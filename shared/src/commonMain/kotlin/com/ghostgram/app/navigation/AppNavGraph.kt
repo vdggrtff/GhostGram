@@ -6,23 +6,30 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.ghostgram.app.presentation.auth.AuthRoute
 import com.ghostgram.app.presentation.chats.ChatListRoute
-import com.ghostgram.app.presentation.chats.ChatListScreen
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsRoute
-
-sealed class Screen(val route: String) {
-    object ChatList : Screen("chat_list")
-    object ChatDetails : Screen("chat_details/{chatId}")
-}
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
-        startDestination = Screen.ChatList.route
+        startDestination = Screen.LoginScreen.route
     ) {
+
+        composable(Screen.LoginScreen.route) {
+            AuthRoute(
+                onAuthSuccess = {
+                    // Переходим на чаты и удаляем экран авторизации из бэкстека
+                    navController.navigate("chat_list") {
+                        popUpTo(Screen.LoginScreen.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         // Экран списка чатов
-        composable("chat_list") {
+        composable(Screen.ChatList.route) {
             ChatListRoute(
                 onNavigateToChat = { chatId ->
                     navController.navigate("chat_details/$chatId")

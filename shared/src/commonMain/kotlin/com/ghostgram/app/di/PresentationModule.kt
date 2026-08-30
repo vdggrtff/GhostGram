@@ -1,5 +1,6 @@
 package com.ghostgram.app.di
 
+import com.ghostgram.app.presentation.auth.AuthViewModel
 import com.ghostgram.app.presentation.chats.ChatListViewModel
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsViewModel
 import org.koin.core.module.dsl.viewModel
@@ -19,4 +20,6 @@ val presentationModule = module {
             chatRepository = get()
         )
     }
+
+    viewModel { AuthViewModel(authRepository = get()) }
 }

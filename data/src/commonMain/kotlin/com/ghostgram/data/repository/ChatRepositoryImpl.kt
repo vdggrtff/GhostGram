@@ -11,6 +11,12 @@ class ChatRepositoryImpl(
     private val tdlibClient: TelegramFlowClient
 ) : ChatRepository {
 
+    /*init {
+        // Запускаем прослушивание ядра C++ (потребуется GlobalScope или кастомный scope для синглтона)
+        tdlibClient.startReceiving(kotlinx.coroutines.GlobalScope)
+    }*/
+
+
     override fun observeChats(): Flow<List<Chat>> {
         // Запрос к TDLib на загрузку списка чатов
         tdlibClient.send("""{"@type": "loadChats", "chat_list": {"@type": "chatListMain"}, "limit": 20}""")

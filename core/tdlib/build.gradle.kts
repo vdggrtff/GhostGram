@@ -29,5 +29,13 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.koin.core)
         }
+        androidMain.dependencies {
+            implementation(libs.kotlinx.coroutines.core)
+            implementation("net.java.dev.jna:jna:5.19.1@aar")
+        }
+        jvmMain.dependencies {
+            implementation(libs.kotlinx.coroutines.core)
+            implementation("net.java.dev.jna:jna:5.19.1")
+        }
     }
 }
