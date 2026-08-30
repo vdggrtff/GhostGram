@@ -12,7 +12,8 @@ fun initKoin() {
             networkModule,
             tdlibModule,
             dataModule,
-            domainModule
+            domainModule,
+            presentationModule
         )
     }
 }

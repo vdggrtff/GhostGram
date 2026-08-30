@@ -91,6 +91,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
+            implementation("net.java.dev.jna:jna:5.19.1@aar")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
@@ -98,6 +99,7 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation("net.java.dev.jna:jna:5.19.1")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
