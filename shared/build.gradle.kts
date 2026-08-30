@@ -80,6 +80,13 @@ kotlin {
 
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)
+
+            implementation(project(":core:network"))
+            implementation(project(":core:tdlib"))
+            implementation(project(":domain"))
+            implementation(project(":data"))
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
         }
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
