@@ -22,19 +22,36 @@ class ChatDetailsViewModel(
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
 
     init {
-        onIntent(ChatDetailsIntent.LoadChatInfo)
+        loadMessages()
     }
 
     fun onIntent(intent: ChatDetailsIntent) {
         when (intent) {
-            is ChatDetailsIntent.LoadChatInfo -> loadChatDetails()
-            is ChatDetailsIntent.OnBackClicked -> {
+            is ChatDetailsIntent.OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
+            is ChatDetailsIntent.OnSendMessage -> sendMessage()
                 // UI сам обработает клик назад, ViewModel тут просто для логов/аналитики
+        }
+    }
+
+    private fun loadMessages() {
+        viewModelScope.launch {
+            chatRepository.observeMessages(chatId).collect { messageList ->
+                _state.update { it.copy(messages = messageList) }
             }
         }
     }
 
-    private fun loadChatDetails() {
+    private fun sendMessage() {
+        val text = _state.value.inputText.trim()
+        if (text.isBlank()) return
+
+        viewModelScope.launch {
+            chatRepository.sendMessage(chatId, text)
+            _state.update { it.copy(inputText = "") } // Очищаем поле ввода
+        }
+    }
+
+    /*private fun loadChatDetails() {
         if (chatId == 0L) {
             _state.update { it.copy(errorMessage = "Ошибка: неверный ID чата") }
             return
@@ -54,5 +71,5 @@ class ChatDetailsViewModel(
                 )
             }
         }
-    }
+    }*/
 }

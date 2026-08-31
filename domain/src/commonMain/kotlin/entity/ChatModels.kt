@@ -5,10 +5,10 @@ data class Message(
     val chatId: Long,
     val senderName: String,
     val text: String,
-    val isDeletedLocally: Boolean = false // Киллер-фича Anti-Revoke!
+    val isOutgoing: Boolean = false, // 💥 True, если сообщение отправил ТЫ
+    val isDeletedLocally: Boolean = false
 )
 
-// Наша независимая доменная модель чата
 data class Chat(
     val id: Long,
     val title: String,

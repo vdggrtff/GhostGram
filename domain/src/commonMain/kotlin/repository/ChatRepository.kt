@@ -1,13 +1,12 @@
 package repository
 
 import entity.Chat
+import entity.Message
 import kotlinx.coroutines.flow.Flow
 
 interface ChatRepository {
-
-    // Получаем список чатов (Flow, чтобы обновлять UI в реальном времени)
     fun observeChats(): Flow<List<Chat>>
-
-    // Получаем историю сообщений для ИИ-выжимки
-    suspend fun getChatHistory(chatId: Long, limit: Int): String
+    fun observeMessages(chatId: Long): Flow<List<Message>>
+    suspend fun sendMessage(chatId: Long, text: String)
+    suspend fun getChatHistory(chatId: Long, limit: Int): String // Для ИИ
 }
