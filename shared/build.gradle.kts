@@ -83,6 +83,7 @@ kotlin {
 
             implementation(project(":core:network"))
             implementation(project(":core:tdlib"))
+            implementation(project(":core:database"))
             implementation(project(":domain"))
             implementation(project(":data"))
             implementation(libs.koin.core)

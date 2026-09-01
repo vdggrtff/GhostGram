@@ -16,7 +16,7 @@ class ChatDetailsViewModel(
 ) : ViewModel() {
 
     // Достаем аргумент из навигации (ключ "chatId" должен совпадать с тем, что в navArgument)
-    val chatId: Long = savedStateHandle.get<Long>("chatId") ?: 0L
+    val chatId: Long = savedStateHandle.get<Long>("chatId") ?: savedStateHandle.get<String>("chatId")?.toLongOrNull() ?: 0L
 
     private val _state = MutableStateFlow(ChatDetailsState())
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()

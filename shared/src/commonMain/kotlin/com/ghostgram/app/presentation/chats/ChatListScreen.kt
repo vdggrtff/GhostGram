@@ -42,11 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil3.compose.AsyncImage
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
@@ -176,19 +178,31 @@ fun GhostChatCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Заглушка для аватарки (пока цветной кружок)
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(GhostBackground),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = chat.title.take(1).uppercase(),
-                    color = GhostPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+            if (chat.avatarPath != null) {
+                AsyncImage(
+                    model = chat.avatarPath,
+                    contentDescription = "Аватар",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
                 )
+            } else {
+                // Фоллбэк, если аватарки нет или еще не скачалась
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(GhostBackground),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = chat.title.take(1).uppercase(),
+                        color = GhostPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(16.dp))

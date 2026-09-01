@@ -8,3 +8,6 @@ val GhostPrimary = Color(0xFF7C4DFF)    // Фирменный фиолетовы
 val GhostSecondary = Color(0xFF536DFE)  // Сине-фиолетовый для градиентов
 val GhostTextPrimary = Color(0xFFFFFFFF) // Белый текст
 val GhostTextSecondary = Color(0xFF8E9BAE)
+val BubblePurpleStart = Color(0xFF7C4DFF)
+val BubblePurpleEnd = Color(0xFF536DFE)
+val BubbleIncomingBg = Color(0xFF1A1F2B)

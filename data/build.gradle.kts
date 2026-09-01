@@ -24,9 +24,9 @@ kotlin {
             implementation(project(":domain"))
             implementation(project(":core:network"))
             implementation(project(":core:tdlib"))
+            implementation(project(":core:database"))
             implementation(libs.koin.core)
             implementation(libs.ktor.serialization.kotlinx.json)
-            // implementation(project(":core:database")) // Раскоментим, когда добавим Room
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.ghostgram.app.di
 
+import com.ghostgram.core.database.di.databaseModule
 import com.ghostgram.core.network.di.networkModule
 import com.ghostgram.core.tdlib.di.tdlibModule
 import com.ghostgram.data.di.dataModule
@@ -13,7 +14,8 @@ fun initKoin() {
             tdlibModule,
             dataModule,
             domainModule,
-            presentationModule
+            presentationModule,
+            databaseModule
         )
     }
 }

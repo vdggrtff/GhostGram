@@ -23,6 +23,10 @@ kotlin {
             implementation(libs.androidx.room.runtime)
             implementation(libs.androidx.sqlite.bundled) // Единый SQLite для всех платформ
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.koin.core)
+        }
+        androidMain.dependencies {
+            implementation(libs.koin.android)
         }
     }
 }

@@ -5,13 +5,15 @@ data class Message(
     val chatId: Long,
     val senderName: String,
     val text: String,
-    val isOutgoing: Boolean = false, // 💥 True, если сообщение отправил ТЫ
-    val isDeletedLocally: Boolean = false
+    val isOutgoing: Boolean = false,
+    val isDeletedLocally: Boolean = false,
+    val photoPath: String? = null // 💥 Локальный путь к скачанной фотографии
 )
 
 data class Chat(
     val id: Long,
     val title: String,
     val unreadCount: Int,
-    val lastMessage: Message?
+    val lastMessage: Message?,
+    val avatarPath: String? = null // 💥 Локальный путь к аватарке
 )
