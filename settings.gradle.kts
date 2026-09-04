@@ -34,3 +34,8 @@ plugins {
 include(":androidApp")
 include(":desktopApp")
 include(":shared")
+include(":core:network")
+include(":core:tdlib")
+include(":core:database")
+include(":domain")
+include(":data")
