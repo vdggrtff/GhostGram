@@ -6,9 +6,11 @@ import com.ghostgram.core.tdlib.di.tdlibModule
 import com.ghostgram.data.di.dataModule
 import com.ghostgram.domain.di.domainModule
 import org.koin.core.context.startKoin
+import org.koin.dsl.KoinAppDeclaration
 
-fun initKoin() {
+fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
     startKoin {
+        appDeclaration()
         modules(
             networkModule,
             tdlibModule,

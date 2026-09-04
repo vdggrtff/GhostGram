@@ -1,5 +1,6 @@
 package com.ghostgram.core.tdlib
 
+import com.ghostgram.core.tdlib.di.TdlibConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,7 +16,8 @@ import kotlinx.coroutines.launch
  * Превращает синхронный C++ поллинг в асинхронный SharedFlow.
  */
 class TelegramFlowClient(
-    private val nativeClient: TelegramNativeClient
+    private val nativeClient: TelegramNativeClient,
+    private val config: TdlibConfig
 ) {
     // SharedFlow для трансляции обновлений от Telegram на весь проект
     private val _updates = MutableSharedFlow<String>(extraBufferCapacity = 100)
@@ -71,12 +73,12 @@ class TelegramFlowClient(
      * Отправляет системные параметры в TDLib.
      * Вызывается один раз при старте ядра.
      */
-    fun sendInitParameters() {
-        // ВАЖНО: api_id и api_hash нужно получить на https://my.telegram.org
-        // Пока я вставил дефолтные тестовые (могут работать нестабильно, лучше сделай свои)
-        val apiId = 2040
+    private fun sendInitParameters() {
+        val apiId = 2040 // (Тут твои ключи)
         val apiHash = "b18441a1ff607e10a989891a5462e627"
-        val dbPath = "ghostgram_tdlib_data"
+
+        // 💥 БЕРЕМ ПУТЬ ИЗ КОНФИГА
+        val dbPath = config.databasePath
 
         val request = """
             {
@@ -87,12 +89,11 @@ class TelegramFlowClient(
                 "api_id": $apiId,
                 "api_hash": "$apiHash",
                 "system_language_code": "ru",
-                "device_model": "Desktop",
-                "system_version": "Linux",
+                "device_model": "GhostGRAM Mobile",
+                "system_version": "Android",
                 "application_version": "1.0.0"
             }
         """.trimIndent()
-
         send(request)
     }
 

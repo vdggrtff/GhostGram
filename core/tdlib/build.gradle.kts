@@ -31,6 +31,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.koin.android)
             implementation("net.java.dev.jna:jna:5.19.1@aar")
         }
         jvmMain.dependencies {

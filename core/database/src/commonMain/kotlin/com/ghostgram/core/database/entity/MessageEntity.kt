@@ -12,7 +12,10 @@ data class MessageEntity(
     val text: String,
     val isOutgoing: Boolean,
     val isDeletedLocally: Boolean = false,
-    val photoPath: String? = null
+    val photoPath: String? = null,
+    val mediaType: String = "TEXT",
+    val fileName: String? = null,
+    val fileExtraInfo: String? = null
 )
 
 const val TABLE_NAME = "messages"

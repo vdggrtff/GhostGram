@@ -22,6 +22,8 @@ class ChatDetailsViewModel(
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
 
     init {
+        loadMyAvatar()
+        loadChatInfo()
         loadMessages()
     }
 
@@ -30,6 +32,28 @@ class ChatDetailsViewModel(
             is ChatDetailsIntent.OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
             is ChatDetailsIntent.OnSendMessage -> sendMessage()
                 // UI сам обработает клик назад, ViewModel тут просто для логов/аналитики
+        }
+    }
+
+    private fun loadChatInfo() {
+        viewModelScope.launch {
+            chatRepository.observeChat(chatId).collect { chat ->
+                if (chat != null) {
+                    _state.update {
+                        it.copy(
+                            chatTitle = chat.title,
+                            avatarPath = chat.avatarPath
+                        )
+                    }
+                }
+            }
+        }
+    }
+    private fun loadMyAvatar() {
+        viewModelScope.launch {
+            chatRepository.observeMyAvatar().collect { path ->
+                _state.update { it.copy(myAvatarPath = path) }
+            }
         }
     }
 

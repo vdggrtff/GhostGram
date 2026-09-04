@@ -2,6 +2,7 @@ package com.ghostgram.app
 
 import android.app.Application
 import com.ghostgram.app.di.initKoin
+import org.koin.android.ext.koin.androidContext
 
 class GhostGramApp: Application() {
 
@@ -9,6 +10,8 @@ class GhostGramApp: Application() {
         super.onCreate()
 
         // 💥 ЗАПУСКАЕМ KOIN И ПЕРЕДАЕМ ЕМУ НАШУ БАЗУ И DATASTORE
-        initKoin()
+        initKoin {
+            androidContext(this@GhostGramApp)
+        }
     }
 }
