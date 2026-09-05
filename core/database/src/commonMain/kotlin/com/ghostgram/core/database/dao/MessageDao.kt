@@ -24,4 +24,7 @@ interface MessageDao {
     // 💥 МАГИЯ ANTI-REVOKE: Мы НЕ делаем DELETE. Мы делаем UPDATE!
     @Query("UPDATE messages SET isDeletedLocally = 1 WHERE id = :messageId AND chatId = :chatId")
     suspend fun markAsDeleted(chatId: Long, messageId: Long)
+
+    @Query("UPDATE messages SET isRead = 1 WHERE chatId = :chatId AND id <= :lastReadOutboxId AND isOutgoing = 1")
+    suspend fun markOutboxAsRead(chatId: Long, lastReadOutboxId: Long)
 }

@@ -14,7 +14,8 @@ data class Message(
     val photoPath: String? = null, // 💥 Локальный путь к скачанной фотографии
     val mediaType: MessageMediaType = MessageMediaType.TEXT,
     val fileName: String? = null,       // Например: "document.pdf"
-    val fileExtraInfo: String? = null   // Размер ("12.4 MB"), длительность ("0:45") или эмодзи стикера
+    val fileExtraInfo: String? = null,   // Размер ("12.4 MB"), длительность ("0:45") или эмодзи стикера
+    val isRead: Boolean = false
 )
 
 data class Chat(

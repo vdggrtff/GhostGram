@@ -17,7 +17,9 @@ val presentationModule = module {
     viewModel {
         ChatDetailsViewModel(
             savedStateHandle = get(),
-            chatRepository = get()
+            chatRepository = get(),
+            generateSmartRepliesUseCase = get(),
+            generateCatchUpSummaryUseCase = get()
         )
     }
 

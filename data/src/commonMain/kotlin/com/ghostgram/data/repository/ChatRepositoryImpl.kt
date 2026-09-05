@@ -50,6 +50,10 @@ class ChatRepositoryImpl(
     private val _myAvatarPath = MutableStateFlow<String?>(null)
     private var myAvatarFileId: Int? = null
 
+    private val _isGhostModeEnabled = MutableStateFlow(true)
+
+    override fun observeGhostMode(): Flow<Boolean> = _isGhostModeEnabled.asStateFlow()
+
     init {
         // Запускаем фонового слушателя апдейтов от TDLib
         tdlibClient.updates
@@ -265,6 +269,25 @@ class ChatRepositoryImpl(
                         }
                     }
                 }
+                "updateChatReadInbox" -> {
+                    val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return
+                    val unreadCount = jsonObject["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
+
+                    _chatsMap.update { current ->
+                        val chat = current[chatId]
+                        if (chat != null) current + (chatId to chat.copy(unreadCount = unreadCount)) else current
+                    }
+                }
+
+                // 💥 2. СОБЕСЕДНИК ПРОЧИТАЛ НАШИ СООБЩЕНИЯ (Зажигаем две галочки ✓✓!)
+                "updateChatReadOutbox" -> {
+                    val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return
+                    val lastReadId = jsonObject["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: return
+
+                    repoScope.launch {
+                        messageDao.markOutboxAsRead(chatId, lastReadId)
+                    }
+                }
             }
         } catch (e: Exception) {
         }
@@ -444,12 +467,12 @@ class ChatRepositoryImpl(
     }
 
     override fun observeMessages(chatId: Long): Flow<List<Message>> {
-        // 1. Говорим Telegram, что мы смотрим в чат
+        // 1. Говорим Telegram, что мы смотрим в этот чат
         tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
 
-        // 💥 2. АГРЕССИВНАЯ АВТОДОКАЧКА ДЛЯ МЕДЛЕННЫХ ЭМУЛЯТОРОВ
+        // 2. Агрессивная автодокачка для медленных сетей и эмуляторов
         repoScope.launch {
-            repeat(4) { // Пингуем ядро 4 раза
+            repeat(4) {
                 tdlibClient.send("""
                     {
                         "@type": "getChatHistory",
@@ -460,20 +483,32 @@ class ChatRepositoryImpl(
                         "only_local": false
                     }
                 """.trimIndent())
-                kotlinx.coroutines.delay(1200) // Ждем 1.2 секунды между попытками
+                kotlinx.coroutines.delay(1200)
             }
         }
 
-        // 3. Отдаем поток из Room
+        // 💥 3. ЕДИНЫЙ ПОТОК ИЗ ROOM С АВТОМАТИЧЕСКОЙ ПРОВЕРКОЙ GHOST MODE
         return messageDao.observeMessages(chatId)
+            .onEach { entities ->
+                // Как только из базы прилетают сообщения — проверяем Ghost Mode и шлем прочтение
+                if (entities.isNotEmpty()) {
+                    markChatAsRead(chatId, entities.map { it.id })
+                }
+            }
             .map { entities ->
                 entities.map { entity ->
                     Message(
-                        id = entity.id, chatId = entity.chatId,
-                        senderName = entity.senderName, text = entity.text,
-                        isOutgoing = entity.isOutgoing, isDeletedLocally = entity.isDeletedLocally,
-                        photoPath = entity.photoPath
-                        // mediaType, fileName и т.д. (если ты их добавил)
+                        id = entity.id,
+                        chatId = entity.chatId,
+                        senderName = entity.senderName,
+                        text = entity.text,
+                        isOutgoing = entity.isOutgoing,
+                        isDeletedLocally = entity.isDeletedLocally,
+                        photoPath = entity.photoPath,
+                        mediaType = runCatching { MessageMediaType.valueOf(entity.mediaType) }.getOrDefault(MessageMediaType.TEXT),
+                        fileName = entity.fileName,
+                        fileExtraInfo = entity.fileExtraInfo,
+                        isRead = entity.isRead
                     )
                 }
             }
@@ -487,6 +522,33 @@ class ChatRepositoryImpl(
     override suspend fun getChatHistory(chatId: Long, limit: Int): String {
         val messages = _messagesState.value[chatId] ?: emptyList()
         return messages.takeLast(limit).joinToString("\n") { "${it.senderName}: ${it.text}" }
+    }
+
+    override fun toggleGhostMode() {
+        _isGhostModeEnabled.update { !it }
+        println("👻 Ghost Mode теперь: ${_isGhostModeEnabled.value}")
+    }
+
+    override fun markChatAsRead(chatId: Long, messageIds: List<Long>) {
+        // 💥 ЕСЛИ РЕЖИМ ПРИЗРАКА ВКЛЮЧЕН — МЫ БЛОКИРУЕМ ПРОЧТЕНИЕ!
+        if (_isGhostModeEnabled.value) {
+            println("👻 Ghost Mode активен: прочтение заблокировано!")
+            return
+        }
+
+        if (messageIds.isEmpty()) return
+
+        // Если режим призрака выключен — шлем в TDLib команду отметить как прочитанное!
+        val idsJson = messageIds.joinToString(",")
+        tdlibClient.send("""
+            {
+                "@type": "viewMessages",
+                "chat_id": $chatId,
+                "message_ids": [$idsJson],
+                "force_read": true
+            }
+        """.trimIndent())
+        println("👁 Ghost Mode выключен: отправлен статус прочтения для $chatId")
     }
 
     // Утилиты форматирования размера и длительности
