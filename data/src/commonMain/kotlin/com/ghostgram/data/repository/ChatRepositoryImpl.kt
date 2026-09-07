@@ -1,5 +1,6 @@
 package com.ghostgram.data.repository
 
+import com.ghostgram.core.crypto.CryptoLayer
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.data.repository.handlers.ChatUpdateHandler
@@ -30,6 +31,7 @@ import repository.ChatRepository
 class ChatRepositoryImpl(
     private val tdlibClient: TelegramFlowClient,
     private val messageDao: MessageDao,
+    private val cryptoLayer: CryptoLayer,
 ) : ChatRepository {
 
     private val jsonParser = Json { ignoreUnknownKeys = true }
@@ -50,7 +52,7 @@ class ChatRepositoryImpl(
     private val downloadTracker = DownloadTracker()
 
     private val handlers: List<TdlibUpdateHandler> = listOf(
-        MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker),
+        MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker, cryptoLayer),
         ChatUpdateHandler(_chatsMap, lastReadOutboxMap, tdlibClient, messageDao, repoScope, downloadTracker),
         ProfileAndFileHandler(_myAvatarPath, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker)
     )
@@ -176,5 +178,29 @@ class ChatRepositoryImpl(
         """.trimIndent()
         )
         println("👁 Ghost Mode выключен: отправлен статус прочтения для $chatId")
+    }
+
+    override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean) {
+        // 💥 ЕСЛИ ВКЛЮЧЕН КРИПТО-РЕЖИМ — ШИФРУЕМ!
+        val finalText = if (useCrypto) {
+            cryptoLayer.encryptAndHide(text, cryptoLayer.TEST_SHARED_KEY)
+        } else {
+            text
+        }
+
+        val request = """
+            {
+                "@type": "sendMessage",
+                "chat_id": $chatId,
+                "input_message_content": {
+                    "@type": "inputMessageText",
+                    "text": {
+                        "@type": "formattedText",
+                        "text": "$finalText"
+                    }
+                }
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
     }
 }

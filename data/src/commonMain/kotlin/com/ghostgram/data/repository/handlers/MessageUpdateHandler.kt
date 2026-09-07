@@ -1,5 +1,6 @@
 package com.ghostgram.data.repository.handlers
 
+import com.ghostgram.core.crypto.CryptoLayer
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.database.entity.MessageEntity
 import com.ghostgram.core.tdlib.TelegramFlowClient
@@ -18,7 +19,8 @@ class MessageUpdateHandler(
     private val repoScope: CoroutineScope,
     private val tdlibClient: TelegramFlowClient,          // Нужен для скачивания картинок
     private val lastReadOutboxMap: MutableMap<Long, Long>,
-    private val tracker: DownloadTracker
+    private val tracker: DownloadTracker,
+    private val cryptoLayer: CryptoLayer
 ) : TdlibUpdateHandler {
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
@@ -125,7 +127,7 @@ class MessageUpdateHandler(
         val senderName = if (isOutgoing) "Вы" else "Собеседник"
 
         return when (contentType) {
-            "messageText" -> {
+            /*"messageText" -> {
                 val text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 MessageEntity(
                     id = msgId,
@@ -135,6 +137,21 @@ class MessageUpdateHandler(
                     isOutgoing = isOutgoing,
                     mediaType = "TEXT"
                 )
+            }*/
+            "messageText" -> {
+                var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                var extraInfo: String? = null
+
+                // 💥 МАГИЯ РАСШИФРОВКИ!
+                if (text.startsWith("👻 ")) {
+                    val decrypted = cryptoLayer.revealAndDecrypt(text, cryptoLayer.TEST_SHARED_KEY)
+                    if (decrypted != null) {
+                        text = decrypted
+                        extraInfo = "ENCRYPTED" // Ставим метку, что сообщение было зашифровано!
+                    }
+                }
+
+                MessageEntity(id = msgId, chatId = chatId, senderName = senderName, text = text, isOutgoing = isOutgoing, mediaType = "TEXT", fileExtraInfo = extraInfo)
             }
             "messagePhoto" -> {
                 val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""

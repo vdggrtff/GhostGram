@@ -9,6 +9,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGen
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
 import com.ghostgram.core.crypto.CryptoLayer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +65,7 @@ class ChatDetailsViewModel(
     fun onIntent(intent: ChatDetailsIntent) {
         when (intent) {
             is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
-            is OnSendMessage -> sendMessage()
+            //is OnSendMessage -> sendMessage()
             is OnSmartReplyClick -> {
                 // При клике на чип — текст вставляется в инпут!
                 _state.update { it.copy(inputText = intent.reply, smartReplies = emptyList()) }
@@ -73,6 +74,19 @@ class ChatDetailsViewModel(
             is OnCatchUpClick -> generateCatchUp()
             is OnDismissCatchUpDialog -> _state.update { it.copy(catchUpSummary = null) }
             is OnToggleGhostMode -> chatRepository.toggleGhostMode()
+            is OnToggleCryptoMode -> {
+                _state.update { it.copy(isCryptoMode = !it.isCryptoMode) }
+            }
+            is OnSendMessage -> {
+                val text = _state.value.inputText.trim()
+                val useCrypto = _state.value.isCryptoMode // 💥 Читаем статус тумблера
+                if (text.isBlank()) return
+
+                viewModelScope.launch {
+                    chatRepository.sendMessage(chatId, text, useCrypto)
+                    _state.update { it.copy(inputText = "") }
+                }
+            }
         }
     }
 

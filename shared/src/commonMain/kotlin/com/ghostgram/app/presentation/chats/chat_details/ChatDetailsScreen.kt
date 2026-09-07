@@ -110,6 +110,7 @@ fun ChatDetailsScreen(
                 isRepliesLoading = state.isRepliesLoading,
                 inputText = state.inputText,
                 onIntent = onIntent,
+                isCryptoMode = state.isCryptoMode
             )
         },
         floatingActionButton = {

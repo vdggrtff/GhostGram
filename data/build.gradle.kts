@@ -25,6 +25,7 @@ kotlin {
             implementation(project(":core:network"))
             implementation(project(":core:tdlib"))
             implementation(project(":core:database"))
+            implementation(project(":core:crypto"))
             implementation(libs.koin.core)
             implementation(libs.ktor.serialization.kotlinx.json)
         }

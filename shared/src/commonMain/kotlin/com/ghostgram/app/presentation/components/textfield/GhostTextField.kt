@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
@@ -30,11 +31,20 @@ import com.ghostgram.app.ui.theme.GhostTextSecondary
 @Composable
 fun GhostTextField(
     inputText: String,
+    isCryptoMode: Boolean,
     onIntent: (ChatDetailsIntent) -> Unit
 ){
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
+        IconButton(
+            onClick = { onIntent(ChatDetailsIntent.OnToggleCryptoMode) }
+        ) {
+            Text(
+                text = if (isCryptoMode) "🔒" else "🔓",
+                fontSize = 20.sp
+            )
+        }
     TextField(
         value = inputText,
         onValueChange = { onIntent(ChatDetailsIntent.OnInputChanged(it)) },

@@ -11,6 +11,6 @@ import repository.ChatRepository
 val dataModule = module {
     // Указываем, что при запросе интерфейса (AiRepository) нужно отдать реализацию (AiRepositoryImpl)
     single<AiRepository> { AiRepositoryImpl(geminiClient = get()) }
-    single<ChatRepository> { ChatRepositoryImpl(tdlibClient = get(), messageDao = get()) }
+    single<ChatRepository> { ChatRepositoryImpl(tdlibClient = get(), messageDao = get(), cryptoLayer = get()) }
     single<AuthRepository> { AuthRepositoryImpl(tdlibClient = get()) }
 }

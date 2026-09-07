@@ -16,6 +16,7 @@ data class ChatDetailsState(
     val catchUpSummary: String? = null,     // 💥 Текст выжимки от ИИ
     val isCatchUpLoading: Boolean = false,
     val isGhostMode: Boolean = true,
+    val isCryptoMode: Boolean = false,
 )
 
 // Действия на экране чата
@@ -29,4 +30,5 @@ sealed interface ChatDetailsIntent {
     data object OnCatchUpClick : ChatDetailsIntent
     data object OnDismissCatchUpDialog : ChatDetailsIntent
     data object OnToggleGhostMode : ChatDetailsIntent
+    data object OnToggleCryptoMode : ChatDetailsIntent
 }

@@ -3,6 +3,8 @@ package com.ghostgram.core.crypto
 class CryptoLayer {
     private val cryptoEngine = GhostCrypto()
 
+    val TEST_SHARED_KEY = ByteArray(32) { 42 }
+
     // 1. Генерация ключей при старте секретного чата
     fun createKeyPair() = cryptoEngine.generateKeyPair()
 
