@@ -8,4 +8,5 @@ interface AuthRepository {
     fun sendPhoneNumber(phone: String)
     fun sendAuthCode(code: String)
     fun sendPassword(password: String)
+    fun logOut()
 }

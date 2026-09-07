@@ -18,8 +18,24 @@ class CryptoLayer {
     fun encryptAndHide(text: String, sharedKey: ByteArray): String {
         val rawBytes = text.encodeToByteArray()
         val encryptedBytes = cryptoEngine.encryptAES(sharedKey, rawBytes)
-        return WordCoder.encode(encryptedBytes)
+        val hiddenWords = WordCoder.encode(encryptedBytes)
+
+        // 💥 НАША ВИРУСНАЯ РЕКЛАМА ДЛЯ ОФИЦИАЛЬНОГО ТЕЛЕГРАМА:
+        val promoFooter = """
+            
+            
+            🔒 Зашифровано в GhostGRAM
+            🛡 End-to-End Steganography E2EE
+            👉 github.com/ghostgram (или твой канал)
+        """.trimIndent()
+
+        return "$hiddenWords$promoFooter"
     }
+    /*fun encryptAndHide(text: String, sharedKey: ByteArray): String {
+        val rawBytes = text.encodeToByteArray()
+        val encryptedBytes = cryptoEngine.encryptAES(sharedKey, rawBytes)
+        return WordCoder.encode(encryptedBytes)
+    }*/
 
     /**
      * Достает слова, превращает в байты и расшифровывает

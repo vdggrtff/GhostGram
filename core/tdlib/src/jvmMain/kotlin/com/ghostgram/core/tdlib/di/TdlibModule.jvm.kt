@@ -4,7 +4,10 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 actual fun platformTdlibModule(): Module = module {
-    single<TdlibConfig> {
-        TdlibConfig(databasePath = "ghostgram_tdlib_data")
+    factory<TdlibConfig> { (accountId: String) ->
+        TdlibConfig(databasePath = "ghostgram_tdlib_data_$accountId")
     }
+    /*single<TdlibConfig> {
+        TdlibConfig(databasePath = "ghostgram_tdlib_data")
+    }*/
 }

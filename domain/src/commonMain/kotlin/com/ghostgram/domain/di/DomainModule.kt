@@ -7,9 +7,7 @@ import usecase.GenerateSmartRepliesUseCase
 
 val domainModule = module {
     // factory означает, что каждый раз при запросе будет создаваться новый экземпляр UseCase
-    factory { GenerateChatSummaryUseCase(chatRepository = get(), aiRepository = get()) }
-
-    factory { GenerateSmartRepliesUseCase(chatRepository = get(), aiRepository = get()) }
-
-    factory { GenerateCatchUpSummaryUseCase(chatRepository = get(), aiRepository = get()) }
+    factory { GenerateChatSummaryUseCase(sessionManager = get(), aiRepository = get()) }
+    factory { GenerateSmartRepliesUseCase(sessionManager = get(), aiRepository = get()) }
+    factory { GenerateCatchUpSummaryUseCase(sessionManager = get(), aiRepository = get()) }
 }

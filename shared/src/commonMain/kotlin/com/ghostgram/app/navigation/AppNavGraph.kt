@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import com.ghostgram.app.presentation.auth.AuthRoute
 import com.ghostgram.app.presentation.chats.ChatListRoute
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsRoute
+import com.ghostgram.app.presentation.settings.SettingsRoute
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
@@ -44,6 +45,10 @@ fun AppNavGraph(navController: NavHostController) {
             ChatDetailsRoute(
                 onBackClick = { navController.popBackStack() }
             )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsRoute(onNavigateToAuth = {navController.navigate(Screen.LoginScreen.route)})
         }
     }
 }

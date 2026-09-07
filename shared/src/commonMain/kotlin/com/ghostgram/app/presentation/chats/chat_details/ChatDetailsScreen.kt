@@ -22,7 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
-import com.ghostgram.app.presentation.components.bottombar.GhostBottomBar
+import com.ghostgram.app.presentation.input.GhostInput
 import com.ghostgram.app.presentation.components.dialog.GhostAlertDialog
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
@@ -103,7 +103,7 @@ fun ChatDetailsScreen(
             )
         },
         bottomBar = {
-            GhostBottomBar(
+            GhostInput(
                 isCatchUpLoading = state.isCatchUpLoading,
                 unreadCount = state.unreadCount,
                 smartReplies = state.smartReplies,

@@ -127,18 +127,30 @@ class MessageUpdateHandler(
         val senderName = if (isOutgoing) "Вы" else "Собеседник"
 
         return when (contentType) {
-            /*"messageText" -> {
-                val text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+            "messageText" -> {
+                var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                var isEncrypted = false
+
+                // 💥 ЕСЛИ ЭТО ШИФР — РАСШИФРОВЫВАЕМ И В БАЗУ КЛАДЕМ ЧИСТЫЙ ТЕКСТ!
+                if (text.contains("👻 ")) {
+                    val decrypted = cryptoLayer.revealAndDecrypt(text, cryptoLayer.TEST_SHARED_KEY)
+                    if (decrypted != null) {
+                        text = decrypted // 👈 Заменяем белиберду на чистый текст!
+                        isEncrypted = true
+                    }
+                }
+
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
                     senderName = senderName,
                     text = text,
                     isOutgoing = isOutgoing,
-                    mediaType = "TEXT"
+                    mediaType = "TEXT",
+                    fileExtraInfo = if (isEncrypted) "ENCRYPTED" else null
                 )
-            }*/
-            "messageText" -> {
+            }
+            /*"messageText" -> {
                 var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 var extraInfo: String? = null
 
@@ -152,7 +164,7 @@ class MessageUpdateHandler(
                 }
 
                 MessageEntity(id = msgId, chatId = chatId, senderName = senderName, text = text, isOutgoing = isOutgoing, mediaType = "TEXT", fileExtraInfo = extraInfo)
-            }
+            }*/
             "messagePhoto" -> {
                 val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray

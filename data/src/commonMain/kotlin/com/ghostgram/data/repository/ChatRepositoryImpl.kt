@@ -17,6 +17,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -147,9 +148,23 @@ class ChatRepositoryImpl(
     }
 
     override suspend fun getChatHistory(chatId: Long, limit: Int): String {
+        // 💥 ТЕПЕРЬ МЫ БЕРЕМ ИСТОРИЮ ПРЯМО ИЗ БАЗЫ ДАННЫХ ROOM!
+        val entities = messageDao.observeMessages(chatId).firstOrNull() ?: emptyList()
+
+        if (entities.isEmpty()) return ""
+
+        // Склеиваем последние N сообщений в текст для Gemini
+        return entities
+            .takeLast(limit)
+            .joinToString("\n") { entity ->
+                "${entity.senderName}: ${entity.text}"
+            }
+    }
+
+    /*override suspend fun getChatHistory(chatId: Long, limit: Int): String {
         val messages = _messagesState.value[chatId] ?: emptyList()
         return messages.takeLast(limit).joinToString("\n") { "${it.senderName}: ${it.text}" }
-    }
+    }*/
 
     override fun toggleGhostMode() {
         _isGhostModeEnabled.update { !it }

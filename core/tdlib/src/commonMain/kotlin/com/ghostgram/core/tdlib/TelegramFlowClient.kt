@@ -20,7 +20,10 @@ class TelegramFlowClient(
     private val config: TdlibConfig
 ) {
     // SharedFlow для трансляции обновлений от Telegram на весь проект
-    private val _updates = MutableSharedFlow<String>(extraBufferCapacity = 100)
+    private val _updates = MutableSharedFlow<String>(
+        replay = 50,
+        extraBufferCapacity = 100
+    )
     val updates: SharedFlow<String> = _updates.asSharedFlow()
 
     private val clientScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
