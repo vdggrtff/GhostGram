@@ -10,6 +10,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInp
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
+import com.ghostgram.core.crypto.CryptoLayer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,24 @@ class ChatDetailsViewModel(
         loadChatInfo()
         loadMessages()
         observeGhostMode()
+
+        val crypto = CryptoLayer()
+        val aliceKeys = crypto.createKeyPair()
+        val bobKeys = crypto.createKeyPair()
+
+// Алиса и Боб вычисляют общий секрет (Магия математики!)
+        val aliceShared = crypto.getSharedSecret(aliceKeys.first, bobKeys.second)
+        val bobShared = crypto.getSharedSecret(bobKeys.first, aliceKeys.second)
+
+        println("Секреты совпали? ${aliceShared.contentEquals(bobShared)}")
+
+        val originalText = "Товарищ майор это не прочитает!"
+        val hiddenMessage = crypto.encryptAndHide(originalText, aliceShared)
+
+        println("ШИФРОВКА: $hiddenMessage")
+
+        val decrypted = crypto.revealAndDecrypt(hiddenMessage, bobShared)
+        println("РАСШИФРОВКА: $decrypted")
     }
 
     fun onIntent(intent: ChatDetailsIntent) {

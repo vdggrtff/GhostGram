@@ -27,4 +27,14 @@ interface MessageDao {
 
     @Query("UPDATE messages SET isRead = 1 WHERE chatId = :chatId AND id <= :lastReadOutboxId AND isOutgoing = 1")
     suspend fun markOutboxAsRead(chatId: Long, lastReadOutboxId: Long)
+
+    @Query("DELETE FROM messages WHERE chatId = :chatId AND id = :messageId")
+    suspend fun deleteMessage(chatId: Long, messageId: Long)
+
+    // 💥 2. Обновляем текст, если сообщение отредактировали
+    @Query("UPDATE messages SET text = :newText WHERE chatId = :chatId AND id = :messageId")
+    suspend fun updateMessageText(chatId: Long, messageId: Long, newText: String)
+
+    @Query("UPDATE messages SET photoPath = :path WHERE id = :messageId")
+    suspend fun updateMessagePhoto(messageId: Long, path: String)
 }
