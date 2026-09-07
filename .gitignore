@@ -2,7 +2,10 @@
 .kotlin
 .gradle
 **/build/
-**/ghostgram_tdlib_data/
+**/ghostgram_tdlib_data*/
+*.binlog
+*.sqlite*
+*.db*
 xcuserdata
 !src/**/build/
 local.properties
