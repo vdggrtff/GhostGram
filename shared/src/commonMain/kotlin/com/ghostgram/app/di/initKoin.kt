@@ -1,5 +1,6 @@
 package com.ghostgram.app.di
 
+import com.ghostgram.core.crypto.di.cryptoModule
 import com.ghostgram.core.database.di.databaseModule
 import com.ghostgram.core.network.di.networkModule
 import com.ghostgram.core.tdlib.di.tdlibModule
@@ -17,7 +18,8 @@ fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
             dataModule,
             domainModule,
             presentationModule,
-            databaseModule
+            databaseModule,
+            cryptoModule
         )
     }
 }

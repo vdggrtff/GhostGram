@@ -11,6 +11,11 @@ expect fun platformTdlibModule(): Module
 
 val tdlibModule = module {
     includes(platformTdlibModule())
-    single { TelegramNativeClient() }
-    single { TelegramFlowClient(nativeClient = get(), config = get()) }
+    factory { TelegramNativeClient() }
+    factory { (accountId: String) ->
+        TelegramFlowClient(
+            nativeClient = get(),
+            config = get { org.koin.core.parameter.parametersOf(accountId) }
+        )
+    }
 }

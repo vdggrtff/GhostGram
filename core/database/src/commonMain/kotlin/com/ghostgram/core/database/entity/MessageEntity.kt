@@ -15,7 +15,8 @@ data class MessageEntity(
     val photoPath: String? = null,
     val mediaType: String = "TEXT",
     val fileName: String? = null,
-    val fileExtraInfo: String? = null
+    val fileExtraInfo: String? = null,
+    val isRead: Boolean = false
 )
 
 const val TABLE_NAME = "messages"

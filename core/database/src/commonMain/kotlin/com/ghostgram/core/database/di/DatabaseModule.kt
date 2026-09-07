@@ -12,15 +12,17 @@ expect val platformDatabaseModule: Module
 val databaseModule = module {
     includes(platformDatabaseModule) // Подтягиваем платформенный билдер
 
-    // Собираем готовую БД
-    single {
-        get<androidx.room.RoomDatabase.Builder<GhostDatabase>>()
+    factory { (accountId: String) ->
+        get<androidx.room.RoomDatabase.Builder<GhostDatabase>>(
+            parameters = { org.koin.core.parameter.parametersOf(accountId) }
+        )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
     }
 
-    // Раздаем DAO по всему приложению
-    single { get<GhostDatabase>().messageDao() }
+    factory { (accountId: String) ->
+        get<GhostDatabase>(parameters = { org.koin.core.parameter.parametersOf(accountId) }).messageDao()
+    }
 }
