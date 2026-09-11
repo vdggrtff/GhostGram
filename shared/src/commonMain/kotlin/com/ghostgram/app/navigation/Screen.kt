@@ -5,7 +5,9 @@ sealed class Screen(val route: String) {
     object LoginScreen : Screen(LOGIN_SCREEN)
     object ChatList : Screen(CHAT_LIST_SCREEN)
 
-    object Settings : Screen("settings")
+    object Settings : Screen(SETTINGS_SCREEN)
+
+    object Contacts : Screen(CONTACTS_SCREEN)
 
     companion object{
         const val CHAT_LIST_SCREEN = "chat_list"
@@ -14,6 +16,7 @@ sealed class Screen(val route: String) {
 
         const val SETTINGS_SCREEN = "settings"
 
+        const val CONTACTS_SCREEN = "contacts"
     }
 
 }

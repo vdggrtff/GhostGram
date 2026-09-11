@@ -34,19 +34,4 @@ val presentationModule = module {
     viewModel { AuthViewModel(sessionManager = get()) }
 
     viewModel { SettingsViewModel(sessionManager = get()) }
-
-    single {
-        SessionManager(
-            sessionFactory = { accountId ->
-                val tdlibClient: TelegramFlowClient = get { parametersOf(accountId) }
-                val database: GhostDatabase = get { parametersOf(accountId) }
-
-                AccountSession(
-                    accountId = accountId,
-                    chatRepository = ChatRepositoryImpl(tdlibClient, database.messageDao(), cryptoLayer = get()),
-                    authRepository = AuthRepositoryImpl(tdlibClient)
-                )
-            }
-        )
-    }
 }

@@ -9,12 +9,16 @@ interface ChatRepository {
     fun observeChat(chatId: Long): Flow<Chat?>
     fun observeMyAvatar(): Flow<String?>
     fun observeMessages(chatId: Long): Flow<List<Message>>
-    suspend fun sendMessage(chatId: Long, text: String)
+    suspend fun sendMessage(chatId: Long, text: String, )
+
+    suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean = false)
     suspend fun getChatHistory(chatId: Long, limit: Int): String // Для ИИ
 
     fun observeGhostMode(): Flow<Boolean>
     fun toggleGhostMode()
     fun markChatAsRead(chatId: Long, messageIds: List<Long>)
 
-    suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean = false)
+    suspend fun loadMoreMessages(chatId: Long, fromMessageId: Long)
+
+    suspend fun requestKeyExchange(chatId: Long)
 }

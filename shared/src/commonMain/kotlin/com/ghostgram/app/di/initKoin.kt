@@ -19,7 +19,6 @@ fun initKoin(appDeclaration: KoinAppDeclaration = {}) {
             domainModule,
             presentationModule,
             databaseModule,
-            cryptoModule
         )
     }
 }

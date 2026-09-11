@@ -1,6 +1,7 @@
 package com.ghostgram.data.repository
 
 import com.ghostgram.core.crypto.CryptoLayer
+import com.ghostgram.core.crypto.toHex
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.data.repository.handlers.ChatUpdateHandler
@@ -39,8 +40,6 @@ class ChatRepositoryImpl(
 
     // Потокобезопасный кэш чатов в памяти: Map<ChatId, Chat>
     private val _chatsMap = MutableStateFlow<Map<Long, Chat>>(emptyMap())
-
-    private val _messagesState = MutableStateFlow<Map<Long, List<Message>>>(emptyMap())
     private val repoScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     private val _myAvatarPath = MutableStateFlow<String?>(null)
@@ -83,6 +82,20 @@ class ChatRepositoryImpl(
 
     override fun observeChat(chatId: Long): Flow<Chat?> {
         return _chatsMap.map { it[chatId] }
+    }
+
+    override suspend fun loadMoreMessages(chatId: Long, fromMessageId: Long) {
+        // Просим еще 50 старых сообщений, начиная от fromMessageId
+        tdlibClient.send("""
+            {
+                "@type": "getChatHistory",
+                "chat_id": $chatId,
+                "from_message_id": $fromMessageId,
+                "offset": 0,
+                "limit": 50,
+                "only_local": false
+            }
+        """.trimIndent())
     }
 
     override fun observeMyAvatar(): Flow<String?> {
@@ -136,7 +149,9 @@ class ChatRepositoryImpl(
                         ),
                         fileName = entity.fileName,
                         fileExtraInfo = entity.fileExtraInfo,
-                        isRead = entity.isRead
+                        isRead = entity.isRead,
+                        date = entity.date,
+                        mediaAlbumId = entity.mediaAlbumId
                     )
                 }
             }
@@ -160,11 +175,6 @@ class ChatRepositoryImpl(
                 "${entity.senderName}: ${entity.text}"
             }
     }
-
-    /*override suspend fun getChatHistory(chatId: Long, limit: Int): String {
-        val messages = _messagesState.value[chatId] ?: emptyList()
-        return messages.takeLast(limit).joinToString("\n") { "${it.senderName}: ${it.text}" }
-    }*/
 
     override fun toggleGhostMode() {
         _isGhostModeEnabled.update { !it }
@@ -196,13 +206,26 @@ class ChatRepositoryImpl(
     }
 
     override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean) {
-        // 💥 ЕСЛИ ВКЛЮЧЕН КРИПТО-РЕЖИМ — ШИФРУЕМ!
+        /*val finalText = if (useCrypto) {
+            cryptoLayer.encryptAndHide(chatId = chatId, text = text)
+        } else {
+            text
+        }*/
+
         val finalText = if (useCrypto) {
-            cryptoLayer.encryptAndHide(text, cryptoLayer.TEST_SHARED_KEY)
+            // 💥 ПРОВЕРЯЕМ: если рукопожатие еще не завершено — шлем запрос ключей вместо мусора!
+            if (!cryptoLayer.isChatSecure(chatId)) {
+                println("⚠️ E2EE: Ключ для чата $chatId еще не готов! Сначала завершите рукопожатие.")
+                text // Шлем как обычный текст, либо блокируем
+            } else {
+                cryptoLayer.encryptAndHide(chatId, text)
+            }
         } else {
             text
         }
 
+
+        // 💥 ДОБАВЛЯЕМ link_preview_options, чтобы убить карточку GitHub!
         val request = """
             {
                 "@type": "sendMessage",
@@ -212,7 +235,32 @@ class ChatRepositoryImpl(
                     "text": {
                         "@type": "formattedText",
                         "text": "$finalText"
+                    },
+                    "link_preview_options": {
+                        "@type": "linkPreviewOptions",
+                        "is_disabled": true
                     }
+                }
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
+    }
+
+    override suspend fun requestKeyExchange(chatId: Long) {
+        // Достаем наш публичный ключ в виде строки
+        val myPubKeyHex = cryptoLayer.myKeyPair.second.toHex()
+
+        // 💥 Отправляем спец-сообщение (Префикс 👻🔑)
+        val text = "👻🔑 $myPubKeyHex"
+
+        val request = """
+            {
+                "@type": "sendMessage",
+                "chat_id": $chatId,
+                "input_message_content": {
+                    "@type": "inputMessageText",
+                    "text": { "@type": "formattedText", "text": "$text" },
+                    "link_preview_options": { "@type": "linkPreviewOptions", "is_disabled": true }
                 }
             }
         """.trimIndent()

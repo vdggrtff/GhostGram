@@ -1,49 +1,61 @@
 package com.ghostgram.app.presentation.chats
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ghostgram.app.presentation.chats.ChatListIntent.OnSummarizeChatClick
-import com.ghostgram.app.presentation.components.card.GhostChatCard
+import com.ghostgram.app.presentation.components.items.GhostChatListItem
+import com.ghostgram.app.presentation.components.input.GhostSearchBar
 import com.ghostgram.app.ui.theme.GhostBackground
+import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
-import com.ghostgram.app.ui.theme.GhostTextPrimary
+import com.ghostgram.app.ui.theme.GhostSecureGreen
+import com.ghostgram.app.ui.theme.GhostTextSecondary
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun ChatListRoute(
     viewModel: ChatListViewModel = koinViewModel(),
-    onNavigateToChat: (Long) -> Unit // Принимаем лямбду от графа
+    onNavigateToChat: (Long) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
-
-    ChatListScreen(
-        state = state,
-        onIntent = viewModel::onIntent, // Пробрасываем отправку интентов
-        onNavigateToChat = onNavigateToChat
-    )
+    ChatListScreen(state = state, onIntent = viewModel::onIntent, onNavigateToChat = onNavigateToChat)
 }
 
 @Composable
@@ -52,79 +64,91 @@ fun ChatListScreen(
     onIntent: (ChatListIntent) -> Unit,
     onNavigateToChat: (Long) -> Unit
 ) {
-    Scaffold(
-        containerColor = GhostBackground, // Темный фон из палитры
-        topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = GhostBackground,
-                    titleContentColor = GhostTextPrimary
-                ),
-                title = {
-                    Text("Ghost", fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                }
-            )
-        },
-        floatingActionButton = {
-            // Круглая фиолетовая кнопка из твоего дизайна
-            FloatingActionButton(
-                onClick = { /* TODO: Новый чат */ },
-                containerColor = GhostPrimary,
-                contentColor = Color.White,
-                shape = CircleShape
-            ) {
-                Text("✏️", fontSize = 24.sp)
-            }
-        }
-    ) { innerPadding ->
-        Box(
+    // Выбранная вкладка (пока только UI-переключатель)
+    var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf("Все", "Личные", "Группы", "Каналы")
+    var searchQuery by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(GhostBackground)
+    ) {
+        // 💥 1. КАСТОМНЫЙ TOP BAR ИЗ МАКЕТА
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 8.dp, start = 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (state.isLoading && state.chats.isEmpty()) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = GhostPrimary
+            GhostSearchBar(
+                query = searchQuery,
+                onQueryChange = {searchQuery = it}
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(GhostCard)
+                    .clickable { /* TODO: Быстрые настройки невидимости */ },
+                contentAlignment = Alignment.Center
+            ) {
+                // Сделаем иконку щита неоново-зеленой, чтобы подчеркнуть, что Ghost Mode работает!
+                Icon(Icons.Outlined.Shield, contentDescription = "Secure", tint = GhostSecureGreen, modifier = Modifier.size(22.dp))
+            }
+            IconButton(onClick = { /* TODO */ }) { Icon(Icons.Default.MoreVert, contentDescription = "Еще", tint = Color.White) }
+        }
+
+        // 💥 2. ТАБЫ (ВКЛАДКИ)
+        ScrollableTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = GhostBackground,
+            contentColor = Color.White,
+            edgePadding = 16.dp,
+            indicator = { tabPositions ->
+                // Тонкий фиолетовый индикатор под текстом
+                SecondaryIndicator(
+                    Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    color = GhostPrimary,
+                    height = 3.dp
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp) // Отступы сверху и снизу
-                ) {
-                    items(state.chats, key = { it.id }) { chat ->
-                        GhostChatCard(
-                            chat = chat,
-                            onClick = { onNavigateToChat(chat.id) },
-                            onAiClick = { onIntent(OnSummarizeChatClick(chat.id)) },
-                            isSummarizing = state.isSummarizing
+            },
+            divider = { HorizontalDivider(color = GhostCard) } // Тонкая линия под табами
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = {
+                        Text(
+                            text = title,
+                            color = if (selectedTab == index) Color.White else GhostTextSecondary,
+                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 15.sp
                         )
                     }
-                }
-            }
-
-            // Всплывающий диалог с готовой выжимкой от Gemini
-            if (state.aiSummaryText != null) {
-                AlertDialog(
-                    onDismissRequest = { onIntent(ChatListIntent.OnDismissSummaryDialog) },
-                    title = { Text("✨ AI Выжимка") },
-                    text = { Text(state.aiSummaryText) },
-                    confirmButton = {
-                        TextButton(
-                            onClick = { onIntent(ChatListIntent.OnDismissSummaryDialog) }
-                        ) {
-                            Text("Понял")
-                        }
-                    }
                 )
             }
+        }
 
-            // Ошибка от Gemini (если вдруг ключ не тот или инета нет)
-            if (state.errorMessage != null) {
-                Snackbar(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
-                ) {
-                    Text(state.errorMessage)
+        // 💥 3. СПИСОК ЧАТОВ ОТ КРАЯ ДО КРАЯ
+        if (state.isLoading && state.chats.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = GhostPrimary)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                // Отступ снизу, чтобы наш парящий BottomBar не перекрывал последнее сообщение!
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
+                items(state.chats, key = { it.id }) { chat ->
+                    GhostChatListItem(
+                        chat = chat,
+                        onClick = { onNavigateToChat(chat.id) }
+                    )
                 }
             }
         }

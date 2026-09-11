@@ -3,6 +3,7 @@ package com.ghostgram.data.repository.handlers
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import entity.Chat
+import entity.Message
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -31,12 +32,11 @@ class ChatUpdateHandler(
                 val id = chatObj["id"]?.jsonPrimitive?.longOrNull ?: return true
                 val title = chatObj["title"]?.jsonPrimitive?.content ?: "Без названия"
                 val unreadCount = chatObj["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
-
-                // Запоминаем статус прочтения НАШИХ сообщений собеседником
+                val lastMsgObj = chatObj["last_message"]?.jsonObject
+                val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
+                val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
                 val lastReadOutbox = chatObj["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
                 lastReadOutboxMap[id] = lastReadOutbox
-
-                // Аватарка чата
                 val photoObj = chatObj["photo"]?.jsonObject
                 val smallPhoto = photoObj?.get("small")?.jsonObject
                 val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
@@ -47,15 +47,41 @@ class ChatUpdateHandler(
                     tracker.chatAvatars[fileId] = id // 💥 Записали в трекер!
                     tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
+
+                val lastMessage = if (previewText != null) {
+                   Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
+                } else null
+
                 val chat = Chat(
                     id = id,
                     title = title,
                     unreadCount = unreadCount,
-                    lastMessage = null,
+                    lastMessage = lastMessage,
                     avatarPath = if (!avatarPath.isNullOrBlank()) avatarPath else null
                 )
 
                 chatsMap.update { it + (id to chat) }
+                return true
+            }
+            "updateChatLastMessage" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val lastMsgObj = jsonObject["last_message"]?.jsonObject
+                val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
+
+                val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
+
+                chatsMap.update { current ->
+                    val chat = current[chatId]
+                    if (chat != null) {
+                        val lastMessage = if (previewText != null) {
+                            Message(id = 0, chatId = chatId, senderName = "", text = previewText, date = dateUnix)
+                        } else null
+
+                        current + (chatId to chat.copy(lastMessage = lastMessage))
+                    } else {
+                        current
+                    }
+                }
                 return true
             }
 
@@ -86,4 +112,25 @@ class ChatUpdateHandler(
 
         return false
     }
+    private fun parsePreviewText(contentObj: JsonObject?): String? {
+        val msgType = contentObj?.get("@type")?.jsonPrimitive?.content
+        return when (msgType) {
+            "messageText" -> {
+                val text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                when {
+                    text.startsWith("👻🔑 ") -> "🔐 Запрос на секретный чат"
+                    text.startsWith("👻🤝 ") -> "✅ Секретный чат установлен"
+                    text.startsWith("👻 ") -> "🔒 Секретное сообщение"
+                    else -> text
+                }
+            }
+            "messagePhoto" -> "📷 Фотография"
+            "messageVideo", "messageVideoNote" -> "🎥 Видео"
+            "messageDocument" -> "📄 Документ"
+            "messageVoiceNote" -> "🎤 Голосовое сообщение"
+            "messageSticker" -> "✨ Стикер"
+            else -> null
+        }
+    }
 }
+
