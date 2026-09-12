@@ -3,6 +3,8 @@
 .gradle
 **/build/
 **/ghostgram_tdlib_data*/
+**/ghostgram_accounts.json
+ghostgram_accounts.json
 *.binlog
 *.sqlite*
 *.db*

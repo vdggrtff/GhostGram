@@ -5,6 +5,7 @@ import SessionManager
 import com.ghostgram.app.presentation.auth.AuthViewModel
 import com.ghostgram.app.presentation.chats.ChatListViewModel
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsViewModel
+import com.ghostgram.app.presentation.contacts.ContactsViewModel
 import com.ghostgram.app.presentation.settings.SettingsViewModel
 import com.ghostgram.core.database.GhostDatabase
 import com.ghostgram.core.tdlib.TelegramFlowClient
@@ -35,18 +36,5 @@ val presentationModule = module {
 
     viewModel { SettingsViewModel(sessionManager = get()) }
 
-    single {
-        SessionManager(
-            sessionFactory = { accountId ->
-                val tdlibClient: TelegramFlowClient = get { parametersOf(accountId) }
-                val database: GhostDatabase = get { parametersOf(accountId) }
-
-                AccountSession(
-                    accountId = accountId,
-                    chatRepository = ChatRepositoryImpl(tdlibClient, database.messageDao(), cryptoLayer = get()),
-                    authRepository = AuthRepositoryImpl(tdlibClient)
-                )
-            }
-        )
-    }
+    viewModel { ContactsViewModel(sessionManager = get()) }
 }

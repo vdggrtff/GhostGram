@@ -1,5 +1,6 @@
 package com.ghostgram.app.presentation.chats.chat_details
 
+import AccountSession
 import SessionManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -12,7 +13,6 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSen
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
-import com.ghostgram.core.crypto.CryptoLayer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,11 +27,13 @@ class ChatDetailsViewModel(
     savedStateHandle: SavedStateHandle, // 💥 Koin сам отдаст его сюда!
     private val sessionManager: SessionManager,
     private val generateSmartRepliesUseCase: GenerateSmartRepliesUseCase,
-    private val generateCatchUpSummaryUseCase: GenerateCatchUpSummaryUseCase
+    private val generateCatchUpSummaryUseCase: GenerateCatchUpSummaryUseCase,
 ) : ViewModel() {
 
     // Достаем аргумент из навигации (ключ "chatId" должен совпадать с тем, что в navArgument)
-    val chatId: Long = savedStateHandle.get<Long>("chatId") ?: savedStateHandle.get<String>("chatId")?.toLongOrNull() ?: 0L
+    val chatId: Long =
+        savedStateHandle.get<Long>("chatId") ?: savedStateHandle.get<String>("chatId")
+            ?.toLongOrNull() ?: 0L
 
     private val _state = MutableStateFlow(ChatDetailsState())
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
@@ -44,6 +46,8 @@ class ChatDetailsViewModel(
     private var lastSummarizedMessageId: Long? = null
     private var cachedSummaryText: String? = null
 
+    private var isLoadingMore = false
+
     init {
         println("🔍 ChatDetailsViewModel запущен для chatId: $chatId")
         viewModelScope.launch {
@@ -52,7 +56,7 @@ class ChatDetailsViewModel(
                     val repo = session.chatRepository
                     loadChatInfo(repo)
                     loadMessages(repo)
-                    loadMyAvatar(repo)
+                    loadMyAvatar(session)
                     observeGhostMode(repo)
                 }
             }
@@ -64,7 +68,21 @@ class ChatDetailsViewModel(
 
         when (intent) {
             is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
-            is OnToggleCryptoMode -> _state.update { it.copy(isCryptoMode = !it.isCryptoMode) }
+            is OnToggleCryptoMode -> {
+                viewModelScope.launch {
+                    val isCurrentlyCrypto = _state.value.isCryptoMode
+
+                    if (!isCurrentlyCrypto) {
+                        // 💥 Если режим БЫЛ ВЫКЛЮЧЕН, то мы его включаем и шлем публичный ключ собеседнику!
+                        viewModelScope.launch {
+                            repo.requestKeyExchange(chatId)
+                        }
+                    }
+
+                    _state.update { it.copy(isCryptoMode = !isCurrentlyCrypto) }
+                }
+            }
+
             is OnToggleGhostMode -> repo.toggleGhostMode()
             is OnSendMessage -> {
                 val text = _state.value.inputText.trim()
@@ -76,40 +94,28 @@ class ChatDetailsViewModel(
                     _state.update { it.copy(inputText = "") }
                 }
             }
+
             is OnGenerateRepliesClick -> generateReplies()
-            is OnSmartReplyClick -> _state.update { it.copy(inputText = intent.reply, smartReplies = emptyList()) }
+            is OnSmartReplyClick -> _state.update {
+                it.copy(
+                    inputText = intent.reply,
+                    smartReplies = emptyList()
+                )
+            }
+
             is OnCatchUpClick -> generateCatchUp()
             is OnDismissCatchUpDialog -> _state.update { it.copy(catchUpSummary = null) }
-        }
-    }
-
-    /*fun onIntent(intent: ChatDetailsIntent) {
-        when (intent) {
-            is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
-            //is OnSendMessage -> sendMessage()
-            is OnSmartReplyClick -> {
-                // При клике на чип — текст вставляется в инпут!
-                _state.update { it.copy(inputText = intent.reply, smartReplies = emptyList()) }
-            }
-            is OnGenerateRepliesClick -> generateReplies()
-            is OnCatchUpClick -> generateCatchUp()
-            is OnDismissCatchUpDialog -> _state.update { it.copy(catchUpSummary = null) }
-            is OnToggleGhostMode -> chatRepository.toggleGhostMode()
-            is OnToggleCryptoMode -> {
-                _state.update { it.copy(isCryptoMode = !it.isCryptoMode) }
-            }
-            is OnSendMessage -> {
-                val text = _state.value.inputText.trim()
-                val useCrypto = _state.value.isCryptoMode // 💥 Читаем статус тумблера
-                if (text.isBlank()) return
-
+            is ChatDetailsIntent.LoadMoreMessages -> {
+                if (isLoadingMore) return
+                isLoadingMore = true
                 viewModelScope.launch {
-                    chatRepository.sendMessage(chatId, text, useCrypto)
-                    _state.update { it.copy(inputText = "") }
+                    repo.loadMoreMessages(chatId, intent.fromMessageId)
+                    kotlinx.coroutines.delay(500) // Даем базе время записать данные
+                    isLoadingMore = false
                 }
             }
         }
-    }*/
+    }
 
     private fun loadChatInfo(repo: ChatRepository) {
         chatInfoJob?.cancel()
@@ -127,11 +133,16 @@ class ChatDetailsViewModel(
             }
         }
     }
-    private fun loadMyAvatar(repo: ChatRepository) {
+
+    private fun loadMyAvatar(session: AccountSession) {
         avatarJob?.cancel()
         avatarJob = viewModelScope.launch {
-            repo.observeMyAvatar().collect { path ->
-                _state.update { it.copy(myAvatarPath = path) }
+            session.chatRepository.observeMyProfile().collect { profile ->
+                _state.update {
+                    it.copy(
+                        avatarPath = profile.avatarPath, // В ChatDetails тебе нужен только avatarPath и myAvatarPath
+                    )
+                }
             }
         }
     }
@@ -144,16 +155,6 @@ class ChatDetailsViewModel(
             }
         }
     }
-
-    /*private fun sendMessage() {
-        val text = _state.value.inputText.trim()
-        if (text.isBlank()) return
-
-        viewModelScope.launch {
-            chatRepository.sendMessage(chatId, text)
-            _state.update { it.copy(inputText = "") } // Очищаем поле ввода
-        }
-    }*/
     private fun generateCatchUp() {
         val currentLastMessageId = _state.value.messages.lastOrNull()?.id
 

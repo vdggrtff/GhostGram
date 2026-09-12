@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import com.ghostgram.app.presentation.auth.AuthRoute
 import com.ghostgram.app.presentation.chats.ChatListRoute
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsRoute
+import com.ghostgram.app.presentation.contacts.ContactsRoute
 import com.ghostgram.app.presentation.settings.SettingsRoute
 
 @Composable
@@ -22,9 +23,12 @@ fun AppNavGraph(navController: NavHostController) {
             AuthRoute(
                 onAuthSuccess = {
                     // Переходим на чаты и удаляем экран авторизации из бэкстека
-                    navController.navigate("chat_list") {
+                    navController.navigate(Screen.ChatList.route) {
                         popUpTo(Screen.LoginScreen.route) { inclusive = true }
                     }
+                },
+                onNavigateBack = { // 💥 ВОЗВРАТ В НАСТРОЙКИ
+                    navController.popBackStack()
                 }
             )
         }
@@ -47,8 +51,24 @@ fun AppNavGraph(navController: NavHostController) {
             )
         }
 
+        composable(Screen.Contacts.route) {
+            ContactsRoute(
+                onNavigateToChat = { chatId ->
+                    navController.navigate("chat_details/$chatId")
+                }
+            )
+        }
+
         composable(Screen.Settings.route) {
-            SettingsRoute(onNavigateToAuth = {navController.navigate(Screen.LoginScreen.route)})
+            SettingsRoute(
+                onNavigateToAuth = { navController.navigate(Screen.LoginScreen.route){
+                    popUpTo(navController.graph.id) { inclusive = true }
+                } },
+                onNavigateToChatList = { // 💥 ДОБАВИЛИ МАРШРУТ
+                    navController.navigate(Screen.ChatList.route) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                })
         }
     }
 }

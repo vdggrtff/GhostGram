@@ -20,6 +20,7 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.koin.core)
+            implementation("com.squareup.okio:okio:3.9.0")
         }
     }
 }

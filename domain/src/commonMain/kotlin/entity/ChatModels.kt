@@ -15,7 +15,9 @@ data class Message(
     val mediaType: MessageMediaType = MessageMediaType.TEXT,
     val fileName: String? = null,       // Например: "document.pdf"
     val fileExtraInfo: String? = null,   // Размер ("12.4 MB"), длительность ("0:45") или эмодзи стикера
-    val isRead: Boolean = false
+    val isRead: Boolean = false,
+    val date: Int = 0,
+    val mediaAlbumId: Long = 0L
 )
 
 data class Chat(
@@ -23,5 +25,5 @@ data class Chat(
     val title: String,
     val unreadCount: Int,
     val lastMessage: Message?,
-    val avatarPath: String? = null // 💥 Локальный путь к аватарке
+    val avatarPath: String? = null, // 💥 Локальный путь к аватарке
 )

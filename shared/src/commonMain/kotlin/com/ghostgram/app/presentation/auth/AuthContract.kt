@@ -15,4 +15,5 @@ sealed interface AuthIntent {
     data class OnInputChanged(val text: String) : AuthIntent
     data object OnSubmit : AuthIntent
     data object ClearError : AuthIntent
+    data object OnCancelClick : AuthIntent
 }

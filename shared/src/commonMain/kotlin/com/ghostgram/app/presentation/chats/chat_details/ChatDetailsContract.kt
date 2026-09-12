@@ -31,4 +31,6 @@ sealed interface ChatDetailsIntent {
     data object OnDismissCatchUpDialog : ChatDetailsIntent
     data object OnToggleGhostMode : ChatDetailsIntent
     data object OnToggleCryptoMode : ChatDetailsIntent
+
+    data class LoadMoreMessages(val fromMessageId: Long) : ChatDetailsIntent
 }

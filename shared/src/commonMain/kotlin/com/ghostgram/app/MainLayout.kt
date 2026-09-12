@@ -1,6 +1,7 @@
 package com.ghostgram.app
 
 import SessionManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.ghostgram.app.navigation.AppNavGraph
@@ -27,23 +29,25 @@ fun MainLayout() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val showBottomBar = currentRoute == Screen.ChatList.route || currentRoute == Screen.Settings.route
+    val showBottomBar = currentRoute == Screen.ChatList.route || currentRoute == Screen.Settings.route || currentRoute == Screen.Contacts.route
 
     val sessionManager: SessionManager = koinInject()
     val currentSession by sessionManager.currentSession.collectAsState()
 
-    LaunchedEffect(Unit) {
+    /*LaunchedEffect(Unit) {
         sessionManager.initDefaultAccount() // 💥 Всегда один и тот же "main_account"!
+    }*/
+    LaunchedEffect(Unit) {
+        // 💥 Грузим аккаунты с диска!
+        sessionManager.loadSavedAccounts()
     }
 
     if (currentSession == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().background(GhostBackground), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = GhostPrimary)
         }
         return
     }
-
-
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -66,7 +70,8 @@ fun MainLayout() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = paddingValues.calculateTopPadding())
+                .background(GhostBackground)
         ) {
             AppNavGraph(navController)
         }

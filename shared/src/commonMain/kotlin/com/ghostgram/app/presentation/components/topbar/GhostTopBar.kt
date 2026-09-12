@@ -5,11 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -34,6 +36,7 @@ fun GhostTopBar(
     avatarPath: String?,
     chatTitle: String,
     isGhostMode: Boolean,
+    isCryptoMode: Boolean,
     onBackClick: () -> Unit,
     onIntent: (ChatDetailsIntent) -> Unit
 ){
@@ -45,29 +48,34 @@ fun GhostTopBar(
         ),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 💥 Аватарка собеседника в шапке
-                if (avatarPath != null) {
-                    AsyncImage(
-                        model = avatarPath,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(38.dp).clip(CircleShape)
-                    )
-                } else {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    // Сама аватарка
+                    if (avatarPath != null) {
+                        AsyncImage(
+                            model = avatarPath,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(40.dp).clip(CircleShape)
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.size(40.dp).clip(CircleShape).background(GhostPrimary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(chatTitle.take(1).uppercase(), color = GhostPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // 💥 ЗЕЛЕНАЯ ТОЧКА ОНЛАЙНА (С обводкой цвета фона, чтобы не сливалась!)
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(12.dp)
                             .clip(CircleShape)
-                            .background(GhostPrimary.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = chatTitle.take(1).uppercase(),
-                            color = GhostPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                            .background(GhostBackground) // Обводка
+                            .padding(2.dp) // Толщина обводки
+                            .clip(CircleShape)
+                            .background(Color(0xFF00E676)) // Неоновый зеленый
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -90,16 +98,24 @@ fun GhostTopBar(
             }
         },
         actions = {
-            IconButton(
-                onClick = { onIntent(ChatDetailsIntent.OnToggleGhostMode) }
-            ) {
-                if (isGhostMode) {
-                    // Режим невидимки включен (Фиолетовый неоновый призрак)
-                    Text("👻", fontSize = 22.sp)
-                } else {
-                    // Обычный режим (Глаз, тебя видят!)
-                    Text("👁️", fontSize = 20.sp)
-                }
+            // Кнопка Шифрования
+            IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleCryptoMode) }) {
+                Text(
+                    text = if (isCryptoMode) "🔒" else "🔓",
+                    fontSize = 18.sp,
+                    // Слегка затемняем открытый замок, чтобы не отвлекал
+                    color = if (isCryptoMode) Color.White else Color.White.copy(alpha = 0.5f)
+                )
+            }
+
+            // Кнопка Ghost Mode (Призрак/Глаз)
+            IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleGhostMode) }) {
+                Text(if (isGhostMode) "👻" else "👁️", fontSize = 20.sp)
+            }
+
+            // Стандартные три точки (Опции)
+            IconButton(onClick = { /* TODO */ }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Опции", tint = Color.White)
             }
         }
     )
