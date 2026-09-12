@@ -3,6 +3,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import repository.AuthRepository
 import repository.ChatRepository
+import repository.ContactRepository
 import kotlin.time.Clock
 import kotlin.time.Clock.System
 
@@ -10,7 +11,8 @@ import kotlin.time.Clock.System
 data class AccountSession(
     val accountId: String,
     val chatRepository: ChatRepository,
-    val authRepository: AuthRepository
+    val authRepository: AuthRepository,
+    val contactRepository: ContactRepository
 )
 
 class SessionManager(

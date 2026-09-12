@@ -29,7 +29,7 @@ fun MainLayout() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val showBottomBar = currentRoute == Screen.ChatList.route || currentRoute == Screen.Settings.route
+    val showBottomBar = currentRoute == Screen.ChatList.route || currentRoute == Screen.Settings.route || currentRoute == Screen.Contacts.route
 
     val sessionManager: SessionManager = koinInject()
     val currentSession by sessionManager.currentSession.collectAsState()

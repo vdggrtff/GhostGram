@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ghostgram.app.navigation.Screen
@@ -73,7 +74,7 @@ fun GhostBottomBar(
                 icon = Icons.Default.Group,
                 label = "Контакты",
                 isSelected = currentRoute == Screen.Contacts.route,
-                onClick = { Screen.Contacts.route },
+                onClick = { onNavigate(Screen.Contacts.route) },
                 modifier = Modifier.weight(1f)
             )
             GhostBottomBarItem(
@@ -121,7 +122,7 @@ private fun GhostBottomBarItem(
             Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(24.dp))
         }
         Spacer(modifier = Modifier.height(2.dp))
-        Text(text = label, fontSize = 11.sp, color = color, fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal)
+        Text(text = label, fontSize = 11.sp, color = color, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
     }
 }
 

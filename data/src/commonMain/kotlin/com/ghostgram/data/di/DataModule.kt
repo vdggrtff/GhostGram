@@ -8,6 +8,7 @@ import com.ghostgram.core.tdlib.di.TdlibConfig
 import com.ghostgram.data.repository.AiRepositoryImpl
 import com.ghostgram.data.repository.AuthRepositoryImpl
 import com.ghostgram.data.repository.ChatRepositoryImpl
+import com.ghostgram.data.repository.ContactRepositoryImpl
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.module
 import repository.AiRepository
@@ -33,6 +34,9 @@ val dataModule = module {
                     cryptoLayer = CryptoLayer(databasePath = tdlibConfig.databasePath)
                 ),
                 authRepository = AuthRepositoryImpl(
+                    tdlibClient = tdlibClient
+                ),
+                contactRepository = ContactRepositoryImpl( // 💥 Добавили контакт-репозиторий!
                     tdlibClient = tdlibClient
                 )
             )
