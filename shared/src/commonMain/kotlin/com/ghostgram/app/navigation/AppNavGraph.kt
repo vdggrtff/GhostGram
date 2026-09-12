@@ -23,9 +23,12 @@ fun AppNavGraph(navController: NavHostController) {
             AuthRoute(
                 onAuthSuccess = {
                     // Переходим на чаты и удаляем экран авторизации из бэкстека
-                    navController.navigate("chat_list") {
+                    navController.navigate(Screen.ChatList.route) {
                         popUpTo(Screen.LoginScreen.route) { inclusive = true }
                     }
+                },
+                onNavigateBack = { // 💥 ВОЗВРАТ В НАСТРОЙКИ
+                    navController.popBackStack()
                 }
             )
         }
@@ -57,7 +60,15 @@ fun AppNavGraph(navController: NavHostController) {
         }
 
         composable(Screen.Settings.route) {
-            SettingsRoute(onNavigateToAuth = {navController.navigate(Screen.LoginScreen.route)})
+            SettingsRoute(
+                onNavigateToAuth = { navController.navigate(Screen.LoginScreen.route){
+                    popUpTo(navController.graph.id) { inclusive = true }
+                } },
+                onNavigateToChatList = { // 💥 ДОБАВИЛИ МАРШРУТ
+                    navController.navigate(Screen.ChatList.route) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                })
         }
     }
 }

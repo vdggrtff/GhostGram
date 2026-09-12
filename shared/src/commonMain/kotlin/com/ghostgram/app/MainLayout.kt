@@ -34,8 +34,12 @@ fun MainLayout() {
     val sessionManager: SessionManager = koinInject()
     val currentSession by sessionManager.currentSession.collectAsState()
 
-    LaunchedEffect(Unit) {
+    /*LaunchedEffect(Unit) {
         sessionManager.initDefaultAccount() // 💥 Всегда один и тот же "main_account"!
+    }*/
+    LaunchedEffect(Unit) {
+        // 💥 Грузим аккаунты с диска!
+        sessionManager.loadSavedAccounts()
     }
 
     if (currentSession == null) {

@@ -35,11 +35,15 @@ class AuthViewModel(
         }
     }
 
-    fun onIntent(intent: AuthIntent) {
+    fun onIntent(intent: AuthIntent, onNavigateBack: () -> Unit = {}) {
         when (intent) {
             is AuthIntent.OnInputChanged -> _state.update { it.copy(inputText = intent.text, errorMessage = null) }
             is AuthIntent.ClearError -> _state.update { it.copy(errorMessage = null) }
             is AuthIntent.OnSubmit -> submitCurrentStep()
+            is AuthIntent.OnCancelClick -> {
+                sessionManager.cancelAddingAccount()
+                onNavigateBack() // Возвращаемся в настройки
+            }
         }
     }
 

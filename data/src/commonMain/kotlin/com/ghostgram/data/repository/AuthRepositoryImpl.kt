@@ -19,8 +19,10 @@ class AuthRepositoryImpl(
                 json.contains("authorizationStateWaitCode") -> AuthState.WaitCode
                 json.contains("authorizationStateWaitPassword") -> AuthState.WaitPassword
                 json.contains("authorizationStateReady") -> AuthState.Authorized // 💥
-                json.contains("error") && json.contains("PHONE_NUMBER_INVALID") -> AuthState.Error("Неверный номер")
-                json.contains("error") && json.contains("PHONE_CODE_INVALID") -> AuthState.Error("Неверный код")
+                json.contains("error") && json.contains("PASSWORD_HASH_INVALID") -> AuthState.Error("Неверный пароль!")
+                json.contains("error") && json.contains("PHONE_NUMBER_INVALID") -> AuthState.Error("Неверный номер телефона")
+                json.contains("error") && json.contains("PHONE_CODE_INVALID") -> AuthState.Error("Неверный код из СМС")
+                json.contains("error") && json.contains("Too Many Requests") -> AuthState.Error("Слишком много попыток. Подождите.")
                 else -> null
             }
         }

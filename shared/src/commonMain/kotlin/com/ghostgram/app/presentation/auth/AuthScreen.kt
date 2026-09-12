@@ -3,20 +3,26 @@ package com.ghostgram.app.presentation.auth
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ghostgram.app.ui.theme.GhostBackground
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun AuthRoute(
     viewModel: AuthViewModel = koinViewModel(),
-    onAuthSuccess: () -> Unit
+    onAuthSuccess: () -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -29,7 +35,7 @@ fun AuthRoute(
 
     AuthScreen(
         state = state,
-        onIntent = viewModel::onIntent
+        onIntent = { intent -> viewModel.onIntent(intent, onNavigateBack) }
     )
 }
 
@@ -38,11 +44,28 @@ fun AuthScreen(
     state: AuthScreenState,
     onIntent: (AuthIntent) -> Unit
 ) {
-    Scaffold { padding ->
+    Scaffold(
+        containerColor = GhostBackground, // Из твоей темы
+        topBar = {
+            TopAppBar(
+                title = { Text("Добавление аккаунта", color = Color.White, fontSize = 18.sp) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
+                navigationIcon = {
+                    // 💥 КНОПКА ОТМЕНЫ (НАЗАД)
+                    IconButton(onClick = { onIntent(AuthIntent.OnCancelClick) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
+                    }
+                }
+            )
+        }
+    ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "GhostGRAM 👻",

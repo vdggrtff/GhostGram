@@ -12,6 +12,7 @@ import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
 import entity.Chat
 import entity.Message
 import entity.MessageMediaType
+import entity.MyProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -42,8 +43,6 @@ class ChatRepositoryImpl(
     private val _chatsMap = MutableStateFlow<Map<Long, Chat>>(emptyMap())
     private val repoScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
-    private val _myAvatarPath = MutableStateFlow<String?>(null)
-
     private val _isGhostModeEnabled = MutableStateFlow(true)
 
     private val lastReadOutboxMap = mutableMapOf<Long, Long>()
@@ -51,10 +50,12 @@ class ChatRepositoryImpl(
     override fun observeGhostMode(): Flow<Boolean> = _isGhostModeEnabled.asStateFlow()
     private val downloadTracker = DownloadTracker()
 
+    private val _myProfile = MutableStateFlow(MyProfile())
+
     private val handlers: List<TdlibUpdateHandler> = listOf(
         MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker, cryptoLayer),
         ChatUpdateHandler(_chatsMap, lastReadOutboxMap, tdlibClient, messageDao, repoScope, downloadTracker),
-        ProfileAndFileHandler(_myAvatarPath, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker)
+        ProfileAndFileHandler(_myProfile, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker)
     )
 
 
@@ -98,10 +99,10 @@ class ChatRepositoryImpl(
         """.trimIndent())
     }
 
-    override fun observeMyAvatar(): Flow<String?> {
+    /*override fun observeMyAvatar(): Flow<String?> {
         tdlibClient.send("""{"@type": "getMe", "@extra": "get_me_avatar"}""")
         return _myAvatarPath.asStateFlow()
-    }
+    }*/
 
     override fun observeMessages(chatId: Long): Flow<List<Message>> {
         // 1. Говорим Telegram, что мы смотрим в этот чат
@@ -171,6 +172,7 @@ class ChatRepositoryImpl(
         // Склеиваем последние N сообщений в текст для Gemini
         return entities
             .takeLast(limit)
+            .filter { it.fileExtraInfo != "ENCRYPTED" }
             .joinToString("\n") { entity ->
                 "${entity.senderName}: ${entity.text}"
             }
@@ -265,5 +267,12 @@ class ChatRepositoryImpl(
             }
         """.trimIndent()
         tdlibClient.send(request)
+    }
+
+    override fun observeMyProfile(): Flow<MyProfile> {
+        // 💥 Запрашиваем профиль КАЖДЫЙ РАЗ, когда UI на него подписывается!
+        // Теперь никаких 404, потому что в настройки мы заходим уже залогиненными.
+        tdlibClient.send("""{"@type": "getMe", "@extra": "get_me_avatar"}""")
+        return _myProfile.asStateFlow()
     }
 }

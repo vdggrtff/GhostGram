@@ -1,5 +1,6 @@
 package com.ghostgram.app.presentation.chats.chat_details
 
+import AccountSession
 import SessionManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -55,7 +56,7 @@ class ChatDetailsViewModel(
                     val repo = session.chatRepository
                     loadChatInfo(repo)
                     loadMessages(repo)
-                    loadMyAvatar(repo)
+                    loadMyAvatar(session)
                     observeGhostMode(repo)
                 }
             }
@@ -133,11 +134,15 @@ class ChatDetailsViewModel(
         }
     }
 
-    private fun loadMyAvatar(repo: ChatRepository) {
+    private fun loadMyAvatar(session: AccountSession) {
         avatarJob?.cancel()
         avatarJob = viewModelScope.launch {
-            repo.observeMyAvatar().collect { path ->
-                _state.update { it.copy(myAvatarPath = path) }
+            session.chatRepository.observeMyProfile().collect { profile ->
+                _state.update {
+                    it.copy(
+                        avatarPath = profile.avatarPath, // В ChatDetails тебе нужен только avatarPath и myAvatarPath
+                    )
+                }
             }
         }
     }
@@ -150,16 +155,6 @@ class ChatDetailsViewModel(
             }
         }
     }
-
-    /*private fun sendMessage() {
-        val text = _state.value.inputText.trim()
-        if (text.isBlank()) return
-
-        viewModelScope.launch {
-            chatRepository.sendMessage(chatId, text)
-            _state.update { it.copy(inputText = "") } // Очищаем поле ввода
-        }
-    }*/
     private fun generateCatchUp() {
         val currentLastMessageId = _state.value.messages.lastOrNull()?.id
 
