@@ -4,6 +4,7 @@ import SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,87 +21,82 @@ class ChatListViewModel(
     private val _state = MutableStateFlow(ChatListState())
     val state: StateFlow<ChatListState> = _state.asStateFlow()
 
-    private var currentChatsJob: Job? = null
-
-    private var searchResultsJob: Job? = null
-
-    private var typingJob: Job? = null
+    private var sessionObserversJob: Job? = null // Слушает базу данных
+    private var searchDebounceJob: Job? = null   // Таймер задержки при вводе текста
 
     init {
         viewModelScope.launch {
             sessionManager.currentSession.collect { session ->
                 if (session != null) {
-                    loadChatsForSession(session.chatRepository)
+                    observeSessionData(session.chatRepository)
                 } else {
-                    _state.update { it.copy(chats = emptyList()) }
+                    _state.update { it.copy(chats = emptyList(), globalSearchResults = emptyList(), messageSearchResults = emptyList()) }
+                }
+            }
+        }
+    }
+
+    private fun observeSessionData(repo: ChatRepository) {
+        sessionObserversJob?.cancel() // Отменяем старые подписки, если сменился аккаунт
+
+        sessionObserversJob = viewModelScope.launch {
+            // 1. Слушаем список чатов
+            launch {
+                repo.observeChats().collect { chatList ->
+                    _state.update { it.copy(isLoading = false, chats = chatList) }
+                }
+            }
+            // 2. Слушаем результаты глобального поиска (каналы)
+            launch {
+                repo.observeSearchResults().collect { publicChats ->
+                    _state.update { it.copy(globalSearchResults = publicChats, isSearching = false) }
+                }
+            }
+            // 3. Слушаем результаты поиска по сообщениям
+            launch {
+                repo.observeMessageSearchResults().collect { foundMessages ->
+                    _state.update { it.copy(messageSearchResults = foundMessages, isSearching = false) }
                 }
             }
         }
     }
 
     fun onIntent(intent: ChatListIntent) {
+        val repo = sessionManager.currentSession.value?.chatRepository
         when (intent) {
             is ChatListIntent.LoadChats -> {
-                val repo = sessionManager.currentSession.value?.chatRepository
-                if (repo != null) loadChatsForSession(repo)
+                repo?.let { observeSessionData(it) }
             }
-            //is ChatListIntent.LoadChats -> loadChats()
             is ChatListIntent.OnSummarizeChatClick -> summarizeChat(intent.chatId)
             is ChatListIntent.OnDismissSummaryDialog -> dismissSummary()
             is ChatListIntent.OnSearchQueryChanged -> {
-                println("📥 [2. ViewModel] Получен интент с текстом: '${intent.query}'")
                 _state.update { it.copy(searchQuery = intent.query) }
 
-                typingJob?.cancel()
-                val session = sessionManager.currentSession.value
-                val repo = session?.chatRepository
-
-                if (repo == null) {
-                    println("❌ [ViewModel ERROR] Репозиторий равен NULL! Активная сессия: ${session?.accountId}")
-                    return
-                }
+                searchDebounceJob?.cancel() // Отменяем таймер, если юзер продолжает печатать
 
                 if (intent.query.isBlank()) {
-                    repo.searchPublicChats("")
-                    _state.update { it.copy(isSearching = false, globalSearchResults = emptyList()) }
+                    // Если строка пустая — мгновенно очищаем поиск
+                    repo?.searchPublicChats("")
+                    repo?.searchMessages("")
+                    _state.update { it.copy(globalSearchResults = emptyList(), messageSearchResults = emptyList(), isSearching = false) }
                 } else {
                     _state.update { it.copy(isSearching = true) }
-                    typingJob = viewModelScope.launch {
-                        kotlinx.coroutines.delay(400) // Ждем пока юзер допечатает
-                        println("🚀 [2. ViewModel] Отправляем запрос в репозиторий: '${intent.query}'")
-                        repo.searchPublicChats(intent.query)
+
+                    // 💥 Ждем 400мс и шлем ОДИН запрос
+                    searchDebounceJob = viewModelScope.launch {
+                        delay(400)
+                        repo?.searchPublicChats(intent.query)
+                        repo?.searchMessages(intent.query)
                     }
                 }
             }
         }
     }
 
-    private fun loadChatsForSession(chatRepository: ChatRepository) {
-        // Отменяем прослушивание старого аккаунта, если оно было
-        currentChatsJob?.cancel()
-        searchResultsJob?.cancel()
-
-        _state.update { it.copy(isLoading = true) }
-
-        currentChatsJob = viewModelScope.launch {
-            chatRepository.observeChats().collect { chatList ->
-                _state.update { it.copy(isLoading = false, chats = chatList) }
-            }
-        }
-
-        searchResultsJob = viewModelScope.launch {
-            chatRepository.observeSearchResults().collect { results ->
-                _state.update { it.copy(globalSearchResults = results, isSearching = false) }
-            }
-        }
-    }
     private fun summarizeChat(chatId: Long) {
         viewModelScope.launch {
-            // Включаем крутилку лоадера для AI
             _state.update { it.copy(isSummarizing = true, errorMessage = null) }
-
             val result = generateChatSummaryUseCase(chatId = chatId)
-
             result.onSuccess { summary ->
                 _state.update { it.copy(isSummarizing = false, aiSummaryText = summary) }
             }.onFailure { error ->

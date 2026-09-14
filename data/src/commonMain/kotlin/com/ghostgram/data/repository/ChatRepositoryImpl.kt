@@ -56,11 +56,13 @@ class ChatRepositoryImpl(
 
     private val _searchResults = MutableStateFlow<List<PublicChat>>(emptyList())
 
+    private val _messageSearchResults = MutableStateFlow<List<Chat>>(emptyList())
+
     private val handlers: List<TdlibUpdateHandler> = listOf(
+        SearchUpdateHandler(_searchResults, _messageSearchResults, _chatsMap),
         MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker, cryptoLayer),
         ChatUpdateHandler(_chatsMap, lastReadOutboxMap, tdlibClient, messageDao, repoScope, downloadTracker),
         ProfileAndFileHandler(_myProfile, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker),
-        SearchUpdateHandler(_searchResults, _chatsMap)
     )
 
 
@@ -81,9 +83,6 @@ class ChatRepositoryImpl(
     }
 
     override fun observeChats(): Flow<List<Chat>> {
-
-        /*tdlibClient.send("""{"@type": "loadChats", "chat_list": {"@type": "chatListMain"}, "limit": 30}""")
-        return _chatsMap.map { it.values.toList() }*/
         tdlibClient.send("""{"@type": "getMe"}""")
         tdlibClient.send("""{"@type": "loadChats", "chat_list": {"@type": "chatListMain"}, "limit": 30}""")
 
@@ -111,11 +110,6 @@ class ChatRepositoryImpl(
             }
         """.trimIndent())
     }
-
-    /*override fun observeMyAvatar(): Flow<String?> {
-        tdlibClient.send("""{"@type": "getMe", "@extra": "get_me_avatar"}""")
-        return _myAvatarPath.asStateFlow()
-    }*/
 
     override fun observeMessages(chatId: Long): Flow<List<Message>> {
         // 1. Говорим Telegram, что мы смотрим в этот чат
@@ -221,12 +215,6 @@ class ChatRepositoryImpl(
     }
 
     override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean) {
-        /*val finalText = if (useCrypto) {
-            cryptoLayer.encryptAndHide(chatId = chatId, text = text)
-        } else {
-            text
-        }*/
-
         val finalText = if (useCrypto) {
             // 💥 ПРОВЕРЯЕМ: если рукопожатие еще не завершено — шлем запрос ключей вместо мусора!
             if (!cryptoLayer.isChatSecure(chatId)) {
@@ -300,11 +288,55 @@ class ChatRepositoryImpl(
         println("📡 [3. Repo -> TDLib] Шлем команду searchPublicChats в C++: '$query'")
 
         // 💥 Отправляем запрос с фиксированной меткой!
-        val request = """
+       /* val request = """
             {
                 "@type": "searchPublicChats",
                 "query": "$query",
                 "@extra": "search_public" 
+            }
+        """.trimIndent()*/
+
+        val request = """
+            {
+                "@type": "searchPublicChats",
+                "query": "$query",
+                "@extra": "search_public_$query" 
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
+    }
+
+    override fun observeMessageSearchResults(): Flow<List<Chat>> = _messageSearchResults.asStateFlow()
+
+    override fun searchMessages(query: String) {
+        if (query.isBlank()) {
+            _messageSearchResults.value = emptyList()
+            return
+        }
+
+        println("🔍 [ПОИСК СООБЩЕНИЙ] Отправляем запрос в TDLib: '$query'")
+
+        // 💥 Запрашиваем у Telegram поиск по текстам!
+        /*val request = """
+            {
+                "@type": "searchMessages",
+                "query": "$query",
+                "offset_date": 0,
+                "offset_chat_id": 0,
+                "offset_message_id": 0,
+                "limit": 20,
+                "@extra": "search_msg_$query"
+            }
+        """.trimIndent()*/
+        val request = """
+            {
+                "@type": "searchMessages",
+                "query": "$query",
+                "offset_date": 0,
+                "offset_chat_id": 0,
+                "offset_message_id": 0,
+                "limit": 20,
+                "@extra": "search_msg_$query"
             }
         """.trimIndent()
 

@@ -27,4 +27,7 @@ interface ChatRepository {
 
     fun observeSearchResults(): Flow<List<PublicChat>>
     fun searchPublicChats(query: String)
+
+    fun observeMessageSearchResults(): Flow<List<Chat>>
+    fun searchMessages(query: String)
 }

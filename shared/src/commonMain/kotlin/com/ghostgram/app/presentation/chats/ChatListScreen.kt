@@ -191,7 +191,7 @@ fun ChatListScreen(
                 contentPadding = PaddingValues(bottom = 100.dp)
             ) {
                 // 💥 РАЗВИЛКА: ЕСЛИ ВВЕДЕН ТЕКСТ ПОИСКА
-                if (state.searchQuery.isNotBlank()) {
+                /*if (state.searchQuery.isNotBlank()) {
 
                     // Локальный поиск по названиям чатов
                     val localResults = state.chats.filter { chat ->
@@ -217,9 +217,18 @@ fun ChatListScreen(
                         }
                     }
 
+                    if (state.messageSearchResults.isNotEmpty()) {
+                        item {
+                            Text("Сообщения", color = GhostPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                        }
+                        items(state.messageSearchResults, key = { "msg_${it.lastMessage?.id}" }) { chat ->
+                            GhostChatListItem(chat = chat, onClick = { onNavigateToChat(chat.id) })
+                        }
+                    }
+
                     if (state.isSearching) {
                         item { Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = GhostPrimary, modifier = Modifier.size(24.dp)) } }
-                    } else if (state.globalSearchResults.isEmpty()) {
+                    } else if (localResults.isEmpty() && state.messageSearchResults.isEmpty() && state.globalSearchResults.isEmpty()) {
                         item { Text("Ничего не найдено", color = GhostTextSecondary, modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
                     }
 
@@ -228,6 +237,62 @@ fun ChatListScreen(
                             chat = Chat(id = publicChat.id, title = publicChat.title, unreadCount = 0, lastMessage = Message(id = 0, chatId = publicChat.id, senderName = "", text = "@${publicChat.username}"), avatarPath = publicChat.avatarPath),
                             onClick = { onNavigateToChat(publicChat.id) }
                         )
+                    }
+                }*/
+                if (state.searchQuery.isNotBlank()) {
+
+                    // 1. ЛОКАЛЬНЫЕ ЧАТЫ (Мои чаты)
+                    val localResults = state.chats.filter { chat ->
+                        chat.title.contains(state.searchQuery, ignoreCase = true)
+                    }
+
+                    if (localResults.isNotEmpty()) {
+                        item { Text("Мои чаты", color = GhostPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
+                        items(localResults, key = { "local_${it.id}" }) { chat ->
+                            GhostChatListItem(chat = chat, onClick = { onNavigateToChat(chat.id) })
+                        }
+                    }
+
+                    // 2. ГЛОБАЛЬНЫЙ ПОИСК (Каналы)
+                    if (state.globalSearchResults.isNotEmpty() || state.isSearching) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Глобальный поиск", color = GhostPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("🛡️ Спам скрыт", color = GhostSecureGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (state.isSearching) {
+                            item { Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = GhostPrimary, modifier = Modifier.size(24.dp)) } }
+                        }
+
+                        items(state.globalSearchResults, key = { "search_${it.id}" }) { publicChat ->
+                            GhostChatListItem(
+                                chat = Chat(id = publicChat.id, title = publicChat.title, unreadCount = 0, lastMessage = Message(id = 0, chatId = publicChat.id, senderName = "", text = "@${publicChat.username}"), avatarPath = publicChat.avatarPath),
+                                onClick = { onNavigateToChat(publicChat.id) }
+                            )
+                        }
+                    }
+
+                    // 3. СООБЩЕНИЯ (Из твоих переписок)
+                    if (state.messageSearchResults.isNotEmpty()) {
+                        item {
+                            Text("Сообщения", color = GhostPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                        }
+
+                        // 💥 ФИКС КРАША: Ключ = ChatID + MessageID (абсолютно уникальный!)
+                        items(state.messageSearchResults, key = { "msg_${it.id}_${it.lastMessage?.id}" }) { chat ->
+                            GhostChatListItem(chat = chat, onClick = { onNavigateToChat(chat.id) })
+                        }
+                    }
+
+                    // 4. "НИЧЕГО НЕ НАЙДЕНО"
+                    if (localResults.isEmpty() && state.messageSearchResults.isEmpty() && state.globalSearchResults.isEmpty() && !state.isSearching) {
+                        item { Text("Ничего не найдено", color = GhostTextSecondary, modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
                     }
                 }
                 // 💥 ИНАЧЕ - ОБЫЧНЫЙ СПИСОК ТВОИХ ЧАТОВ

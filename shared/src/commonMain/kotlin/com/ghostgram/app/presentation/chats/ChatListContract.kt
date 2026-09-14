@@ -11,7 +11,8 @@ data class ChatListState(
     val errorMessage: String? = null,
     val searchQuery: String = "",
     val globalSearchResults: List<PublicChat> = emptyList(),
-    val isSearching: Boolean = false
+    val isSearching: Boolean = false,
+    val messageSearchResults: List<Chat> = emptyList()
 )
 
 // 2. Все возможные действия пользователя на этом экране
