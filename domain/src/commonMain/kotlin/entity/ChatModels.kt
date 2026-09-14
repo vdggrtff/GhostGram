@@ -26,4 +26,6 @@ data class Chat(
     val unreadCount: Int,
     val lastMessage: Message?,
     val avatarPath: String? = null, // 💥 Локальный путь к аватарке
+    val isJoined: Boolean = false,
+    val order: Long = 0L
 )

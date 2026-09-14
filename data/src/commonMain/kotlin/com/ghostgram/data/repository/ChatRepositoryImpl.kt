@@ -8,11 +8,13 @@ import com.ghostgram.data.repository.handlers.ChatUpdateHandler
 import com.ghostgram.data.repository.handlers.DownloadTracker
 import com.ghostgram.data.repository.handlers.MessageUpdateHandler
 import com.ghostgram.data.repository.handlers.ProfileAndFileHandler
+import com.ghostgram.data.repository.handlers.SearchUpdateHandler
 import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
 import entity.Chat
 import entity.Message
 import entity.MessageMediaType
 import entity.MyProfile
+import entity.PublicChat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -52,10 +54,13 @@ class ChatRepositoryImpl(
 
     private val _myProfile = MutableStateFlow(MyProfile())
 
+    private val _searchResults = MutableStateFlow<List<PublicChat>>(emptyList())
+
     private val handlers: List<TdlibUpdateHandler> = listOf(
         MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker, cryptoLayer),
         ChatUpdateHandler(_chatsMap, lastReadOutboxMap, tdlibClient, messageDao, repoScope, downloadTracker),
-        ProfileAndFileHandler(_myProfile, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker)
+        ProfileAndFileHandler(_myProfile, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker),
+        SearchUpdateHandler(_searchResults, _chatsMap)
     )
 
 
@@ -77,8 +82,16 @@ class ChatRepositoryImpl(
 
     override fun observeChats(): Flow<List<Chat>> {
 
+        /*tdlibClient.send("""{"@type": "loadChats", "chat_list": {"@type": "chatListMain"}, "limit": 30}""")
+        return _chatsMap.map { it.values.toList() }*/
+        tdlibClient.send("""{"@type": "getMe"}""")
         tdlibClient.send("""{"@type": "loadChats", "chat_list": {"@type": "chatListMain"}, "limit": 30}""")
-        return _chatsMap.map { it.values.toList() }
+
+        return _chatsMap.map { map ->
+            map.values
+                .filter { it.order > 0L } // 💥 ВЫКИДЫВАЕМ ВЕСЬ МУСОР ИЗ КЭША!
+                .sortedByDescending { it.order } // 💥 Сортируем (свежие чаты сверху!)
+        }
     }
 
     override fun observeChat(chatId: Long): Flow<Chat?> {
@@ -275,4 +288,27 @@ class ChatRepositoryImpl(
         tdlibClient.send("""{"@type": "getMe", "@extra": "get_me_avatar"}""")
         return _myProfile.asStateFlow()
     }
+
+    override fun observeSearchResults(): Flow<List<PublicChat>> = _searchResults.asStateFlow()
+
+    override fun searchPublicChats(query: String) {
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+
+        println("📡 [3. Repo -> TDLib] Шлем команду searchPublicChats в C++: '$query'")
+
+        // 💥 Отправляем запрос с фиксированной меткой!
+        val request = """
+            {
+                "@type": "searchPublicChats",
+                "query": "$query",
+                "@extra": "search_public" 
+            }
+        """.trimIndent()
+
+        tdlibClient.send(request)
+    }
+
 }

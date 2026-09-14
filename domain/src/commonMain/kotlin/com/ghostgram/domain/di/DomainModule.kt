@@ -23,7 +23,7 @@ val domainModule = module {
     }*/
 
     single {
-        SessionManager(sessionFactory = get())
+        SessionManager( appStorage = get(), sessionFactory = get())
     }
 
     // factory означает, что каждый раз при запросе будет создаваться новый экземпляр UseCase

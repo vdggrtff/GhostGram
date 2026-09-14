@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,27 +36,38 @@ fun GhostSearchBar(
 ) {
     BasicTextField(
         value = query,
-        onValueChange = onQueryChange,
+        onValueChange = { newText ->
+            // 💥 ДИАГНОСТИЧЕСКИЙ ЛОГ №1 (Срабатывает ли клавиатура вообще)
+            println("⌨️ [1. UI SearchBar] Нажата клавиша: '$newText'")
+            onQueryChange(newText)
+        },
         textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
         cursorBrush = SolidColor(Color.White),
         singleLine = true,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(38.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(GhostCard),
         decorationBox = { innerTextField ->
             Row(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .height(38.dp) // 💥 Изящная высота, как в iOS/Telegram!
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(GhostCard)
+                modifier = Modifier
+                    .fillMaxSize()
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Search, contentDescription = null, tint = GhostTextSecondary, modifier = Modifier.size(18.dp))
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "Поиск",
+                    tint = GhostTextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(modifier = Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text("Поиск...", color = GhostTextSecondary, fontSize = 15.sp)
+                        Text("Поиск чатов и каналов...", color = GhostTextSecondary, fontSize = 15.sp)
                     }
-                    innerTextField() // Сам текст
+                    innerTextField() // Сам курсор и текст
                 }
             }
         }

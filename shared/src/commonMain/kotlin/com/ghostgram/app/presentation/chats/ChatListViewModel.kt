@@ -22,6 +22,10 @@ class ChatListViewModel(
 
     private var currentChatsJob: Job? = null
 
+    private var searchResultsJob: Job? = null
+
+    private var typingJob: Job? = null
+
     init {
         viewModelScope.launch {
             sessionManager.currentSession.collect { session ->
@@ -43,18 +47,50 @@ class ChatListViewModel(
             //is ChatListIntent.LoadChats -> loadChats()
             is ChatListIntent.OnSummarizeChatClick -> summarizeChat(intent.chatId)
             is ChatListIntent.OnDismissSummaryDialog -> dismissSummary()
+            is ChatListIntent.OnSearchQueryChanged -> {
+                println("📥 [2. ViewModel] Получен интент с текстом: '${intent.query}'")
+                _state.update { it.copy(searchQuery = intent.query) }
+
+                typingJob?.cancel()
+                val session = sessionManager.currentSession.value
+                val repo = session?.chatRepository
+
+                if (repo == null) {
+                    println("❌ [ViewModel ERROR] Репозиторий равен NULL! Активная сессия: ${session?.accountId}")
+                    return
+                }
+
+                if (intent.query.isBlank()) {
+                    repo.searchPublicChats("")
+                    _state.update { it.copy(isSearching = false, globalSearchResults = emptyList()) }
+                } else {
+                    _state.update { it.copy(isSearching = true) }
+                    typingJob = viewModelScope.launch {
+                        kotlinx.coroutines.delay(400) // Ждем пока юзер допечатает
+                        println("🚀 [2. ViewModel] Отправляем запрос в репозиторий: '${intent.query}'")
+                        repo.searchPublicChats(intent.query)
+                    }
+                }
+            }
         }
     }
 
     private fun loadChatsForSession(chatRepository: ChatRepository) {
         // Отменяем прослушивание старого аккаунта, если оно было
         currentChatsJob?.cancel()
+        searchResultsJob?.cancel()
 
         _state.update { it.copy(isLoading = true) }
 
         currentChatsJob = viewModelScope.launch {
             chatRepository.observeChats().collect { chatList ->
                 _state.update { it.copy(isLoading = false, chats = chatList) }
+            }
+        }
+
+        searchResultsJob = viewModelScope.launch {
+            chatRepository.observeSearchResults().collect { results ->
+                _state.update { it.copy(globalSearchResults = results, isSearching = false) }
             }
         }
     }
