@@ -1,9 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidMultiplatformLibrary) // Если плагин версии 8.2+, используем его для KMP-библиотек
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.buildConfig)
 }
 
 kotlin {
@@ -33,6 +36,7 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.koin.core)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(project(":domain"))
         }
 
         // Движок OkHttp для Android
@@ -50,4 +54,21 @@ kotlin {
             implementation(libs.ktor.client.darwin)
         }
     }
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+// 💥 3. Генерируем BuildConfig ДЛЯ СЕТЕВОГО МОДУЛЯ
+buildConfig {
+    packageName("com.ghostgram.core.network") // Пакет совпадает с модулем!
+
+    val supabaseUrlKey = localProperties.getProperty("SUPABASE_URL") ?: ""
+    val supabaseAnonKey = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""
+
+    buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrlKey\"")
+    buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 }

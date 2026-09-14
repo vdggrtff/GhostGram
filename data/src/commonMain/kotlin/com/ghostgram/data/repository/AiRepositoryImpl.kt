@@ -1,10 +1,11 @@
 package com.ghostgram.data.repository
 
 import api.GeminiApiClient
+import entity.LocalSettingsManager
 import repository.AiRepository
 
 class AiRepositoryImpl(
-    private val geminiClient: GeminiApiClient,
+    private val geminiClient: GeminiApiClient
 ) : AiRepository {
 
     override suspend fun getChatSummary(chatHistory: String): Result<String> {

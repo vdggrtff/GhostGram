@@ -49,9 +49,8 @@ val dataModule = module {
         ChatRepositoryImpl(
             // Прокидываем accountId в TDLib и Dao
             tdlibClient = get { parametersOf(accountId) },
-            //messageDao = get { parametersOf(accountId) },
             messageDao = database.messageDao(),
-            cryptoLayer = com.ghostgram.core.crypto.CryptoLayer(databasePath = tdlibConfig.databasePath)
+            cryptoLayer = CryptoLayer(databasePath = tdlibConfig.databasePath)
         )
     }
     factory<AuthRepository> { (accountId: String) ->
