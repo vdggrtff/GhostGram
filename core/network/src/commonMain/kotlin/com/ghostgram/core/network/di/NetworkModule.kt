@@ -22,5 +22,7 @@ val networkModule = module {
     }
 
     // Временно хардкодим ключ, потом переделаем на BYOK или сервер
-    single { GeminiApiClient(httpClient = get(), apiKey = "AQ.Ab8RN6K0K3GeqdC27Zj-71Jv6Uzk_iyKZqLEXgpAI06kGvBVOw") }
+        // single { GeminiApiClient(httpClient = get(), apiKey = "AQ.Ab8RN6K0K3GeqdC27Zj-71Jv6Uzk_iyKZqLEXgpAI06kGvBVOw") }
+
+    single { GeminiApiClient(httpClient = get(), settingsManager = get()) }
 }

@@ -3,12 +3,12 @@ package repository
 import entity.Chat
 import entity.Message
 import entity.MyProfile
+import entity.PublicChat
 import kotlinx.coroutines.flow.Flow
 
 interface ChatRepository {
     fun observeChats(): Flow<List<Chat>>
     fun observeChat(chatId: Long): Flow<Chat?>
-    //fun observeMyAvatar(): Flow<String?>
     fun observeMessages(chatId: Long): Flow<List<Message>>
     suspend fun sendMessage(chatId: Long, text: String, )
 
@@ -24,4 +24,10 @@ interface ChatRepository {
     suspend fun requestKeyExchange(chatId: Long)
 
     fun observeMyProfile(): Flow<MyProfile>
+
+    fun observeSearchResults(): Flow<List<PublicChat>>
+    fun searchPublicChats(query: String)
+
+    fun observeMessageSearchResults(): Flow<List<Chat>>
+    fun searchMessages(query: String)
 }

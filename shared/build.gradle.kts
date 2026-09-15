@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -107,6 +109,22 @@ kotlin {
             implementation(libs.kotlin.test)
         }
     }
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+buildConfig {
+    packageName("com.ghostgram.app")
+
+    val supabaseUrlKey = localProperties.getProperty("SUPABASE_URL") ?: ""
+    val supabaseAnonKey = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""
+
+    buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrlKey\"")
+    buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 }
 
 dependencies {

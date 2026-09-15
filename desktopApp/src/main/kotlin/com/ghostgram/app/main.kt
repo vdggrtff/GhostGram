@@ -6,7 +6,7 @@ import com.ghostgram.app.di.initKoin
 
 fun main() = application {
 
-    initKoin()
+    initKoin(appStoragePath = System.getProperty("user.home"))
 
     Window(
         onCloseRequest = ::exitApplication,

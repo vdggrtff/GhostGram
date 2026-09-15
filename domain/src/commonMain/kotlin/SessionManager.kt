@@ -19,6 +19,7 @@ data class AccountSession(
 )
 
 class SessionManager(
+    private val appStorage: AppStorageConfig,
     private val sessionFactory: (String) -> AccountSession
 ) {
     private val _accounts = MutableStateFlow<List<AccountSession>>(emptyList())
@@ -27,7 +28,8 @@ class SessionManager(
     private val _currentSession = MutableStateFlow<AccountSession?>(null)
     val currentSession: StateFlow<AccountSession?> = _currentSession.asStateFlow()
 
-    private val accountsFile = "ghostgram_accounts.json".toPath()
+    //private val accountsFile = "ghostgram_accounts.json".toPath()
+    private val accountsFile = "${appStorage.basePath}/ghostgram_accounts.json".toPath()
 
     fun loadSavedAccounts() {
         if (_accounts.value.isNotEmpty()) return
@@ -61,37 +63,6 @@ class SessionManager(
         _currentSession.value = defaultSession
         saveAccountsToDisk()
     }
-
-    /*fun loadSavedAccounts() {
-        if (_accounts.value.isNotEmpty()) return
-
-        val fs = FileSystem.SYSTEM
-        if (fs.exists(accountsFile)) {
-            try {
-                // Читаем список ID из файла (через запятую)
-                val savedIds = fs.read(accountsFile) { readUtf8() }.split(",").filter { it.isNotBlank() }
-                if (savedIds.isNotEmpty()) {
-                    val sessions = savedIds.map { sessionFactory(it) }
-                    _accounts.value = sessions
-                    _currentSession.value = sessions.firstOrNull()
-                    println("💾 Загружены аккаунты с диска: $savedIds")
-                    return
-                }
-            } catch (e: Exception) { println("Ошибка загрузки аккаунтов") }
-        }
-
-        // Если файла нет - создаем дефолтный main_account
-        val defaultSession = sessionFactory("main_account")
-        _accounts.value = listOf(defaultSession)
-        _currentSession.value = defaultSession
-        saveAccountsToDisk() // Сразу сохраняем
-    }*/
-
-   /* private fun saveAccountsToDisk() {
-        val fs = FileSystem.SYSTEM
-        val idsString = _accounts.value.joinToString(",") { it.accountId }
-        fs.write(accountsFile) { writeUtf8(idsString) }
-    }*/
 
     private fun saveAccountsToDisk() {
         val fs = FileSystem.SYSTEM

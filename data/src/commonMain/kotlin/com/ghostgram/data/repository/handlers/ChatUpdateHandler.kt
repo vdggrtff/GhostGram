@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -41,6 +42,8 @@ class ChatUpdateHandler(
                 val smallPhoto = photoObj?.get("small")?.jsonObject
                 val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
                 val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val positions = chatObj["positions"]?.jsonArray
+                val isJoined = positions != null && positions.isNotEmpty()
 
                 // Если фото нет на диске, но есть ID — качаем!
                 if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
@@ -57,10 +60,28 @@ class ChatUpdateHandler(
                     title = title,
                     unreadCount = unreadCount,
                     lastMessage = lastMessage,
-                    avatarPath = if (!avatarPath.isNullOrBlank()) avatarPath else null
+                    avatarPath = if (!avatarPath.isNullOrBlank()) avatarPath else null,
+                    isJoined = isJoined
                 )
 
                 chatsMap.update { it + (id to chat) }
+                return true
+            }
+            "updateChatPosition" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val positionObj = jsonObject["position"]?.jsonObject ?: return true
+                val listType = positionObj["list"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
+
+                // Нас интересует только главный список чатов
+                if (listType == "chatListMain") {
+                    val order = positionObj["order"]?.jsonPrimitive?.longOrNull ?: 0L
+
+                    chatsMap.update { current ->
+                        val chat = current[chatId]
+                        // Обновляем позицию чата
+                        if (chat != null) current + (chatId to chat.copy(order = order)) else current
+                    }
+                }
                 return true
             }
             "updateChatLastMessage" -> {
