@@ -4,19 +4,39 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButtonDefaults.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,10 +65,16 @@ import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
+import com.ghostgram.app.ui.theme.GhostPrimary
+import com.ghostgram.app.ui.theme.GhostSurfaceElevated
+import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.core.PickerMode
+import io.github.vinceglb.filekit.core.PickerType
 
 sealed class MessageListItem {
     data class Single(val message: Message) : MessageListItem()
@@ -95,6 +121,18 @@ fun ChatDetailsScreen(
             val totalItems = listState.layoutInfo.totalItemsCount
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             totalItems > 0 && lastVisibleItem >= totalItems - 5
+        }
+    }
+
+    val fileLauncher = rememberFilePickerLauncher(
+        type = PickerType.Image, mode = PickerMode.Multiple()
+    ) { files ->
+        if (!files.isNullOrEmpty()) {
+            coroutineScope.launch {
+                val byteArrayList = files.map { it.readBytes() }
+                // 💥 ТЕПЕРЬ ОНО НЕ ОТПРАВЛЯЕТ, А ОТКРЫВАЕТ ДИАЛОГ!
+                onIntent(ChatDetailsIntent.OnMediaSelected(byteArrayList))
+            }
         }
     }
 
@@ -192,6 +230,7 @@ fun ChatDetailsScreen(
                 isRepliesLoading = state.isRepliesLoading,
                 inputText = state.inputText,
                 onIntent = onIntent,
+                fileLauncher = fileLauncher
             )
         },
         floatingActionButton = {
@@ -219,6 +258,24 @@ fun ChatDetailsScreen(
                 val item = groupedMessages[index]
                 val itemDate = getDateFromItem(item)
 
+                val currentSender = when (item) {
+                    is MessageListItem.Single -> item.message.isOutgoing to item.message.senderName
+                    is MessageListItem.Album -> item.messages.first().isOutgoing to item.messages.first().senderName
+                }
+
+                val topNeighbor = groupedMessages.getOrNull(index + 1)?.let {
+                    if (it is MessageListItem.Single) it.message.isOutgoing to it.message.senderName
+                    else (it as MessageListItem.Album).messages.first().isOutgoing to it.messages.first().senderName
+                }
+
+                val bottomNeighbor = groupedMessages.getOrNull(index - 1)?.let {
+                    if (it is MessageListItem.Single) it.message.isOutgoing to it.message.senderName
+                    else (it as MessageListItem.Album).messages.first().isOutgoing to it.messages.first().senderName
+                }
+
+                val isFirstInGroup = currentSender != topNeighbor    // Сверху чужое сообщение
+                val isLastInGroup = currentSender != bottomNeighbor  // Снизу чужое сообщение
+
                 // 💥 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
                 val showDateHeader = if (index == groupedMessages.size - 1) {
                     true
@@ -235,6 +292,8 @@ fun ChatDetailsScreen(
                             chatAvatarPath = state.avatarPath,
                             myAvatarPath = state.myAvatarPath,
                             chatTitle = state.chatTitle,
+                            isFirstInGroup = isFirstInGroup, // 👈
+                            isLastInGroup = isLastInGroup,   // 👈
                             onMediaClick = { fullScreenImage = it }
                         )
                     }
@@ -273,7 +332,7 @@ fun ChatDetailsScreen(
     if (fullScreenImage != null) {
         Dialog(
             onDismissRequest = { fullScreenImage = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            properties =DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Box(
                 modifier = Modifier
@@ -288,6 +347,84 @@ fun ChatDetailsScreen(
                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {
                     Text("✖", color = Color.White)
+                }
+            }
+        }
+    }
+    if (state.pendingMedia.isNotEmpty()) {
+        Dialog(
+            onDismissRequest = { onIntent(ChatDetailsIntent.OnCancelMediaSend) }
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GhostSurfaceElevated),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Отправить фото", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 💥 Превью первой картинки (Coil умеет читать ByteArray!)
+                    AsyncImage(
+                        model = state.pendingMedia.first(),
+                        contentDescription = "Preview",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(GhostBackground)
+                    )
+
+                    if (state.pendingMedia.size > 1) {
+                        Text("И еще ${state.pendingMedia.size - 1} файлов...", color = GhostTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Галочка "Как файл"
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onIntent(ChatDetailsIntent.OnToggleSendAsDocument(!state.sendAsDocument)) }) {
+                        Checkbox(
+                            checked = state.sendAsDocument,
+                            onCheckedChange = { onIntent(ChatDetailsIntent.OnToggleSendAsDocument(it)) },
+                            colors = CheckboxDefaults.colors(checkedColor = GhostPrimary)
+                        )
+                        Text("Отправить как файл (без сжатия)", color = Color.White, fontSize = 14.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Поле подписи
+                    TextField(
+                        value = state.pendingCaption,
+                        onValueChange = { onIntent(ChatDetailsIntent.OnPendingCaptionChanged(it)) },
+                        placeholder = { Text("Добавить подпись...", color = GhostTextSecondary) },
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = GhostCard,
+                            unfocusedContainerColor = GhostCard,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Кнопки
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { onIntent(ChatDetailsIntent.OnCancelMediaSend) }) {
+                            Text("Отмена", color = GhostTextSecondary)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { onIntent(ChatDetailsIntent.OnConfirmMediaSend) },
+                            colors = ButtonDefaults.buttonColors(containerColor = GhostPrimary)
+                        ) {
+                            Text("Отправить", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

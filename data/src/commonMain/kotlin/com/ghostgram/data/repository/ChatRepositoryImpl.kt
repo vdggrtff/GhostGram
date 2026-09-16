@@ -29,9 +29,17 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.serializer
+import okio.FileSystem
+import okio.Path
+import okio.SYSTEM
 import repository.ChatRepository
+import kotlin.time.Clock
+import kotlin.time.Clock.System
 
 class ChatRepositoryImpl(
     private val tdlibClient: TelegramFlowClient,
@@ -288,14 +296,6 @@ class ChatRepositoryImpl(
         println("📡 [3. Repo -> TDLib] Шлем команду searchPublicChats в C++: '$query'")
 
         // 💥 Отправляем запрос с фиксированной меткой!
-       /* val request = """
-            {
-                "@type": "searchPublicChats",
-                "query": "$query",
-                "@extra": "search_public" 
-            }
-        """.trimIndent()*/
-
         val request = """
             {
                 "@type": "searchPublicChats",
@@ -315,19 +315,6 @@ class ChatRepositoryImpl(
         }
 
         println("🔍 [ПОИСК СООБЩЕНИЙ] Отправляем запрос в TDLib: '$query'")
-
-        // 💥 Запрашиваем у Telegram поиск по текстам!
-        /*val request = """
-            {
-                "@type": "searchMessages",
-                "query": "$query",
-                "offset_date": 0,
-                "offset_chat_id": 0,
-                "offset_message_id": 0,
-                "limit": 20,
-                "@extra": "search_msg_$query"
-            }
-        """.trimIndent()*/
         val request = """
             {
                 "@type": "searchMessages",
@@ -342,5 +329,78 @@ class ChatRepositoryImpl(
 
         tdlibClient.send(request)
     }
+    override suspend fun sendPhoto(chatId: Long, photoBytes: ByteArray, caption: String, useCrypto: Boolean, asDocument: Boolean) {
+        if (photoBytes.isEmpty()) return
 
+        val finalCaption = if (useCrypto) cryptoLayer.encryptAndHide(chatId, caption) else caption
+
+        // 💥 1. Пишем файл ПРЯМО В ПАПКУ TDLIB (У ядра туда 100% есть права доступа!)
+        val fs = FileSystem.SYSTEM
+        val tempDir = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "ghostgram_temp"
+        if (!fs.exists(tempDir)) fs.createDirectories(tempDir)
+
+        val tempFile = tempDir / "send_${System.now().toEpochMilliseconds()}.${if (asDocument) "png" else "jpg"}"
+        fs.write(tempFile) { write(photoBytes) }
+        val absolutePath = tempFile.toString().replace("\\", "/") // На всякий случай чистим слэши
+
+        // 💥 2. УЛЬТРА-КОРОТКИЙ JSON (Без width, height и даже без caption, если он пустой)
+        /*val requestJson = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+            put("input_message_content", buildJsonObject {
+                put("@type", if (asDocument) "inputMessageDocument" else "inputMessagePhoto")
+
+                // Передаем файл
+                put(if (asDocument) "document" else "photo", buildJsonObject {
+                    put("@type", "inputFileLocal")
+                    put("path", absolutePath)
+                })
+
+                // Передаем текст ТОЛЬКО если он есть
+                if (finalCaption.isNotBlank()) {
+                    put("caption", buildJsonObject {
+                        put("@type", "formattedText")
+                        put("text", finalCaption)
+                    })
+                }
+            })
+        }*/
+        val requestJson = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+            put("input_message_content", buildJsonObject {
+                if (asDocument) {
+                    // Документ: inputMessageDocument -> inputDocument -> inputFileLocal
+                    put("@type", "inputMessageDocument")
+                    put("document", buildJsonObject {
+                        put("@type", "inputDocument")
+                        put("document", buildJsonObject {
+                            put("@type", "inputFileLocal")
+                            put("path", absolutePath)
+                        })
+                    })
+                } else {
+                    // 💥 ФОТО: inputMessagePhoto -> inputPhoto -> inputFileLocal!
+                    put("@type", "inputMessagePhoto")
+                    put("photo", buildJsonObject {
+                        put("@type", "inputPhoto") // ВОТ ОНА, ТАЙНАЯ ОБЕРТКА!
+                        put("photo", buildJsonObject {
+                            put("@type", "inputFileLocal")
+                            put("path", absolutePath)
+                        })
+                    })
+                }
+
+                if (finalCaption.isNotBlank()) {
+                    put("caption", buildJsonObject {
+                        put("@type", "formattedText")
+                        put("text", finalCaption.trim())
+                    })
+                }
+            })
+        }
+
+        println("📸 [ОТПРАВКА] Шлем: $requestJson")
+        tdlibClient.send(requestJson.toString())
+    }
 }

@@ -114,6 +114,44 @@ class ChatDetailsViewModel(
                     isLoadingMore = false
                 }
             }
+            is ChatDetailsIntent.OnSendPhotos -> {
+                val useCrypto = _state.value.isCryptoMode
+                val caption = _state.value.inputText.trim()
+                val asDocument = _state.value.sendAsDocument
+
+                viewModelScope.launch {
+                    intent.photos.forEach { bytes ->
+                        repo.sendPhoto(chatId, bytes, caption, useCrypto, asDocument )
+                    }
+                    _state.update { it.copy(inputText = "") }
+                }
+            }
+            is ChatDetailsIntent.OnMediaSelected -> {
+                _state.update { it.copy(pendingMedia = intent.photos, pendingCaption = "") }
+            }
+            is ChatDetailsIntent.OnPendingCaptionChanged -> {
+                _state.update { it.copy(pendingCaption = intent.text) }
+            }
+            is ChatDetailsIntent.OnToggleSendAsDocument -> {
+                _state.update { it.copy(sendAsDocument = intent.isChecked) }
+            }
+            is ChatDetailsIntent.OnCancelMediaSend -> {
+                _state.update { it.copy(pendingMedia = emptyList()) }
+            }
+            is ChatDetailsIntent.OnConfirmMediaSend -> {
+                val media = _state.value.pendingMedia
+                val caption = _state.value.pendingCaption.trim()
+                val useCrypto = _state.value.isCryptoMode
+                val asDocument = _state.value.sendAsDocument
+
+                _state.update { it.copy(pendingMedia = emptyList(), pendingCaption = "", sendAsDocument = false) }
+
+                viewModelScope.launch {
+                    media.forEach { bytes ->
+                        repo.sendPhoto(chatId, bytes, caption, useCrypto, asDocument)
+                    }
+                }
+            }
         }
     }
 

@@ -91,6 +91,8 @@ kotlin {
             implementation(project(":data"))
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
+            implementation(libs.compottie)
+            implementation(libs.filekit.compose)
         }
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)

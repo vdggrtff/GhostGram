@@ -34,24 +34,22 @@ import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSecondary
 import com.ghostgram.app.ui.theme.GhostTextSecondary
+import io.github.vinceglb.filekit.compose.PickerResultLauncher
 
 @Composable
 fun GhostTextField(
     inputText: String,
     onIntent: (ChatDetailsIntent) -> Unit,
+    fileLauncher: PickerResultLauncher
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
-            onClick = { /* TODO: Медиа */ },
+            onClick = { fileLauncher.launch() }, // 💥 Открываем системный выбор файлов
             modifier = Modifier.align(Alignment.CenterVertically)
         ) {
-            Icon(
-                Icons.Default.AttachFile,
-                contentDescription = "Прикрепить",
-                tint = GhostTextSecondary
-            )
+            Icon(Icons.Default.AttachFile, contentDescription = "Прикрепить", tint = GhostTextSecondary)
         }
         TextField(
             value = inputText,

@@ -30,4 +30,6 @@ interface ChatRepository {
 
     fun observeMessageSearchResults(): Flow<List<Chat>>
     fun searchMessages(query: String)
+
+    suspend fun sendPhoto(chatId: Long, photoBytes: ByteArray, caption: String, useCrypto: Boolean, asDocument: Boolean)
 }

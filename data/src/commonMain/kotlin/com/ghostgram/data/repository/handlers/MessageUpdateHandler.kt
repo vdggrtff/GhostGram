@@ -58,33 +58,6 @@ class MessageUpdateHandler(
             }
             // 💥 2. ПРИЛЕТЕЛА ИСТОРИЯ ЧАТА (ПАЧКА СООБЩЕНИЙ)
             "messages" -> {
-                /*val messagesArray = jsonObject["messages"]?.jsonArray ?: return true
-                if (messagesArray.isEmpty()) return true
-                val chatId =
-                    messagesArray[0].jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
-
-                // Парсим весь массив
-                val parsedEntities = messagesArray.reversed().mapNotNull { msgElement ->
-                    val msgObj = msgElement.jsonObject
-                    val msgId = msgObj["id"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
-                    val isOutgoing = msgObj["is_outgoing"]?.jsonPrimitive?.booleanOrNull ?: false
-                    val contentObj = msgObj["content"]?.jsonObject
-                    val date = msgObj["date"]?.jsonPrimitive?.intOrNull ?: 0
-
-                    parseSingleMessageToEntity(msgId, chatId, isOutgoing, contentObj, date, isLive = false)
-                }    // Переворачиваем для хронологии
-
-                repoScope.launch {
-                    // Сохраняем пачку в базу
-                    messageDao.insertMessages(parsedEntities)
-
-                    // Восстанавливаем синие галочки ✓✓
-                    val lastReadId = lastReadOutboxMap[chatId] ?: 0L
-                    if (lastReadId > 0) {
-                        messageDao.markOutboxAsRead(chatId, lastReadId)
-                    }
-                }
-                return true*/
                 val messagesArray = jsonObject["messages"]?.jsonArray ?: return true
                 if (messagesArray.isEmpty()) return true
                 val chatId =
@@ -198,18 +171,6 @@ class MessageUpdateHandler(
 
         return when (contentType) {
             "messageText" -> {
-                /*var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
-                var isEncrypted = false
-
-                // 💥 ЕСЛИ ЭТО ШИФР — РАСШИФРОВЫВАЕМ И В БАЗУ КЛАДЕМ ЧИСТЫЙ ТЕКСТ!
-                if (text.contains("👻 ")) {
-                    val decrypted = cryptoLayer.revealAndDecrypt(text, cryptoLayer.TEST_SHARED_KEY)
-                    if (decrypted != null) {
-                        text = decrypted // 👈 Заменяем белиберду на чистый текст!
-                        isEncrypted = true
-                    }
-                }*/
-
                 var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 var extraInfo: String? = null
 
@@ -368,36 +329,24 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId
                 )
             }
-
             "messageSticker" -> {
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
 
-                // 💥 БЕРЕМ ИМЕННО THUMBNAIL (Превьюшку), А НЕ САМ СТИКЕР!
-                // Потому что сам стикер - это .tgs или .webm, которые Coil не прочитает.
-                // А thumbnail - это всегда статичная .webp картинка!
-                val thumbObj = stickerObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
-                val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
-                val photoPath =
-                    thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                // 💥 КАЧАЕМ ПОЛНОЦЕННЫЙ СТИКЕР (не thumbnail!)
+                val fileObj = stickerObj?.get("sticker")?.jsonObject
+                val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
+                val stickerPath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
-                if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                if (stickerPath.isNullOrBlank() && fileId != null && fileId != 0) {
                     tracker.messagePhotos[fileId] = msgId
                     tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
 
-                // 💥 Не забудь передать date, если она тут есть!
                 MessageEntity(
-                    id = msgId,
-                    chatId = chatId,
-                    senderName = senderName,
-                    text = "",
-                    isOutgoing = isOutgoing,
-                    mediaType = "STICKER",
-                    fileExtraInfo = emoji,
-                    photoPath = photoPath,
-                    date = date,
-                    mediaAlbumId = mediaAlbumId
+                    id = msgId, chatId = chatId, senderName = senderName, text = "",
+                    isOutgoing = isOutgoing, mediaType = "STICKER", fileExtraInfo = emoji,
+                    photoPath = stickerPath, date = date // (твои параметры)
                 )
             }
 
