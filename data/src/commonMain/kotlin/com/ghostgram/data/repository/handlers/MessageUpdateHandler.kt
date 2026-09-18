@@ -34,6 +34,7 @@ class MessageUpdateHandler(
                 val isOutgoing = messageObj["is_outgoing"]?.jsonPrimitive?.booleanOrNull ?: false
                 val date = messageObj["date"]?.jsonPrimitive?.intOrNull ?: 0
                 val mediaAlbumId = messageObj["media_album_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                val isSending = messageObj["sending_state"] != null
 
                 val contentObj = messageObj["content"]?.jsonObject
 
@@ -46,7 +47,8 @@ class MessageUpdateHandler(
                         contentObj,
                         date,
                         mediaAlbumId,
-                        isLive = true
+                        isLive = true,
+                        isSending = isSending
                     )
 
                 if (entity != null) {
@@ -108,9 +110,14 @@ class MessageUpdateHandler(
                 val contentObj = messageObj["content"]?.jsonObject
 
                 val entity = parseSingleMessageToEntity(
-                    newId, chatId, true, contentObj, date = date,
+                    newId,
+                    chatId,
+                    true,
+                    contentObj,
+                    date = date,
                     mediaAlbumId = mediaAlbumId,
-                    isLive = false
+                    isLive = false,
+                    isSending = false
                 )
 
                 repoScope.launch {
@@ -165,6 +172,7 @@ class MessageUpdateHandler(
         date: Int = 0,
         mediaAlbumId: Long = 0L,
         isLive: Boolean = false,
+        isSending: Boolean = false,
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
         val senderName = if (isOutgoing) "Вы" else "Собеседник"
@@ -316,6 +324,15 @@ class MessageUpdateHandler(
                     tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
 
+                val mainVideoObj = videoObj?.get("video")?.jsonObject
+                val videoFileId = mainVideoObj?.get("id")?.jsonPrimitive?.intOrNull
+                val videoPath = mainVideoObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                if (videoPath.isNullOrBlank() && videoFileId != null && videoFileId != 0) {
+                    tracker.messageFiles[videoFileId] = msgId // 💥 КЛАДЕМ В FILES!
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $videoFileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
@@ -326,9 +343,11 @@ class MessageUpdateHandler(
                     fileExtraInfo = formatDuration(duration),
                     photoPath = photoPath, // 💥 Сохраняем путь к превьюшке!
                     date = date,
-                    mediaAlbumId = mediaAlbumId
+                    mediaAlbumId = mediaAlbumId,
+                    fileName = videoPath
                 )
             }
+
             "messageSticker" -> {
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
@@ -336,7 +355,8 @@ class MessageUpdateHandler(
                 // 💥 КАЧАЕМ ПОЛНОЦЕННЫЙ СТИКЕР (не thumbnail!)
                 val fileObj = stickerObj?.get("sticker")?.jsonObject
                 val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
-                val stickerPath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val stickerPath =
+                    fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
                 if (stickerPath.isNullOrBlank() && fileId != null && fileId != 0) {
                     tracker.messagePhotos[fileId] = msgId

@@ -37,4 +37,7 @@ interface MessageDao {
 
     @Query("UPDATE messages SET photoPath = :path WHERE id = :messageId")
     suspend fun updateMessagePhoto(messageId: Long, path: String)
+
+    @Query("UPDATE messages SET fileName = :path WHERE id = :messageId")
+    suspend fun updateMessageFileName(messageId: Long, path: String)
 }

@@ -31,5 +31,5 @@ interface ChatRepository {
     fun observeMessageSearchResults(): Flow<List<Chat>>
     fun searchMessages(query: String)
 
-    suspend fun sendPhoto(chatId: Long, photoBytes: ByteArray, caption: String, useCrypto: Boolean, asDocument: Boolean)
+    suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean)
 }

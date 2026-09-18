@@ -17,7 +17,8 @@ data class Message(
     val fileExtraInfo: String? = null,   // Размер ("12.4 MB"), длительность ("0:45") или эмодзи стикера
     val isRead: Boolean = false,
     val date: Int = 0,
-    val mediaAlbumId: Long = 0L
+    val mediaAlbumId: Long = 0L,
+    val isSending: Boolean = false
 )
 
 data class Chat(

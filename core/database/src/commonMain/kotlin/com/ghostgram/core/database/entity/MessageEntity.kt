@@ -18,7 +18,8 @@ data class MessageEntity(
     val fileExtraInfo: String? = null,
     val isRead: Boolean = false,
     val date: Int = 0,
-    val mediaAlbumId: Long = 0L
+    val mediaAlbumId: Long = 0L,
+    val isSending: Boolean = false
 )
 
 const val TABLE_NAME = "messages"

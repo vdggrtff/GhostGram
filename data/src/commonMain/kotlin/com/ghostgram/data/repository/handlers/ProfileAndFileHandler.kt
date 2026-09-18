@@ -29,12 +29,6 @@ class ProfileAndFileHandler(
         // 💥 1. ПЕРЕХВАТ ТВОЕГО ПРОФИЛЯ
         val extra = jsonObject["@extra"]?.jsonPrimitive?.content
         if (extra == "get_me_avatar" && type == "user") {
-            /*val firstName = jsonObject["first_name"]?.jsonPrimitive?.content ?: "Я"
-            val photoObj = jsonObject["profile_photo"]?.jsonObject
-            val smallPhoto = photoObj?.get("small")?.jsonObject
-            val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
-            val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content*/
-
             val firstName = jsonObject["first_name"]?.jsonPrimitive?.content ?: "Ghost"
             val lastName = jsonObject["last_name"]?.jsonPrimitive?.content ?: ""
             val phoneNumber = jsonObject["phone_number"]?.jsonPrimitive?.content ?: ""
@@ -44,14 +38,6 @@ class ProfileAndFileHandler(
             val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
             val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
-            /*if (!path.isNullOrBlank()) {
-                myAvatarPath.value = path
-            } else if (fileId != null && fileId != 0) {
-                tracker.myAvatarFileId = fileId // Запомнили ID
-                tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
-            } else {
-                myAvatarPath.value = "INITIALS:$firstName"
-            }*/
             myProfileFlow.value = MyProfile(
                 firstName = firstName,
                 lastName = lastName,
@@ -78,9 +64,6 @@ class ProfileAndFileHandler(
             if (isCompleted && path.isNotBlank()) {
 
                 // А) Это твоя аватарка?
-                /*if (fileId == tracker.myAvatarFileId) {
-                    myAvatarPath.value = path
-                }*/
                 if (fileId == tracker.myAvatarFileId) {
                     myProfileFlow.update { it.copy(avatarPath = path) }
                 }
@@ -97,6 +80,12 @@ class ProfileAndFileHandler(
                 tracker.messagePhotos.remove(fileId)?.let { messageId ->
                     repoScope.launch {
                         messageDao.updateMessagePhoto(messageId, path) // 💥 Обновляем в SQLite!
+                    }
+                }
+
+                tracker.messageFiles.remove(fileId)?.let { messageId ->
+                    repoScope.launch {
+                        messageDao.updateMessageFileName(messageId, path) // 💥 Обновляем в SQLite!
                     }
                 }
             }

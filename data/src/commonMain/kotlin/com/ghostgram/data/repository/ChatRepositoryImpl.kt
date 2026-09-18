@@ -167,7 +167,8 @@ class ChatRepositoryImpl(
                         fileExtraInfo = entity.fileExtraInfo,
                         isRead = entity.isRead,
                         date = entity.date,
-                        mediaAlbumId = entity.mediaAlbumId
+                        mediaAlbumId = entity.mediaAlbumId,
+                        isSending = entity.isSending
                     )
                 }
             }
@@ -329,8 +330,8 @@ class ChatRepositoryImpl(
 
         tdlibClient.send(request)
     }
-    override suspend fun sendPhoto(chatId: Long, photoBytes: ByteArray, caption: String, useCrypto: Boolean, asDocument: Boolean) {
-        if (photoBytes.isEmpty()) return
+    override suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean) {
+        if (bytes.isEmpty()) return
 
         val finalCaption = if (useCrypto) cryptoLayer.encryptAndHide(chatId, caption) else caption
 
@@ -339,56 +340,43 @@ class ChatRepositoryImpl(
         val tempDir = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "ghostgram_temp"
         if (!fs.exists(tempDir)) fs.createDirectories(tempDir)
 
-        val tempFile = tempDir / "send_${System.now().toEpochMilliseconds()}.${if (asDocument) "png" else "jpg"}"
-        fs.write(tempFile) { write(photoBytes) }
-        val absolutePath = tempFile.toString().replace("\\", "/") // На всякий случай чистим слэши
+        val ext = extension.lowercase().ifBlank { if (asDocument) "png" else "jpg" }
+        val tempFile = tempDir / "ghost_${System.now().toEpochMilliseconds()}.$ext"
+        fs.write(tempFile) { write(bytes) }
+        val absolutePath = tempFile.toString().replace("\\", "/")
 
-        // 💥 2. УЛЬТРА-КОРОТКИЙ JSON (Без width, height и даже без caption, если он пустой)
-        /*val requestJson = buildJsonObject {
-            put("@type", "sendMessage")
-            put("chat_id", chatId)
-            put("input_message_content", buildJsonObject {
-                put("@type", if (asDocument) "inputMessageDocument" else "inputMessagePhoto")
+        val isVideo = ext in listOf("mp4", "mov", "mkv", "avi")
 
-                // Передаем файл
-                put(if (asDocument) "document" else "photo", buildJsonObject {
-                    put("@type", "inputFileLocal")
-                    put("path", absolutePath)
-                })
-
-                // Передаем текст ТОЛЬКО если он есть
-                if (finalCaption.isNotBlank()) {
-                    put("caption", buildJsonObject {
-                        put("@type", "formattedText")
-                        put("text", finalCaption)
-                    })
-                }
-            })
-        }*/
         val requestJson = buildJsonObject {
             put("@type", "sendMessage")
             put("chat_id", chatId)
             put("input_message_content", buildJsonObject {
-                if (asDocument) {
-                    // Документ: inputMessageDocument -> inputDocument -> inputFileLocal
-                    put("@type", "inputMessageDocument")
-                    put("document", buildJsonObject {
-                        put("@type", "inputDocument")
+                when {
+                    asDocument -> {
+                        put("@type", "inputMessageDocument")
                         put("document", buildJsonObject {
-                            put("@type", "inputFileLocal")
-                            put("path", absolutePath)
+                            put("@type", "inputDocument")
+                            put("document", buildJsonObject { put("@type", "inputFileLocal"); put("path", absolutePath) })
                         })
-                    })
-                } else {
-                    // 💥 ФОТО: inputMessagePhoto -> inputPhoto -> inputFileLocal!
-                    put("@type", "inputMessagePhoto")
-                    put("photo", buildJsonObject {
-                        put("@type", "inputPhoto") // ВОТ ОНА, ТАЙНАЯ ОБЕРТКА!
+                    }
+                    isVideo -> {
+                        // 💥 НОВОЕ: ОТПРАВКА ВИДЕО
+                        put("@type", "inputMessageVideo")
+                        put("video", buildJsonObject {
+                            put("@type", "inputVideo") // 💥 ВОТ ЭТА ОБЕРТКА БЫЛА ПРОПУЩЕНА!
+                            put("video", buildJsonObject {
+                                put("@type", "inputFileLocal")
+                                put("path", absolutePath)
+                            })
+                        })
+                    }
+                    else -> {
+                        put("@type", "inputMessagePhoto")
                         put("photo", buildJsonObject {
-                            put("@type", "inputFileLocal")
-                            put("path", absolutePath)
+                            put("@type", "inputPhoto")
+                            put("photo", buildJsonObject { put("@type", "inputFileLocal"); put("path", absolutePath) })
                         })
-                    })
+                    }
                 }
 
                 if (finalCaption.isNotBlank()) {
@@ -399,6 +387,7 @@ class ChatRepositoryImpl(
                 }
             })
         }
+
 
         println("📸 [ОТПРАВКА] Шлем: $requestJson")
         tdlibClient.send(requestJson.toString())

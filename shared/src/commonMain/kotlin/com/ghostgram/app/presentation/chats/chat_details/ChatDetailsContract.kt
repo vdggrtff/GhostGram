@@ -2,6 +2,8 @@ package com.ghostgram.app.presentation.chats.chat_details
 
 import entity.Message
 
+data class MediaItem(val bytes: ByteArray, val extension: String)
+
 data class ChatDetailsState(
     val isLoading: Boolean = false,
     val chatTitle: String = "Чат",
@@ -17,9 +19,9 @@ data class ChatDetailsState(
     val isCatchUpLoading: Boolean = false,
     val isGhostMode: Boolean = true,
     val isCryptoMode: Boolean = false,
-    val pendingMedia: List<ByteArray> = emptyList(), // Выбранные фотки
+    val pendingMedia: List<MediaItem> = emptyList(), // Выбранные фотки
     val pendingCaption: String = "",                 // Подпись в диалоге
-    val sendAsDocument: Boolean = false              // Галочка "Отправить как файл"
+    val sendAsDocument: Boolean = false,              // Галочка "Отправить как файл"
 )
 
 // Действия на экране чата
@@ -37,11 +39,11 @@ sealed interface ChatDetailsIntent {
 
     data class LoadMoreMessages(val fromMessageId: Long) : ChatDetailsIntent
 
-    data class OnSendPhotos(val photos: List<ByteArray>) : ChatDetailsIntent // 💥
-
-    data class OnMediaSelected(val photos: List<ByteArray>) : ChatDetailsIntent
+    //data class OnSendPhotos(val photos: List<ByteArray>) : ChatDetailsIntent // 💥
     data class OnPendingCaptionChanged(val text: String) : ChatDetailsIntent
     data class OnToggleSendAsDocument(val isChecked: Boolean) : ChatDetailsIntent
     data object OnCancelMediaSend : ChatDetailsIntent
     data object OnConfirmMediaSend : ChatDetailsIntent
+
+    data class OnMediaSelected(val media: List<MediaItem>) : ChatDetailsIntent
 }

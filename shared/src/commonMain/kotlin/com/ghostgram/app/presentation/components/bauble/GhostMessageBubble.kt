@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter.State.Empty.painter
+import com.ghostgram.app.presentation.components.openVideoInSystemPlayer
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
@@ -70,8 +74,10 @@ fun GhostMessageBubble(
     modifier: Modifier = Modifier,
 ) {
     val isOutgoing = message.isOutgoing
+    val isVideo = message.mediaType == MessageMediaType.VIDEO || message.mediaType == MessageMediaType.VIDEO_NOTE
     val isSticker = message.mediaType == MessageMediaType.STICKER
     val timeString = TimeFormatter.formatTime(message.date)
+    val hasText = message.text.isNotBlank()
 
     if (message.fileExtraInfo == "SYSTEM") {
         Box(
@@ -95,7 +101,6 @@ fun GhostMessageBubble(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            //.padding(vertical = 4.dp),
             .padding(top = if (isFirstInGroup) 8.dp else 2.dp),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom // Аватарки прижаты к низу
@@ -152,7 +157,7 @@ fun GhostMessageBubble(
         Box(
             modifier = Modifier
                 .widthIn(
-                    min = 80.dp,
+                    if (isVideo) 240.dp else 80.dp,
                     max = 280.dp
                 ) // Ограничиваем только максимум, чтобы он сжимался под текст
                 .clip(bubbleShape)
@@ -172,7 +177,7 @@ fun GhostMessageBubble(
                         Modifier.background(Brush.linearGradient(listOf(GhostCard, GhostCard)))
                     }
                 )
-                .padding(if (isSticker) 0.dp else 10.dp)
+                .padding(if (isVideo && !hasText ||isSticker) 0.dp else 10.dp)
         ) {
             Column(
                 modifier = Modifier.wrapContentWidth(), // 💥 Пузырь плотно облегает контент
@@ -198,47 +203,164 @@ fun GhostMessageBubble(
                     }
 
                     MessageMediaType.VIDEO, MessageMediaType.VIDEO_NOTE -> {
-                        if (message.photoPath != null) {
-                            val model =
-                                if (message.photoPath!!.startsWith("/")) "file://${message.photoPath}" else message.photoPath
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 240.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable { onMediaClick(model ?: "") }, // 💥 КЛИКАБЕЛЬНО!
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AsyncImage(
-                                    model = model,
-                                    contentDescription = "Превью",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                        //val model = message.photoPath?.let { if (it.startsWith("/")) "file://$it" else it }
+                        val thumbModel = message.photoPath?.let { if (it.startsWith("/")) "file://$it" else it }
+                        // 💥 ПУТЬ К САМОМУ ВИДЕО (Который мы сохранили в fileName)
+                        val videoPath = message.fileName
+
+                        Box(
+                            modifier = Modifier
+                                .width(260.dp)
+                                .height(180.dp) // Фиксированная высота карточки
+                                .clip(bubbleShape)
+                                .background(Color(0xFF1E2330)) // Темный стильный фон, если превью еще грузится
+                                .clickable {
+                                    if (!message.isSending && !videoPath.isNullOrBlank()) {
+                                        // Запускаем в системном плеере (VLC, и т.д.)
+                                       openVideoInSystemPlayer(videoPath)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Превью (если есть)
+                            if (thumbModel != null) {
+                                AsyncImage(model = thumbModel, contentDescription = "Превью", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+                            } else {
+                                // Если превью нет (особенность десктопа) - просто пишем, что это видео
+                                Text("🎬", fontSize = 40.sp)
+                            }
+
+                            // Затемнение
+                            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+
+                            // 💥 КНОПКА PLAY ИЛИ СПИННЕР ПО ЦЕНТРУ
+                            if (message.isSending) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(44.dp), strokeWidth = 3.dp)
+                            } else {
                                 Box(
-                                    modifier = Modifier.fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.3f))
-                                )
-                                Box(
-                                    modifier = Modifier.size(48.dp).clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.5f)),
+                                    modifier = Modifier.size(52.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("▶", color = Color.White, fontSize = 20.sp)
+                                    Text("▶", color = Color.White, fontSize = 22.sp, modifier = Modifier.padding(start = 2.dp))
                                 }
+                            }
+
+                            // 💥 ХРОНОМЕТРАЖ В ВЕРХНЕМ ЛЕВОМ УГЛУ (КАК НА СКРИНЕ!)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(8.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
                                 Text(
-                                    text = message.fileExtraInfo ?: "0:00",
+                                    text = message.fileExtraInfo?.ifBlank { "00:00" } ?: "00:00",
                                     color = Color.White,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                                        .background(
-                                            Color.Black.copy(alpha = 0.5f),
-                                            RoundedCornerShape(4.dp)
-                                        ).padding(horizontal = 4.dp, vertical = 2.dp)
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
+
+                            // 💥 ВРЕМЯ И ГАЛОЧКА В ПРАВОМ НИЖНЕМ УГЛУ (КАК НА СКРИНЕ!)
+                            if (!hasText) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(8.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = TimeFormatter.formatTime(message.date),
+                                            color = Color.White,
+                                            fontSize = 11.sp
+                                        )
+                                        if (isOutgoing) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = if (message.isSending) Icons.Default.Schedule else if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        /*if (message.photoPath != null) {
+                            val model = message.photoPath?.let {
+                                if (it.startsWith("/")) "file://$it" else it
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .width(220.dp)
+                                    .height(160.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.Black.copy(alpha = 0.4f)) // Темный фон
+                                    .clickable {
+                                        if (!message.isSending && model != null) onMediaClick(model)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (model != null) {
+                                    AsyncImage(
+                                        model = model,
+                                        contentDescription = "Превью видео",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+                                }
+
+                                // 💥 2. ЕСЛИ ВИДЕО ГРУЗИТСЯ — ПОКАЗЫВАЕМ СПИННЕР!
+                                if (message.isSending) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            modifier = Modifier.size(36.dp),
+                                            strokeWidth = 3.dp
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Отправка видео...",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                                // 💥 3. КОГДА ЗАГРУЗИЛОСЬ — ПОКАЗЫВАЕМ КНОПКУ PLAY!
+                                else {
+                                    Box(
+                                        modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("▶", color = Color.White, fontSize = 20.sp)
+                                    }
+
+                                    // Хронометраж в углу
+                                    Text(
+                                        text = message.fileExtraInfo ?: "0:00",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(8.dp)
+                                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }*/
                     }
 
                     MessageMediaType.DOCUMENT -> {
@@ -410,12 +532,28 @@ fun GhostMessageBubble(
                         Text(text = timeString, color = Color.White, fontSize = 11.sp)
                         if (isOutgoing) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
+                            /*Icon(
                                 imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
                                 contentDescription = "Статус",
                                 tint = if (message.isRead) Color(0xFF4FC3F7) else Color.White,
                                 modifier = Modifier.size(14.dp)
-                            )
+                            )*/
+                            if (message.isSending) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = "Отправляется",
+                                    tint = Color.White.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            } else {
+                                // Когда отправилось — наши привычные галочки
+                                Icon(
+                                    imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                                    contentDescription = "Статус",
+                                    tint = if (message.isRead) Color(0xFF4FC3F7) else Color.White.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
                 }

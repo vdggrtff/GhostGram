@@ -114,7 +114,7 @@ class ChatDetailsViewModel(
                     isLoadingMore = false
                 }
             }
-            is ChatDetailsIntent.OnSendPhotos -> {
+            /*is ChatDetailsIntent.OnSendPhotos -> {
                 val useCrypto = _state.value.isCryptoMode
                 val caption = _state.value.inputText.trim()
                 val asDocument = _state.value.sendAsDocument
@@ -125,9 +125,24 @@ class ChatDetailsViewModel(
                     }
                     _state.update { it.copy(inputText = "") }
                 }
-            }
+            }*/
             is ChatDetailsIntent.OnMediaSelected -> {
-                _state.update { it.copy(pendingMedia = intent.photos, pendingCaption = "") }
+                _state.update { it.copy(pendingMedia = intent.media, pendingCaption = "") }
+            }
+            is ChatDetailsIntent.OnConfirmMediaSend -> {
+                val mediaItems = _state.value.pendingMedia
+                val caption = _state.value.pendingCaption.trim()
+                val useCrypto = _state.value.isCryptoMode
+                val asDocument = _state.value.sendAsDocument
+
+                _state.update { it.copy(pendingMedia = emptyList(), pendingCaption = "", sendAsDocument = false) }
+
+                viewModelScope.launch {
+                    mediaItems.forEach { item ->
+                        // 💥 Передаем байты и расширение!
+                        repo.sendMedia(chatId, item.bytes, item.extension, caption, useCrypto, asDocument)
+                    }
+                }
             }
             is ChatDetailsIntent.OnPendingCaptionChanged -> {
                 _state.update { it.copy(pendingCaption = intent.text) }
@@ -137,20 +152,6 @@ class ChatDetailsViewModel(
             }
             is ChatDetailsIntent.OnCancelMediaSend -> {
                 _state.update { it.copy(pendingMedia = emptyList()) }
-            }
-            is ChatDetailsIntent.OnConfirmMediaSend -> {
-                val media = _state.value.pendingMedia
-                val caption = _state.value.pendingCaption.trim()
-                val useCrypto = _state.value.isCryptoMode
-                val asDocument = _state.value.sendAsDocument
-
-                _state.update { it.copy(pendingMedia = emptyList(), pendingCaption = "", sendAsDocument = false) }
-
-                viewModelScope.launch {
-                    media.forEach { bytes ->
-                        repo.sendPhoto(chatId, bytes, caption, useCrypto, asDocument)
-                    }
-                }
             }
         }
     }

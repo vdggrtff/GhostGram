@@ -124,7 +124,7 @@ fun ChatDetailsScreen(
         }
     }
 
-    val fileLauncher = rememberFilePickerLauncher(
+    /*val fileLauncher = rememberFilePickerLauncher(
         type = PickerType.Image, mode = PickerMode.Multiple()
     ) { files ->
         if (!files.isNullOrEmpty()) {
@@ -132,6 +132,22 @@ fun ChatDetailsScreen(
                 val byteArrayList = files.map { it.readBytes() }
                 // 💥 ТЕПЕРЬ ОНО НЕ ОТПРАВЛЯЕТ, А ОТКРЫВАЕТ ДИАЛОГ!
                 onIntent(ChatDetailsIntent.OnMediaSelected(byteArrayList))
+            }
+        }
+    }*/
+    val fileLauncher = rememberFilePickerLauncher(
+        type = PickerType.ImageAndVideo, // 💥 ТЕПЕРЬ МОЖНО И ФОТО, И ВИДЕО!
+        mode = PickerMode.Multiple()
+    ) { files ->
+        if (!files.isNullOrEmpty()) {
+            coroutineScope.launch {
+                val mediaList = files.map { file ->
+                    val bytes = file.readBytes()
+                    // Достаем расширение из имени файла (например, "video.mp4" -> "mp4")
+                    val ext = file.name.substringAfterLast('.', "jpg")
+                   MediaItem(bytes, ext) // 💥 Наш новый дата-класс
+                }
+                onIntent(ChatDetailsIntent.OnMediaSelected(mediaList))
             }
         }
     }
@@ -295,6 +311,7 @@ fun ChatDetailsScreen(
                             isFirstInGroup = isFirstInGroup, // 👈
                             isLastInGroup = isLastInGroup,   // 👈
                             onMediaClick = { fullScreenImage = it }
+
                         )
                     }
                     is MessageListItem.Album -> {
@@ -366,7 +383,7 @@ fun ChatDetailsScreen(
 
                     // 💥 Превью первой картинки (Coil умеет читать ByteArray!)
                     AsyncImage(
-                        model = state.pendingMedia.first(),
+                        model = state.pendingMedia.first().bytes,
                         contentDescription = "Preview",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
@@ -377,7 +394,12 @@ fun ChatDetailsScreen(
                     )
 
                     if (state.pendingMedia.size > 1) {
-                        Text("И еще ${state.pendingMedia.size - 1} файлов...", color = GhostTextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                        Text(
+                            "И еще ${state.pendingMedia.size - 1} файлов",
+                            color = GhostTextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
