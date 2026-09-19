@@ -6,12 +6,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelEdit
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCatchUpClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissCatchUpDialog
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEditMessageClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
@@ -96,22 +98,32 @@ class ChatDetailsViewModel(
             /*is OnSendMessage -> {
                 val text = _state.value.inputText.trim()
                 val useCrypto = _state.value.isCryptoMode
-                if (text.isBlank()) return
-
-                viewModelScope.launch {
-                    repo.sendMessage(chatId, text, useCrypto)
-                    _state.update { it.copy(inputText = "") }
-                }
-            }*/
-            is OnSendMessage -> {
-                val text = _state.value.inputText.trim()
-                val useCrypto = _state.value.isCryptoMode
                 val replyToId = _state.value.replyingToMessage?.id ?: 0L // 💥 БЕРЕМ ID ОТВЕТА
                 if (text.isBlank()) return
 
                 viewModelScope.launch {
                     repo.sendMessage(chatId, text, useCrypto, replyToId) // 💥 ПЕРЕДАЕМ ID
                     _state.update { it.copy(inputText = "", replyingToMessage = null) } // Очищаем всё
+                }
+            }*/
+            is OnSendMessage -> {
+                val text = _state.value.inputText.trim()
+                val useCrypto = _state.value.isCryptoMode
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L
+                val editMsg = _state.value.editingMessage
+
+                if (text.isBlank()) return
+
+                viewModelScope.launch {
+                    if (editMsg != null) {
+                        // ✏️ ЕСЛИ МЫ В РЕЖИМЕ РЕДАКТИРОВАНИЯ - МЕНЯЕМ ТЕКСТ!
+                        repo.editMessageText(chatId, editMsg.id, text, useCrypto)
+                    } else {
+                        // 📨 ИНАЧЕ - ШЛЕМ НОВОЕ
+                        repo.sendMessage(chatId, text, useCrypto, replyToId)
+                    }
+                    // Очищаем всё после отправки
+                    _state.update { it.copy(inputText = "", replyingToMessage = null, editingMessage = null) }
                 }
             }
             is OnGenerateRepliesClick -> generateReplies()
@@ -136,21 +148,6 @@ class ChatDetailsViewModel(
             is OnMediaSelected -> {
                 _state.update { it.copy(pendingMedia = intent.media, pendingCaption = "") }
             }
-            /*is OnConfirmMediaSend -> {
-                val mediaItems = _state.value.pendingMedia
-                val caption = _state.value.pendingCaption.trim()
-                val useCrypto = _state.value.isCryptoMode
-                val asDocument = _state.value.sendAsDocument
-
-                _state.update { it.copy(pendingMedia = emptyList(), pendingCaption = "", sendAsDocument = false) }
-
-                viewModelScope.launch {
-                    mediaItems.forEach { item ->
-                        // 💥 Передаем байты и расширение!
-                        repo.sendMedia(chatId, item.bytes, item.extension, caption, useCrypto, asDocument)
-                    }
-                }
-            }*/
             is OnConfirmMediaSend -> {
                 val mediaItems = _state.value.pendingMedia
                 val caption = _state.value.pendingCaption.trim()
@@ -198,6 +195,24 @@ class ChatDetailsViewModel(
             }
             is OnSwipeToReply -> _state.update { it.copy(replyingToMessage = intent.message) }
             is OnCancelReply -> _state.update { it.copy(replyingToMessage = null) }
+            is OnEditMessageClick -> {
+                val msg = intent.message
+                val isEncrypted = msg.fileExtraInfo == "ENCRYPTED"
+
+                _state.update {
+                    it.copy(
+                        editingMessage = msg,
+                        inputText = msg.text, // 💥 Кидаем старый текст в инпут!
+                        isCryptoMode = isEncrypted, // Включаем замок, если это была шифровка!
+                        replyingToMessage = null // Сбрасываем reply, если был
+                    )
+                }
+            }
+
+            // 💥 ОТМЕНА РЕДАКТИРОВАНИЯ
+            is OnCancelEdit -> {
+                _state.update { it.copy(editingMessage = null, inputText = "") }
+            }
         }
     }
 

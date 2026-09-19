@@ -40,4 +40,11 @@ interface MessageDao {
 
     @Query("UPDATE messages SET fileName = :path WHERE id = :messageId")
     suspend fun updateMessageFileName(messageId: Long, path: String)
+
+    @Query("DELETE FROM messages WHERE isDeletedLocally = 0")
+    suspend fun clearNormalMessages()
+
+    // 💥 Удаляет ТОЛЬКО сохраненные Anti-Revoke сообщения
+    @Query("DELETE FROM messages WHERE isDeletedLocally = 1")
+    suspend fun clearAntiRevokeMessages()
 }

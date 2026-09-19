@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons.Outlined
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
+import com.ghostgram.app.ui.theme.GhostAccentGreen
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSecondary
@@ -50,6 +52,7 @@ fun GhostTextField(
     inputText: String,
     onIntent: (ChatDetailsIntent) -> Unit,
     replyingToMessage: Message?,
+    editingMessage: Message?,
     fileLauncher: PickerResultLauncher
 ) {
     if (replyingToMessage != null) {
@@ -78,6 +81,40 @@ fun GhostTextField(
             }
 
             IconButton(onClick = { onIntent(ChatDetailsIntent.OnCancelReply) }, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Отмена", tint = GhostTextSecondary)
+            }
+        }
+    }
+    if (editingMessage != null) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(GhostSurfaceElevated)
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Зеленая или фиолетовая полоска слева
+            Box(modifier = Modifier.width(3.dp).height(32.dp).background(GhostAccentGreen, RoundedCornerShape(2.dp)))
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Иконка карандаша
+            Icon(Icons.Default.Edit, contentDescription = null, tint = GhostAccentGreen, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Редактирование", color = GhostAccentGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(
+                    text = editingMessage.text,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(onClick = { onIntent(ChatDetailsIntent.OnCancelEdit) }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Отмена", tint = GhostTextSecondary)
             }
         }

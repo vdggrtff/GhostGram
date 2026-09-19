@@ -1,37 +1,19 @@
 package com.ghostgram.app.presentation.chats.chat_details
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,29 +27,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import coil3.compose.AsyncImage
 import com.ghostgram.app.presentation.components.SwipeToReplyWrapper
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
+import com.ghostgram.app.presentation.components.dialog.FullScreenImageDialog
 import com.ghostgram.app.presentation.components.dialog.GhostAlertDialog
 import com.ghostgram.app.presentation.components.dialog.PendingMediaDialog
+import com.ghostgram.app.presentation.components.dialog.SelectedMessageForMenuDialog
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
-import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
-import com.ghostgram.app.ui.theme.GhostPrimary
-import com.ghostgram.app.ui.theme.GhostSurfaceElevated
-import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
@@ -133,7 +108,7 @@ fun ChatDetailsScreen(
                     val bytes = file.readBytes()
                     // Достаем расширение из имени файла (например, "video.mp4" -> "mp4")
                     val ext = file.name.substringAfterLast('.', "jpg")
-                   MediaItem(bytes, ext) // 💥 Наш новый дата-класс
+                    MediaItem(bytes, ext) // 💥 Наш новый дата-класс
                 }
                 onIntent(ChatDetailsIntent.OnMediaSelected(mediaList))
             }
@@ -239,7 +214,8 @@ fun ChatDetailsScreen(
                 inputText = state.inputText,
                 onIntent = onIntent,
                 fileLauncher = fileLauncher,
-                replyingToMessage = state.replyingToMessage
+                replyingToMessage = state.replyingToMessage,
+                editingMessage = state.editingMessage
             )
         },
         floatingActionButton = {
@@ -299,7 +275,7 @@ fun ChatDetailsScreen(
                         val repliedMsg = if (item.message.replyToMessageId != 0L) {
                             state.messages.find { it.id == item.message.replyToMessageId }
                         } else null
-                       SwipeToReplyWrapper(
+                        SwipeToReplyWrapper(
                             onSwipe = { onIntent(ChatDetailsIntent.OnSwipeToReply(item.message)) }
                         ) {
                             GhostMessageBubble(
@@ -315,6 +291,7 @@ fun ChatDetailsScreen(
                             )
                         }
                     }
+
                     is MessageListItem.Album -> {
                         val baseMsg = item.messages.first()
                         val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
@@ -342,10 +319,18 @@ fun ChatDetailsScreen(
                 if (showDateHeader) {
                     val dateText = TimeFormatter.formatDateHeader(itemDate)
                     if (dateText.isNotBlank()) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = dateText, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(GhostCard.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 4.dp)
+                                text = dateText,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(GhostCard.copy(alpha = 0.6f))
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
                             )
                         }
                     }
@@ -360,26 +345,10 @@ fun ChatDetailsScreen(
         }
     }
     if (fullScreenImage != null) {
-        Dialog(
-            onDismissRequest = { fullScreenImage = null },
-            properties =DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.9f))
-                    .clickable { fullScreenImage = null },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(model = fullScreenImage, contentDescription = "Full Screen", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-                IconButton(
-                    onClick = { fullScreenImage = null },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Text("✖", color = Color.White)
-                }
-            }
-        }
+        FullScreenImageDialog(
+            imageUrl = fullScreenImage!!,
+            onDismiss = { fullScreenImage = null }
+        )
     }
     if (state.pendingMedia.isNotEmpty()) {
         PendingMediaDialog(
@@ -390,62 +359,11 @@ fun ChatDetailsScreen(
         )
     }
     if (selectedMessageForMenu != null) {
-        val msg = selectedMessageForMenu!!
-
-        AlertDialog(
-            onDismissRequest = { selectedMessageForMenu = null },
-            containerColor = GhostCard,
-            title = { Text("Действия", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-
-                    // Копировать (Только если есть текст)
-                    if (msg.text.isNotBlank()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    coroutineScope.launch {
-                                        clipboardManager.setText(AnnotatedString(msg.text))
-                                        //clipboardManager.getClipEntry()
-                                    }
-                                    selectedMessageForMenu = null
-                                }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("📋", fontSize = 20.sp)
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("Скопировать текст", color = Color.White, fontSize = 16.sp)
-                        }
-                    }
-
-                    // Удалить у всех (Revoke)
-                    if (!msg.isDeletedLocally) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    onIntent(ChatDetailsIntent.OnDeleteMessage(msg.id, revoke = true))
-                                    selectedMessageForMenu = null
-                                }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("🗑", fontSize = 20.sp)
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text("Удалить у всех", color = GhostAccentRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { selectedMessageForMenu = null }) {
-                    Text("Отмена", color = GhostTextSecondary)
-                }
-            }
+        SelectedMessageForMenuDialog(
+            msg = selectedMessageForMenu!!,
+            clipboardManager = clipboardManager,
+            onIntent = onIntent,
+            onDismiss = { selectedMessageForMenu = null }
         )
     }
 }

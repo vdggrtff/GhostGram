@@ -34,4 +34,9 @@ interface ChatRepository {
     suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean, replyToMessageId: Long = 0L)
 
     suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean)
+
+    suspend fun clearLocalCache(clearNormal: Boolean, clearAntiRevoke: Boolean)
+
+    suspend fun editMessageText(chatId: Long, messageId: Long, newText: String, useCrypto: Boolean = false)
+
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,13 +34,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.ghostgram.app.presentation.components.openVideoInSystemPlayer
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSecondary
+import com.ghostgram.app.ui.theme.GhostSurfaceElevated
 import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
-import kotlin.collections.chunked
+import entity.MessageMediaType
 
 @Composable
 fun GhostAlbumBubble(
@@ -161,7 +165,7 @@ fun GhostAlbumBubble(
                     }
                 }
                 // 💥 РИСУЕМ КАРТИНКИ СЕТКОЙ (По 2 в ряд)
-                albumMessages.chunked(2).forEach { rowMessages ->
+                /*albumMessages.chunked(2).forEach { rowMessages ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         rowMessages.forEach { msg ->
                             val model =
@@ -176,6 +180,79 @@ fun GhostAlbumBubble(
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable { if (model != null) onMediaClick(model) }
                             )
+                        }
+                    }
+                }*/
+                albumMessages.chunked(2).forEach { rowMessages ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        rowMessages.forEach { msg ->
+
+                            // 💥 1. ОПРЕДЕЛЯЕМ ТИП И ПУТИ
+                            val isVideo = msg.mediaType == MessageMediaType.VIDEO || msg.mediaType == MessageMediaType.VIDEO_NOTE
+                            val model = if (msg.photoPath?.startsWith("/") == true) "file://${msg.photoPath}" else msg.photoPath
+                            val videoPath = msg.fileName
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f) // Квадратная ячейка альбома
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(GhostSurfaceElevated) // Фон на случай загрузки
+                                    // 💥 2. КЛИКАБЕЛЬНОСТЬ В ЗАВИСИМОСТИ ОТ ТИПА
+                                    .clickable {
+                                        if (isVideo && !msg.isSending && !videoPath.isNullOrBlank()) {
+                                            // Открываем видео в плеере
+                                            openVideoInSystemPlayer(videoPath)
+                                        } else if (!isVideo && model != null) {
+                                            // Открываем фото на фуллскрин
+                                            onMediaClick(model)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Картинка или превью видео
+                                if (model != null) {
+                                    AsyncImage(
+                                        model = model,
+                                        contentDescription = "Фото/Видео альбома",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else if (isVideo) {
+                                    Text("🎬", fontSize = 24.sp) // Заглушка
+                                }
+
+                                // 💥 3. ЕСЛИ ЭТО ВИДЕО - РИСУЕМ UI ПЛЕЕРА!
+                                if (isVideo) {
+                                    // Затемнение
+                                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+
+                                    if (msg.isSending) {
+                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        // Кнопка PLAY
+                                        Box(
+                                            modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("▶", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 2.dp))
+                                        }
+
+                                        // Длительность в левом верхнем углу ячейки
+                                        Text(
+                                            text = msg.fileExtraInfo ?: "0:00",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .padding(4.dp)
+                                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

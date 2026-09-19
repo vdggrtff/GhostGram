@@ -23,6 +23,7 @@ data class ChatDetailsState(
     val pendingCaption: String = "",                 // Подпись в диалоге
     val sendAsDocument: Boolean = false,              // Галочка "Отправить как файл"
     val replyingToMessage: Message? = null,
+    val editingMessage: Message? = null
 )
 
 // Действия на экране чата
@@ -50,4 +51,6 @@ sealed interface ChatDetailsIntent {
 
     data class OnSwipeToReply(val message: Message) : ChatDetailsIntent // 💥 Свайпнули!
     data object OnCancelReply : ChatDetailsIntent // 💥 Передумали отвечать
+    data class OnEditMessageClick(val message: Message) : ChatDetailsIntent // 💥 Клик в меню
+    data object OnCancelEdit : ChatDetailsIntent
 }

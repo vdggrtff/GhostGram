@@ -437,4 +437,35 @@ class ChatRepositoryImpl(
         """.trimIndent()
         tdlibClient.send(request)
     }
+
+    override suspend fun clearLocalCache(clearNormal: Boolean, clearAntiRevoke: Boolean) {
+        if (clearNormal) messageDao.clearNormalMessages()
+        if (clearAntiRevoke) messageDao.clearAntiRevokeMessages()
+    }
+
+    override suspend fun editMessageText(chatId: Long, messageId: Long, newText: String, useCrypto: Boolean) {
+        // 💥 Если редактируем крипто-сообщение — шифруем новый текст!
+        val finalText = if (useCrypto) {
+            cryptoLayer.encryptAndHide(chatId, newText)
+        } else {
+            newText
+        }
+
+        val request = """
+            {
+                "@type": "editMessageText",
+                "chat_id": $chatId,
+                "message_id": $messageId,
+                "input_message_content": {
+                    "@type": "inputMessageText",
+                    "text": {
+                        "@type": "formattedText",
+                        "text": "$finalText"
+                    }
+                }
+            }
+        """.trimIndent()
+
+        tdlibClient.send(request)
+    }
 }

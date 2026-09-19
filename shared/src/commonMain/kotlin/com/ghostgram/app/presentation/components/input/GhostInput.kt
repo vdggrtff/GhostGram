@@ -39,6 +39,7 @@ fun GhostInput(
     isRepliesLoading: Boolean,
     inputText: String,
     replyingToMessage: Message?,
+    editingMessage: Message?,
     fileLauncher: PickerResultLauncher,
     onIntent: (ChatDetailsIntent) -> Unit
 ){
@@ -58,7 +59,8 @@ fun GhostInput(
             inputText = inputText,
             onIntent = onIntent,
             fileLauncher = fileLauncher,
-            replyingToMessage = replyingToMessage
+            replyingToMessage = replyingToMessage,
+            editingMessage = editingMessage
         )
     }
 }
