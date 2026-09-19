@@ -168,7 +168,8 @@ class ChatRepositoryImpl(
                         isRead = entity.isRead,
                         date = entity.date,
                         mediaAlbumId = entity.mediaAlbumId,
-                        isSending = entity.isSending
+                        isSending = entity.isSending,
+                        replyToMessageId = entity.replyToMessageId
                     )
                 }
             }
@@ -223,7 +224,7 @@ class ChatRepositoryImpl(
         println("👁 Ghost Mode выключен: отправлен статус прочтения для $chatId")
     }
 
-    override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean) {
+    override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean, replyToMessageId: Long) {
         val finalText = if (useCrypto) {
             // 💥 ПРОВЕРЯЕМ: если рукопожатие еще не завершено — шлем запрос ключей вместо мусора!
             if (!cryptoLayer.isChatSecure(chatId)) {
@@ -238,7 +239,7 @@ class ChatRepositoryImpl(
 
 
         // 💥 ДОБАВЛЯЕМ link_preview_options, чтобы убить карточку GitHub!
-        val request = """
+        /*val request = """
             {
                 "@type": "sendMessage",
                 "chat_id": $chatId,
@@ -254,8 +255,33 @@ class ChatRepositoryImpl(
                     }
                 }
             }
-        """.trimIndent()
-        tdlibClient.send(request)
+        """.trimIndent()*/
+        val request = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+
+            // 💥 ЕСЛИ ЭТО ОТВЕТ — ДОБАВЛЯЕМ БЛОК REPLY_TO
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                put("@type", "inputMessageText")
+                put("text", buildJsonObject {
+                    put("@type", "formattedText")
+                    put("text", finalText)
+                })
+                put("link_preview_options", buildJsonObject {
+                    put("@type", "linkPreviewOptions")
+                    put("is_disabled", true)
+                })
+            })
+        }
+        tdlibClient.send(request.toString())
+        //tdlibClient.send(request)
     }
 
     override suspend fun requestKeyExchange(chatId: Long) {
@@ -330,7 +356,7 @@ class ChatRepositoryImpl(
 
         tdlibClient.send(request)
     }
-    override suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean) {
+    override suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean, replyToMessageId: Long) {
         if (bytes.isEmpty()) return
 
         val finalCaption = if (useCrypto) cryptoLayer.encryptAndHide(chatId, caption) else caption
@@ -350,6 +376,13 @@ class ChatRepositoryImpl(
         val requestJson = buildJsonObject {
             put("@type", "sendMessage")
             put("chat_id", chatId)
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
             put("input_message_content", buildJsonObject {
                 when {
                     asDocument -> {
@@ -391,5 +424,17 @@ class ChatRepositoryImpl(
 
         println("📸 [ОТПРАВКА] Шлем: $requestJson")
         tdlibClient.send(requestJson.toString())
+    }
+
+    override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
+        val request = """
+            {
+                "@type": "deleteMessages",
+                "chat_id": $chatId,
+                "message_ids": [$messageId],
+                "revoke": $revoke
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
     }
 }

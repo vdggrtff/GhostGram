@@ -28,6 +28,7 @@ import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostTextSecondary
+import entity.Message
 import io.github.vinceglb.filekit.compose.PickerResultLauncher
 
 @Composable
@@ -37,6 +38,7 @@ fun GhostInput(
     smartReplies: List<String>,
     isRepliesLoading: Boolean,
     inputText: String,
+    replyingToMessage: Message?,
     fileLauncher: PickerResultLauncher,
     onIntent: (ChatDetailsIntent) -> Unit
 ){
@@ -55,7 +57,8 @@ fun GhostInput(
         GhostTextField(
             inputText = inputText,
             onIntent = onIntent,
-            fileLauncher
+            fileLauncher = fileLauncher,
+            replyingToMessage = replyingToMessage
         )
     }
 }

@@ -2,6 +2,7 @@ package com.ghostgram.app.presentation.components.bauble
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,6 +35,7 @@ import coil3.compose.AsyncImage
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSecondary
+import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import kotlin.collections.chunked
@@ -43,6 +46,10 @@ fun GhostAlbumBubble(
     chatAvatarPath: String?,
     myAvatarPath: String?,
     chatTitle: String,
+    isFirstInGroup: Boolean = true,
+    isLastInGroup: Boolean = true,
+    replyMessage: Message? = null,
+    onLongClick: () -> Unit,
     onMediaClick: (String) -> Unit
 ) {
     // Берем данные из первого сообщения (кто отправил, когда и тд)
@@ -50,23 +57,65 @@ fun GhostAlbumBubble(
     val isOutgoing = baseMessage.isOutgoing
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = if (isFirstInGroup) 8.dp else 2.dp),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom
     ) {
-        // ... (Аватарка собеседника слева - скопируй из GhostMessageBubble) ...
+        if (!isOutgoing) {
+            if (isLastInGroup) {
+                if (chatAvatarPath != null) {
+                    AsyncImage(
+                        model = chatAvatarPath,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(34.dp).clip(CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.size(34.dp).clip(CircleShape)
+                            .background(Color(0xFFE58235)), contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = chatTitle.take(1).uppercase().ifBlank { "💬" },
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            } else {
+                // Пустое место, чтобы пузыри не съезжали влево
+                Spacer(modifier = Modifier.width(34.dp))
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
 
-        val bubbleShape = if (isOutgoing) RoundedCornerShape(
-            16.dp,
-            16.dp,
-            16.dp,
-            4.dp
-        ) else RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
+        val cornerRadius = 16.dp
+        val smallRadius = 4.dp
 
+        val bubbleShape = if (isOutgoing) {
+            RoundedCornerShape(
+                topStart = cornerRadius,
+                topEnd = if (isFirstInGroup) cornerRadius else smallRadius,
+                bottomStart = cornerRadius,
+                bottomEnd = if (isLastInGroup) cornerRadius else smallRadius
+            )
+        } else {
+            RoundedCornerShape(
+                topStart = if (isFirstInGroup) cornerRadius else smallRadius,
+                topEnd = cornerRadius,
+                bottomStart = if (isLastInGroup) cornerRadius else smallRadius,
+                bottomEnd = cornerRadius
+            )
+        }
         Box(
             modifier = Modifier
                 .widthIn(min = 60.dp, max = 290.dp)
                 .clip(bubbleShape)
+                .combinedClickable( // 💥 ЛОВИМ ДОЛГИЙ ТАП
+                    onClick = {},
+                    onLongClick = onLongClick
+                )
                 .background(
                     if (isOutgoing) Brush.linearGradient(
                         listOf(
@@ -78,7 +127,39 @@ fun GhostAlbumBubble(
                 .padding(6.dp) // Чуть меньше паддинги для альбома
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (baseMessage.replyToMessageId != 0L) {
+                    // Если оригинал есть в памяти - берем его данные, иначе пишем заглушку
+                    val replySenderName = replyMessage?.senderName ?: "Сообщение"
+                    val replyText = replyMessage?.text?.ifBlank { "Медиафайл" } ?: "Загрузка..."
 
+                    // Цвета зависят от того, исходящий ли это пузырь
+                    val accentColor = if (isOutgoing) Color.White else GhostPrimary
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(accentColor.copy(alpha = 0.1f)) // Легкий фон под цитатой
+                            .padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Вертикальная полоска
+                        Box(modifier = Modifier.width(3.dp).height(36.dp).background(accentColor))
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Текст цитаты
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(text = replySenderName, color = accentColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(
+                                text = replyText,
+                                color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else GhostTextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
                 // 💥 РИСУЕМ КАРТИНКИ СЕТКОЙ (По 2 в ряд)
                 albumMessages.chunked(2).forEach { rowMessages ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -135,30 +216,30 @@ fun GhostAlbumBubble(
         }
         if (isOutgoing) {
             Spacer(modifier = Modifier.width(8.dp))
-            if (myAvatarPath != null && !myAvatarPath.startsWith("INITIALS:")) {
-                AsyncImage(
-                    model = myAvatarPath,
-                    contentDescription = "Моя аватарка",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(36.dp).clip(CircleShape)
-                )
-            } else {
-                // Красивая заглушка с инициалами
-                val myName = myAvatarPath?.removePrefix("INITIALS:") ?: "Я"
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(GhostPrimary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = myName.take(1).uppercase(),
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+            if (isLastInGroup) {
+                if (myAvatarPath != null && !myAvatarPath.startsWith("INITIALS:")) {
+                    AsyncImage(
+                        model = myAvatarPath,
+                        contentDescription = "Моя аватарка",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(36.dp).clip(CircleShape)
                     )
+                } else {
+                    val myName = myAvatarPath?.removePrefix("INITIALS:") ?: "Я"
+                    Box(
+                        modifier = Modifier.size(36.dp).clip(CircleShape).background(GhostPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = myName.take(1).uppercase(),
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
+            } else {
+                Spacer(modifier = Modifier.width(34.dp))
             }
         }
     }

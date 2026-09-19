@@ -12,16 +12,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,10 +26,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButtonDefaults.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -51,18 +46,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import com.ghostgram.app.presentation.components.SwipeToReplyWrapper
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
 import com.ghostgram.app.presentation.components.dialog.GhostAlertDialog
+import com.ghostgram.app.presentation.components.dialog.PendingMediaDialog
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
+import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
@@ -70,11 +70,11 @@ import com.ghostgram.app.ui.theme.GhostSurfaceElevated
 import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
-import kotlinx.coroutines.launch
-import org.koin.compose.viewmodel.koinViewModel
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
+import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
 
 sealed class MessageListItem {
     data class Single(val message: Message) : MessageListItem()
@@ -123,18 +123,6 @@ fun ChatDetailsScreen(
             totalItems > 0 && lastVisibleItem >= totalItems - 5
         }
     }
-
-    /*val fileLauncher = rememberFilePickerLauncher(
-        type = PickerType.Image, mode = PickerMode.Multiple()
-    ) { files ->
-        if (!files.isNullOrEmpty()) {
-            coroutineScope.launch {
-                val byteArrayList = files.map { it.readBytes() }
-                // 💥 ТЕПЕРЬ ОНО НЕ ОТПРАВЛЯЕТ, А ОТКРЫВАЕТ ДИАЛОГ!
-                onIntent(ChatDetailsIntent.OnMediaSelected(byteArrayList))
-            }
-        }
-    }*/
     val fileLauncher = rememberFilePickerLauncher(
         type = PickerType.ImageAndVideo, // 💥 ТЕПЕРЬ МОЖНО И ФОТО, И ВИДЕО!
         mode = PickerMode.Multiple()
@@ -153,6 +141,10 @@ fun ChatDetailsScreen(
     }
 
     var fullScreenImage by remember { mutableStateOf<String?>(null) }
+
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
 
     // 💥 УМНЫЙ СКРОЛЛ: если есть непрочитанные — скроллим к началу непрочитанных, если нет — в самый низ (к 0)
     LaunchedEffect(state.messages.size) {
@@ -246,7 +238,8 @@ fun ChatDetailsScreen(
                 isRepliesLoading = state.isRepliesLoading,
                 inputText = state.inputText,
                 onIntent = onIntent,
-                fileLauncher = fileLauncher
+                fileLauncher = fileLauncher,
+                replyingToMessage = state.replyingToMessage
             )
         },
         floatingActionButton = {
@@ -303,25 +296,45 @@ fun ChatDetailsScreen(
                 // 💥 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
                 when (item) {
                     is MessageListItem.Single -> {
-                        GhostMessageBubble(
-                            message = item.message,
-                            chatAvatarPath = state.avatarPath,
-                            myAvatarPath = state.myAvatarPath,
-                            chatTitle = state.chatTitle,
-                            isFirstInGroup = isFirstInGroup, // 👈
-                            isLastInGroup = isLastInGroup,   // 👈
-                            onMediaClick = { fullScreenImage = it }
-
-                        )
+                        val repliedMsg = if (item.message.replyToMessageId != 0L) {
+                            state.messages.find { it.id == item.message.replyToMessageId }
+                        } else null
+                       SwipeToReplyWrapper(
+                            onSwipe = { onIntent(ChatDetailsIntent.OnSwipeToReply(item.message)) }
+                        ) {
+                            GhostMessageBubble(
+                                message = item.message,
+                                chatAvatarPath = state.avatarPath,
+                                myAvatarPath = state.myAvatarPath,
+                                chatTitle = state.chatTitle,
+                                isFirstInGroup = isFirstInGroup, // 👈
+                                isLastInGroup = isLastInGroup,   // 👈
+                                onMediaClick = { fullScreenImage = it },
+                                onLongClick = { selectedMessageForMenu = item.message },
+                                replyMessage = repliedMsg,
+                            )
+                        }
                     }
                     is MessageListItem.Album -> {
-                        GhostAlbumBubble(
-                            albumMessages = item.messages,
-                            chatAvatarPath = state.avatarPath,
-                            myAvatarPath = state.myAvatarPath,
-                            chatTitle = state.chatTitle,
-                            onMediaClick = { fullScreenImage = it }
-                        )
+                        val baseMsg = item.messages.first()
+                        val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
+                            state.messages.find { it.id == baseMsg.replyToMessageId }
+                        } else null
+                        SwipeToReplyWrapper(
+                            onSwipe = { onIntent(ChatDetailsIntent.OnSwipeToReply(baseMsg)) }
+                        ) {
+                            GhostAlbumBubble(
+                                albumMessages = item.messages,
+                                chatAvatarPath = state.avatarPath,
+                                myAvatarPath = state.myAvatarPath,
+                                chatTitle = state.chatTitle,
+                                onMediaClick = { fullScreenImage = it },
+                                isLastInGroup = isLastInGroup,
+                                isFirstInGroup = isFirstInGroup,
+                                replyMessage = repliedMsg,
+                                onLongClick = { selectedMessageForMenu = baseMsg }
+                            )
+                        }
                     }
                 }
 
@@ -369,86 +382,70 @@ fun ChatDetailsScreen(
         }
     }
     if (state.pendingMedia.isNotEmpty()) {
-        Dialog(
-            onDismissRequest = { onIntent(ChatDetailsIntent.OnCancelMediaSend) }
-        ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = GhostSurfaceElevated),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Отправить фото", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(16.dp))
+        PendingMediaDialog(
+            pendingMedia = state.pendingMedia,
+            sendAsDocument = state.sendAsDocument,
+            pendingCaption = state.pendingCaption,
+            onIntent = onIntent
+        )
+    }
+    if (selectedMessageForMenu != null) {
+        val msg = selectedMessageForMenu!!
 
-                    // 💥 Превью первой картинки (Coil умеет читать ByteArray!)
-                    AsyncImage(
-                        model = state.pendingMedia.first().bytes,
-                        contentDescription = "Preview",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(GhostBackground)
-                    )
+        AlertDialog(
+            onDismissRequest = { selectedMessageForMenu = null },
+            containerColor = GhostCard,
+            title = { Text("Действия", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
 
-                    if (state.pendingMedia.size > 1) {
-                        Text(
-                            "И еще ${state.pendingMedia.size - 1} файлов",
-                            color = GhostTextSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Галочка "Как файл"
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onIntent(ChatDetailsIntent.OnToggleSendAsDocument(!state.sendAsDocument)) }) {
-                        Checkbox(
-                            checked = state.sendAsDocument,
-                            onCheckedChange = { onIntent(ChatDetailsIntent.OnToggleSendAsDocument(it)) },
-                            colors = CheckboxDefaults.colors(checkedColor = GhostPrimary)
-                        )
-                        Text("Отправить как файл (без сжатия)", color = Color.White, fontSize = 14.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Поле подписи
-                    TextField(
-                        value = state.pendingCaption,
-                        onValueChange = { onIntent(ChatDetailsIntent.OnPendingCaptionChanged(it)) },
-                        placeholder = { Text("Добавить подпись...", color = GhostTextSecondary) },
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = GhostCard,
-                            unfocusedContainerColor = GhostCard,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Кнопки
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { onIntent(ChatDetailsIntent.OnCancelMediaSend) }) {
-                            Text("Отмена", color = GhostTextSecondary)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { onIntent(ChatDetailsIntent.OnConfirmMediaSend) },
-                            colors = ButtonDefaults.buttonColors(containerColor = GhostPrimary)
+                    // Копировать (Только если есть текст)
+                    if (msg.text.isNotBlank()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    coroutineScope.launch {
+                                        clipboardManager.setText(AnnotatedString(msg.text))
+                                        //clipboardManager.getClipEntry()
+                                    }
+                                    selectedMessageForMenu = null
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Отправить", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("📋", fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text("Скопировать текст", color = Color.White, fontSize = 16.sp)
+                        }
+                    }
+
+                    // Удалить у всех (Revoke)
+                    if (!msg.isDeletedLocally) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    onIntent(ChatDetailsIntent.OnDeleteMessage(msg.id, revoke = true))
+                                    selectedMessageForMenu = null
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🗑", fontSize = 20.sp)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text("Удалить у всех", color = GhostAccentRed, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedMessageForMenu = null }) {
+                    Text("Отмена", color = GhostTextSecondary)
+                }
             }
-        }
+        )
     }
 }

@@ -22,6 +22,7 @@ data class ChatDetailsState(
     val pendingMedia: List<MediaItem> = emptyList(), // Выбранные фотки
     val pendingCaption: String = "",                 // Подпись в диалоге
     val sendAsDocument: Boolean = false,              // Галочка "Отправить как файл"
+    val replyingToMessage: Message? = null,
 )
 
 // Действия на экране чата
@@ -38,12 +39,15 @@ sealed interface ChatDetailsIntent {
     data object OnToggleCryptoMode : ChatDetailsIntent
 
     data class LoadMoreMessages(val fromMessageId: Long) : ChatDetailsIntent
-
-    //data class OnSendPhotos(val photos: List<ByteArray>) : ChatDetailsIntent // 💥
     data class OnPendingCaptionChanged(val text: String) : ChatDetailsIntent
     data class OnToggleSendAsDocument(val isChecked: Boolean) : ChatDetailsIntent
     data object OnCancelMediaSend : ChatDetailsIntent
     data object OnConfirmMediaSend : ChatDetailsIntent
 
     data class OnMediaSelected(val media: List<MediaItem>) : ChatDetailsIntent
+
+    data class OnDeleteMessage(val messageId: Long, val revoke: Boolean) : ChatDetailsIntent
+
+    data class OnSwipeToReply(val message: Message) : ChatDetailsIntent // 💥 Свайпнули!
+    data object OnCancelReply : ChatDetailsIntent // 💥 Передумали отвечать
 }

@@ -35,6 +35,10 @@ class MessageUpdateHandler(
                 val date = messageObj["date"]?.jsonPrimitive?.intOrNull ?: 0
                 val mediaAlbumId = messageObj["media_album_id"]?.jsonPrimitive?.longOrNull ?: 0L
                 val isSending = messageObj["sending_state"] != null
+                val replyToObj = messageObj["reply_to"]?.jsonObject
+                val replyToMessageId = if (replyToObj?.get("@type")?.jsonPrimitive?.content == "messageReplyToMessage") {
+                    replyToObj["message_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                } else 0L
 
                 val contentObj = messageObj["content"]?.jsonObject
 
@@ -48,7 +52,8 @@ class MessageUpdateHandler(
                         date,
                         mediaAlbumId,
                         isLive = true,
-                        isSending = isSending
+                        isSending = isSending,
+                        replyToMessageId = replyToMessageId
                     )
 
                 if (entity != null) {
@@ -70,6 +75,11 @@ class MessageUpdateHandler(
                     val msgObj = msgElement.jsonObject
                     val msgId = msgObj["id"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
                     val isOutgoing = msgObj["is_outgoing"]?.jsonPrimitive?.booleanOrNull ?: false
+                    val isSending = msgObj["sending_state"] != null
+                    val replyToObj = msgObj["reply_to"]?.jsonObject
+                    val replyToMessageId = if (replyToObj?.get("@type")?.jsonPrimitive?.content == "messageReplyToMessage") {
+                        replyToObj["message_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                    } else 0L
                     val contentObj = msgObj["content"]?.jsonObject
 
                     val date = msgObj["date"]?.jsonPrimitive?.intOrNull ?: 0
@@ -83,7 +93,9 @@ class MessageUpdateHandler(
                         contentObj,
                         date,
                         mediaAlbumId,
-                        isLive = false
+                        isLive = false,
+                        isSending = isSending,
+                        replyToMessageId = replyToMessageId
                     )
                 }
 
@@ -173,6 +185,7 @@ class MessageUpdateHandler(
         mediaAlbumId: Long = 0L,
         isLive: Boolean = false,
         isSending: Boolean = false,
+        replyToMessageId: Long = 0L
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
         val senderName = if (isOutgoing) "Вы" else "Собеседник"
@@ -241,7 +254,9 @@ class MessageUpdateHandler(
                     mediaType = "TEXT",
                     fileExtraInfo = extraInfo,
                     date = date,
-                    mediaAlbumId = mediaAlbumId // 💥 Альбомы спасены!
+                    mediaAlbumId = mediaAlbumId,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
 
@@ -269,7 +284,9 @@ class MessageUpdateHandler(
                     photoPath = photoPath,
                     mediaType = "PHOTO",
                     date = date,
-                    mediaAlbumId = mediaAlbumId
+                    mediaAlbumId = mediaAlbumId,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
 
@@ -287,7 +304,9 @@ class MessageUpdateHandler(
                     mediaType = "DOCUMENT",
                     fileName = fileName,
                     date = date,
-                    mediaAlbumId = mediaAlbumId
+                    mediaAlbumId = mediaAlbumId,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
 
@@ -302,7 +321,9 @@ class MessageUpdateHandler(
                     isOutgoing = isOutgoing,
                     mediaType = "VOICE",
                     date = date,
-                    mediaAlbumId = mediaAlbumId
+                    mediaAlbumId = mediaAlbumId,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
 
@@ -344,7 +365,9 @@ class MessageUpdateHandler(
                     photoPath = photoPath, // 💥 Сохраняем путь к превьюшке!
                     date = date,
                     mediaAlbumId = mediaAlbumId,
-                    fileName = videoPath
+                    fileName = videoPath,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
 
@@ -366,7 +389,9 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId, chatId = chatId, senderName = senderName, text = "",
                     isOutgoing = isOutgoing, mediaType = "STICKER", fileExtraInfo = emoji,
-                    photoPath = stickerPath, date = date // (твои параметры)
+                    photoPath = stickerPath, date = date,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
 
@@ -379,7 +404,9 @@ class MessageUpdateHandler(
                     isOutgoing = isOutgoing,
                     mediaType = "TEXT",
                     date = date,
-                    mediaAlbumId = mediaAlbumId
+                    mediaAlbumId = mediaAlbumId,
+                    isSending = isSending,
+                    replyToMessageId = replyToMessageId,
                 )
             }
         }

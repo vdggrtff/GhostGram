@@ -12,7 +12,7 @@ interface ChatRepository {
     fun observeMessages(chatId: Long): Flow<List<Message>>
     suspend fun sendMessage(chatId: Long, text: String, )
 
-    suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean = false)
+    suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean = false, replyToMessageId: Long)
     suspend fun getChatHistory(chatId: Long, limit: Int): String // Для ИИ
 
     fun observeGhostMode(): Flow<Boolean>
@@ -31,5 +31,7 @@ interface ChatRepository {
     fun observeMessageSearchResults(): Flow<List<Chat>>
     fun searchMessages(query: String)
 
-    suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean)
+    suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean, replyToMessageId: Long = 0L)
+
+    suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean)
 }

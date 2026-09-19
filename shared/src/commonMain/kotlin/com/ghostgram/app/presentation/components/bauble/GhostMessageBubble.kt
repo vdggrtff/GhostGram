@@ -2,6 +2,7 @@ package com.ghostgram.app.presentation.components.bauble
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +54,7 @@ import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSecondary
 import com.ghostgram.app.ui.theme.GhostSecureGreen
+import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TgsDecoder
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
@@ -70,6 +72,8 @@ fun GhostMessageBubble(
     chatTitle: String,
     isFirstInGroup: Boolean = true, // 💥 Новые параметры
     isLastInGroup: Boolean = true,
+    replyMessage: Message? = null,
+    onLongClick: () -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -161,6 +165,10 @@ fun GhostMessageBubble(
                     max = 280.dp
                 ) // Ограничиваем только максимум, чтобы он сжимался под текст
                 .clip(bubbleShape)
+                .combinedClickable( // 💥 ЛОВИМ ДОЛГИЙ ТАП
+                    onClick = {},
+                    onLongClick = onLongClick
+                )
                 .then(
                     if (isSticker) {
                         Modifier.background(Color.Transparent) // Стикеры без фона!
@@ -183,6 +191,39 @@ fun GhostMessageBubble(
                 modifier = Modifier.wrapContentWidth(), // 💥 Пузырь плотно облегает контент
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (message.replyToMessageId != 0L) {
+                    // Если оригинал есть в памяти - берем его данные, иначе пишем заглушку
+                    val replySenderName = replyMessage?.senderName ?: "Сообщение"
+                    val replyText = replyMessage?.text?.ifBlank { "Медиафайл" } ?: "Загрузка..."
+
+                    // Цвета зависят от того, исходящий ли это пузырь
+                    val accentColor = if (isOutgoing) Color.White else GhostPrimary
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(accentColor.copy(alpha = 0.1f)) // Легкий фон под цитатой
+                            .padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Вертикальная полоска
+                        Box(modifier = Modifier.width(3.dp).height(36.dp).background(accentColor))
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Текст цитаты
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(text = replySenderName, color = accentColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(
+                                text = replyText,
+                                color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else GhostTextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
 
                 when (message.mediaType) {
                     MessageMediaType.PHOTO -> {

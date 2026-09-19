@@ -5,14 +5,23 @@ import SessionManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelMediaSend
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCatchUpClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmMediaSend
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissCatchUpDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,7 +93,7 @@ class ChatDetailsViewModel(
             }
 
             is OnToggleGhostMode -> repo.toggleGhostMode()
-            is OnSendMessage -> {
+            /*is OnSendMessage -> {
                 val text = _state.value.inputText.trim()
                 val useCrypto = _state.value.isCryptoMode
                 if (text.isBlank()) return
@@ -93,8 +102,18 @@ class ChatDetailsViewModel(
                     repo.sendMessage(chatId, text, useCrypto)
                     _state.update { it.copy(inputText = "") }
                 }
-            }
+            }*/
+            is OnSendMessage -> {
+                val text = _state.value.inputText.trim()
+                val useCrypto = _state.value.isCryptoMode
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L // 💥 БЕРЕМ ID ОТВЕТА
+                if (text.isBlank()) return
 
+                viewModelScope.launch {
+                    repo.sendMessage(chatId, text, useCrypto, replyToId) // 💥 ПЕРЕДАЕМ ID
+                    _state.update { it.copy(inputText = "", replyingToMessage = null) } // Очищаем всё
+                }
+            }
             is OnGenerateRepliesClick -> generateReplies()
             is OnSmartReplyClick -> _state.update {
                 it.copy(
@@ -105,7 +124,7 @@ class ChatDetailsViewModel(
 
             is OnCatchUpClick -> generateCatchUp()
             is OnDismissCatchUpDialog -> _state.update { it.copy(catchUpSummary = null) }
-            is ChatDetailsIntent.LoadMoreMessages -> {
+            is LoadMoreMessages -> {
                 if (isLoadingMore) return
                 isLoadingMore = true
                 viewModelScope.launch {
@@ -114,22 +133,10 @@ class ChatDetailsViewModel(
                     isLoadingMore = false
                 }
             }
-            /*is ChatDetailsIntent.OnSendPhotos -> {
-                val useCrypto = _state.value.isCryptoMode
-                val caption = _state.value.inputText.trim()
-                val asDocument = _state.value.sendAsDocument
-
-                viewModelScope.launch {
-                    intent.photos.forEach { bytes ->
-                        repo.sendPhoto(chatId, bytes, caption, useCrypto, asDocument )
-                    }
-                    _state.update { it.copy(inputText = "") }
-                }
-            }*/
-            is ChatDetailsIntent.OnMediaSelected -> {
+            is OnMediaSelected -> {
                 _state.update { it.copy(pendingMedia = intent.media, pendingCaption = "") }
             }
-            is ChatDetailsIntent.OnConfirmMediaSend -> {
+            /*is OnConfirmMediaSend -> {
                 val mediaItems = _state.value.pendingMedia
                 val caption = _state.value.pendingCaption.trim()
                 val useCrypto = _state.value.isCryptoMode
@@ -143,16 +150,54 @@ class ChatDetailsViewModel(
                         repo.sendMedia(chatId, item.bytes, item.extension, caption, useCrypto, asDocument)
                     }
                 }
+            }*/
+            is OnConfirmMediaSend -> {
+                val mediaItems = _state.value.pendingMedia
+                val caption = _state.value.pendingCaption.trim()
+                val useCrypto = _state.value.isCryptoMode
+                val asDocument = _state.value.sendAsDocument
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L
+
+                _state.update {
+                    it.copy(
+                        pendingMedia = emptyList(),
+                        pendingCaption = "",
+                        sendAsDocument = false,
+                        replyingToMessage = null
+                    )
+                }
+
+                viewModelScope.launch {
+                    mediaItems.forEach { item ->
+                        // 💥 Передаем байты и расширение!
+                        repo.sendMedia(
+                            chatId,
+                            item.bytes,
+                            item.extension,
+                            caption,
+                            useCrypto,
+                            asDocument,
+                            replyToId
+                        )
+                    }
+                }
             }
-            is ChatDetailsIntent.OnPendingCaptionChanged -> {
+            is OnPendingCaptionChanged -> {
                 _state.update { it.copy(pendingCaption = intent.text) }
             }
-            is ChatDetailsIntent.OnToggleSendAsDocument -> {
+            is OnToggleSendAsDocument -> {
                 _state.update { it.copy(sendAsDocument = intent.isChecked) }
             }
-            is ChatDetailsIntent.OnCancelMediaSend -> {
+            is OnCancelMediaSend -> {
                 _state.update { it.copy(pendingMedia = emptyList()) }
             }
+            is OnDeleteMessage -> {
+                viewModelScope.launch {
+                    repo.deleteMessage(chatId, intent.messageId, intent.revoke)
+                }
+            }
+            is OnSwipeToReply -> _state.update { it.copy(replyingToMessage = intent.message) }
+            is OnCancelReply -> _state.update { it.copy(replyingToMessage = null) }
         }
     }
 
