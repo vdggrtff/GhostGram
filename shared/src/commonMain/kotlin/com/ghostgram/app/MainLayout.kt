@@ -4,6 +4,8 @@ import SessionManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -34,9 +36,6 @@ fun MainLayout() {
     val sessionManager: SessionManager = koinInject()
     val currentSession by sessionManager.currentSession.collectAsState()
 
-    /*LaunchedEffect(Unit) {
-        sessionManager.initDefaultAccount() // 💥 Всегда один и тот же "main_account"!
-    }*/
     LaunchedEffect(Unit) {
         // 💥 Грузим аккаунты с диска!
         sessionManager.loadSavedAccounts()
@@ -50,8 +49,10 @@ fun MainLayout() {
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
         containerColor = GhostBackground,
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
         bottomBar = {
             if (showBottomBar) {
                 GhostBottomBar(
@@ -70,7 +71,6 @@ fun MainLayout() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = paddingValues.calculateTopPadding())
                 .background(GhostBackground)
         ) {
             AppNavGraph(navController)

@@ -39,6 +39,8 @@ class MessageUpdateHandler(
                 val replyToMessageId = if (replyToObj?.get("@type")?.jsonPrimitive?.content == "messageReplyToMessage") {
                     replyToObj["message_id"]?.jsonPrimitive?.longOrNull ?: 0L
                 } else 0L
+                val editDate = messageObj["edit_date"]?.jsonPrimitive?.intOrNull ?: 0
+                val isEdited = editDate > 0
 
                 val contentObj = messageObj["content"]?.jsonObject
 
@@ -53,7 +55,8 @@ class MessageUpdateHandler(
                         mediaAlbumId,
                         isLive = true,
                         isSending = isSending,
-                        replyToMessageId = replyToMessageId
+                        replyToMessageId = replyToMessageId,
+                        isEdited = isEdited
                     )
 
                 if (entity != null) {
@@ -85,6 +88,8 @@ class MessageUpdateHandler(
                     val date = msgObj["date"]?.jsonPrimitive?.intOrNull ?: 0
                     // 💥 ДОСТАЕМ АЛЬБОМ ИЗ ИСТОРИИ!
                     val mediaAlbumId = msgObj["media_album_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                    val editDate = msgObj["edit_date"]?.jsonPrimitive?.intOrNull ?: 0
+                    val isEdited = editDate > 0
 
                     parseSingleMessageToEntity(
                         msgId,
@@ -95,7 +100,8 @@ class MessageUpdateHandler(
                         mediaAlbumId,
                         isLive = false,
                         isSending = isSending,
-                        replyToMessageId = replyToMessageId
+                        replyToMessageId = replyToMessageId,
+                        isEdited = isEdited
                     )
                 }
 
@@ -144,7 +150,7 @@ class MessageUpdateHandler(
                 return true
             }
             // 💥 4. СООБЩЕНИЕ ОТРЕДАКТИРОВАНО (Фиксим текст в базе)
-            "updateMessageContent" -> {
+            /*"updateMessageContent" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val newContent = jsonObject["new_content"]?.jsonObject ?: return true
@@ -157,7 +163,7 @@ class MessageUpdateHandler(
                     }
                 }
                 return true
-            }
+            }*/
             // 💥 5. ANTI-REVOKE (Собеседник удалил сообщение)
             "updateDeleteMessages" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
@@ -169,6 +175,40 @@ class MessageUpdateHandler(
                     messageIds.forEach { msgId ->
                         messageDao.markAsDeleted(chatId = chatId, messageId = msgId)
                     }
+                }
+                return true
+            }
+            "updateMessageContent" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val newContent = jsonObject["new_content"]?.jsonObject ?: return true
+
+                if (newContent["@type"]?.jsonPrimitive?.content == "messageText") {
+                    var text = newContent["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                    var extraInfo: String? = null
+
+                    // 💥 РАСШИФРОВЫВАЕМ НОВЫЙ ТЕКСТ, ЕСЛИ ЭТО КРИПТА!
+                    // (Предполагается, что в MessageUpdateHandler у тебя прокинут cryptoLayer)
+                    if (text.contains("👻 ")) {
+                        val decrypted = cryptoLayer.revealAndDecrypt(chatId, text)
+                        if (decrypted != null) {
+                            text = decrypted
+                            extraInfo = "ENCRYPTED"
+                        }
+                    }
+
+                    repoScope.launch {
+                        messageDao.updateMessageText(msgId, text, extraInfo)
+                    }
+                }
+                return true
+            }
+
+            // 💥 2. ТЕЛЕГРАМ СКАЗАЛ, ЧТО СООБЩЕНИЕ ИЗМЕНЕНО
+            "updateMessageEdited" -> {
+                val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
+                repoScope.launch {
+                    messageDao.markMessageAsEdited(msgId)
                 }
                 return true
             }
@@ -185,7 +225,8 @@ class MessageUpdateHandler(
         mediaAlbumId: Long = 0L,
         isLive: Boolean = false,
         isSending: Boolean = false,
-        replyToMessageId: Long = 0L
+        replyToMessageId: Long = 0L,
+        isEdited: Boolean = false
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
         val senderName = if (isOutgoing) "Вы" else "Собеседник"
@@ -257,6 +298,7 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
 
@@ -287,6 +329,7 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
 
@@ -307,6 +350,7 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
 
@@ -324,6 +368,7 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
 
@@ -368,6 +413,7 @@ class MessageUpdateHandler(
                     fileName = videoPath,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
 
@@ -392,6 +438,7 @@ class MessageUpdateHandler(
                     photoPath = stickerPath, date = date,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
 
@@ -407,6 +454,7 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
+                    isEdited = isEdited
                 )
             }
         }

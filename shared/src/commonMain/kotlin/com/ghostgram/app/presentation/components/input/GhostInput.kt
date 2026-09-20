@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -44,7 +45,7 @@ fun GhostInput(
     onIntent: (ChatDetailsIntent) -> Unit
 ){
     Column(
-        modifier = Modifier.fillMaxWidth().background(GhostBackground)
+        modifier = Modifier.fillMaxWidth().navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         // 💥 ПЛАВАЮЩИЙ РЯД AI-ЧИПОВ

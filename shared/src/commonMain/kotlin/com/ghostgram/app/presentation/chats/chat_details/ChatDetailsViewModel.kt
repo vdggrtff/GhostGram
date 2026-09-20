@@ -65,6 +65,7 @@ class ChatDetailsViewModel(
             sessionManager.currentSession.collect { session ->
                 if (session != null) {
                     val repo = session.chatRepository
+                    repo.openChat(chatId)
                     loadChatInfo(repo)
                     loadMessages(repo)
                     loadMyAvatar(session)
@@ -95,17 +96,6 @@ class ChatDetailsViewModel(
             }
 
             is OnToggleGhostMode -> repo.toggleGhostMode()
-            /*is OnSendMessage -> {
-                val text = _state.value.inputText.trim()
-                val useCrypto = _state.value.isCryptoMode
-                val replyToId = _state.value.replyingToMessage?.id ?: 0L // 💥 БЕРЕМ ID ОТВЕТА
-                if (text.isBlank()) return
-
-                viewModelScope.launch {
-                    repo.sendMessage(chatId, text, useCrypto, replyToId) // 💥 ПЕРЕДАЕМ ID
-                    _state.update { it.copy(inputText = "", replyingToMessage = null) } // Очищаем всё
-                }
-            }*/
             is OnSendMessage -> {
                 val text = _state.value.inputText.trim()
                 val useCrypto = _state.value.isCryptoMode
@@ -165,17 +155,22 @@ class ChatDetailsViewModel(
                 }
 
                 viewModelScope.launch {
-                    mediaItems.forEach { item ->
-                        // 💥 Передаем байты и расширение!
-                        repo.sendMedia(
-                            chatId,
-                            item.bytes,
-                            item.extension,
-                            caption,
-                            useCrypto,
-                            asDocument,
-                            replyToId
-                        )
+                    if (mediaItems.size > 1 && !asDocument) {
+                        val payload = mediaItems.map { it.bytes to it.extension }
+                        repo.sendMediaAlbum(chatId, payload, caption, useCrypto, replyToId)
+                    } else {
+                        mediaItems.forEach { item ->
+                            // 💥 Передаем байты и расширение!
+                            repo.sendMedia(
+                                chatId,
+                                item.bytes,
+                                item.extension,
+                                caption,
+                                useCrypto,
+                                asDocument,
+                                replyToId
+                            )
+                        }
                     }
                 }
             }
@@ -239,7 +234,7 @@ class ChatDetailsViewModel(
             session.chatRepository.observeMyProfile().collect { profile ->
                 _state.update {
                     it.copy(
-                        avatarPath = profile.avatarPath, // В ChatDetails тебе нужен только avatarPath и myAvatarPath
+                        myAvatarPath = profile.avatarPath  // В ChatDetails тебе нужен только avatarPath и myAvatarPath
                     )
                 }
             }
@@ -299,5 +294,11 @@ class ChatDetailsViewModel(
                 _state.update { it.copy(isGhostMode = isGhost) }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // При закрытии экрана закрываем чат в ядре
+        sessionManager.currentSession.value?.chatRepository?.closeChat(chatId)
     }
 }

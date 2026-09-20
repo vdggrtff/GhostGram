@@ -47,4 +47,11 @@ interface MessageDao {
     // 💥 Удаляет ТОЛЬКО сохраненные Anti-Revoke сообщения
     @Query("DELETE FROM messages WHERE isDeletedLocally = 1")
     suspend fun clearAntiRevokeMessages()
+
+    @Query("UPDATE messages SET text = :newText, fileExtraInfo = :extraInfo WHERE id = :msgId")
+    suspend fun updateMessageText(msgId: Long, newText: String, extraInfo: String?)
+
+    // 💥 Ставит галочку "Изменено"
+    @Query("UPDATE messages SET isEdited = 1 WHERE id = :msgId")
+    suspend fun markMessageAsEdited(msgId: Long)
 }

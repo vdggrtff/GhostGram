@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -169,7 +170,8 @@ class ChatRepositoryImpl(
                         date = entity.date,
                         mediaAlbumId = entity.mediaAlbumId,
                         isSending = entity.isSending,
-                        replyToMessageId = entity.replyToMessageId
+                        replyToMessageId = entity.replyToMessageId,
+                        isEdited = entity.isEdited
                     )
                 }
             }
@@ -426,6 +428,85 @@ class ChatRepositoryImpl(
         tdlibClient.send(requestJson.toString())
     }
 
+    override suspend fun sendMediaAlbum(
+        chatId: Long,
+        media: List<Pair<ByteArray, String>>,
+        caption: String,
+        useCrypto: Boolean,
+        replyToMessageId: Long
+    ) {
+        if (media.isEmpty()) return
+
+        val finalCaption = if (useCrypto) cryptoLayer.encryptAndHide(chatId, caption) else caption
+
+        val fs = FileSystem.SYSTEM
+        val tempDir = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "ghostgram_temp"
+        if (!fs.exists(tempDir)) fs.createDirectories(tempDir)
+
+        // 💥 Telegram разрешает максимум 10 файлов в одном альбоме (делим на чанки если больше)
+        media.chunked(10).forEach { chunk ->
+
+            // 1. Сохраняем файлы на диск и формируем элементы альбома
+            val inputContents = chunk.mapIndexed { index, (bytes, extension) ->
+                val ext = extension.lowercase().ifBlank { "jpg" }
+                val tempFile = tempDir / "ghost_album_${System.now().toEpochMilliseconds()}_$index.$ext"
+                fs.write(tempFile) { write(bytes) }
+                val absolutePath = tempFile.toString().replace("\\", "/")
+                val isVideo = ext in listOf("mp4", "mov", "mkv", "avi")
+
+                buildJsonObject {
+                    if (isVideo) {
+                        put("@type", "inputMessageVideo")
+                        put("video", buildJsonObject {
+                            put("@type", "inputVideo")
+                            put("video", buildJsonObject {
+                                put("@type", "inputFileLocal")
+                                put("path", absolutePath)
+                            })
+                        })
+                    } else {
+                        put("@type", "inputMessagePhoto")
+                        put("photo", buildJsonObject {
+                            put("@type", "inputPhoto")
+                            put("photo", buildJsonObject {
+                                put("@type", "inputFileLocal")
+                                put("path", absolutePath)
+                            })
+                        })
+                    }
+
+                    // 💥 Подпись крепим ТОЛЬКО к первому элементу альбома (как в Telegram!)
+                    if (index == 0 && finalCaption.isNotBlank()) {
+                        put("caption", buildJsonObject {
+                            put("@type", "formattedText")
+                            put("text", finalCaption.trim())
+                        })
+                    }
+                }
+            }
+
+            // 💥 2. ОТПРАВЛЯЕМ КАК ЕДИНЫЙ АЛЬБОМ: sendMessageAlbum
+            val requestJson = buildJsonObject {
+                put("@type", "sendMessageAlbum")
+                put("chat_id", chatId)
+
+                if (replyToMessageId != 0L) {
+                    put("reply_to", buildJsonObject {
+                        put("@type", "inputMessageReplyToMessage")
+                        put("message_id", replyToMessageId)
+                    })
+                }
+
+                put("input_message_contents", buildJsonArray {
+                    inputContents.forEach { add(it) }
+                })
+            }
+
+            println("📸 [АЛЬБОМ] Шлем альбом из ${chunk.size} медиа: $requestJson")
+            tdlibClient.send(requestJson.toString())
+        }
+    }
+
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
         val request = """
             {
@@ -467,5 +548,40 @@ class ChatRepositoryImpl(
         """.trimIndent()
 
         tdlibClient.send(request)
+    }
+
+    override suspend fun sendSticker(chatId: Long, stickerFileId: Int, replyToMessageId: Long) {
+        val request = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                put("@type", "inputMessageSticker")
+                put("sticker", buildJsonObject {
+                    // 💥 Магия! Мы отправляем не локальный файл, а ID файла на сервере ТГ!
+                    put("@type", "inputFileRemote")
+                    put("id", stickerFileId.toString()) // В JSON TDLib remote_id часто передается как строка
+                })
+            })
+        }
+
+        tdlibClient.send(request.toString())
+    }
+
+    override fun openChat(chatId: Long) {
+        // 💥 Говорим TDLib: "Юзер смотрит на этот чат! Дай инфу и начни скачивать всё необходимое!"
+        tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
+        tdlibClient.send("""{"@type": "getChat", "chat_id": $chatId}""")
+    }
+
+    override fun closeChat(chatId: Long) {
+        tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
     }
 }

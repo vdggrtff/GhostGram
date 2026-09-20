@@ -26,11 +26,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter.Companion.tint
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +60,7 @@ fun GhostTextField(
     editingMessage: Message?,
     fileLauncher: PickerResultLauncher
 ) {
+    var showStickerPanel by remember { mutableStateOf(false) }
     if (replyingToMessage != null) {
         Row(
             modifier = Modifier
@@ -124,9 +130,12 @@ fun GhostTextField(
     ) {
         IconButton(
             onClick = { fileLauncher.launch() }, // 💥 Открываем системный выбор файлов
-            modifier = Modifier.align(Alignment.CenterVertically)
+            modifier = Modifier.size(42.dp)
+                .clip(CircleShape)
+                .background(GhostCard)
+                .align(Alignment.CenterVertically)
         ) {
-            Icon(Icons.Default.AttachFile, contentDescription = "Прикрепить", tint = GhostTextSecondary)
+            Icon(Icons.Default.AttachFile, contentDescription = "Прикрепить", tint = Color.White.copy(alpha = 0.9f) )
         }
         TextField(
             value = inputText,
@@ -146,13 +155,14 @@ fun GhostTextField(
             maxLines = 5,
             // Иконка эмодзи внутри поля ввода (справа)
             trailingIcon = {
-                Icon(
-                    // Замени на нужную иконку смайлика
-                    imageVector = Outlined.Face,
-                    contentDescription = "Эмодзи",
-                    tint = GhostTextSecondary,
-                    modifier = Modifier.padding(end = 8.dp).size(22.dp)
-                )
+                IconButton(onClick = { showStickerPanel = !showStickerPanel }) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Face,
+                        contentDescription = "Стикеры",
+                        tint = if (showStickerPanel) GhostPrimary else GhostTextSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         )
         Spacer(modifier = Modifier.width(8.dp))

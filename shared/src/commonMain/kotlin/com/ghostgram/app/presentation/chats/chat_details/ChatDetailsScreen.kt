@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -194,6 +195,9 @@ fun ChatDetailsScreen(
     }
 
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
         containerColor = GhostBackground,
         topBar = {
             GhostTopBar(
@@ -228,8 +232,8 @@ fun ChatDetailsScreen(
         LazyColumn(
             state = listState,
             reverseLayout = true,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()), /*.padding(innerPadding)*/
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = innerPadding.calculateBottomPadding() + 28.dp  /*8.dp*/),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Итерируемся по альбомам и одиночным сообщениям

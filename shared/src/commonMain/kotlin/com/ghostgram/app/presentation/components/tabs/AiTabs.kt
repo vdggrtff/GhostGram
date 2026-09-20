@@ -3,6 +3,7 @@ package com.ghostgram.app.presentation.components.tabs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSurfaceElevated
+import com.ghostgram.app.ui.theme.GhostTextSecondary
 
 @Composable
 fun AiTabs(
@@ -39,6 +41,78 @@ fun AiTabs(
 
     // Если ИИ уже сгенерировал ответы, показываем их. Иначе - одну кнопку меню.
     if (smartReplies.isNotEmpty()) {
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp), // Минимум паддинга, фон прозрачный!
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(smartReplies) { reply ->
+                SuggestionChip(
+                    onClick = { onIntent(ChatDetailsIntent.OnSmartReplyClick(reply)) },
+                    label = { Text(reply, color = Color.White, fontSize = 13.sp) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(containerColor = GhostSurfaceElevated),
+                    border = SuggestionChipDefaults.suggestionChipBorder( enabled = true, borderColor = GhostPrimary.copy(alpha = 0.5f))
+                )
+            }
+            item {
+                IconButton(onClick = { onIntent(ChatDetailsIntent.OnSmartReplyClick("")) }, modifier = Modifier.size(32.dp)) {
+                    Text("✖", color = GhostTextSecondary, fontSize = 12.sp)
+                }
+            }
+        }
+    }
+    // Иначе — одна компактная парящая кнопка
+    else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp) // 💥 Всего 2dp высоты вместо 50dp! Фон убран!
+        ) {
+            SuggestionChip(
+                onClick = { expandedAiMenu = true },
+                label = {
+                    Text(
+                        text = if (isCatchUpLoading || isRepliesLoading) "🧠 ИИ думает..." else "✨ Ghost AI",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    containerColor = GhostCard.copy(alpha = 0.85f) // Сам чип контрастный, а вокруг — пустота чата!
+                ),
+                border = SuggestionChipDefaults.suggestionChipBorder(
+                    enabled = true,
+                    borderColor = GhostPrimary.copy(alpha = 0.4f)
+                ),
+                enabled = !isCatchUpLoading && !isRepliesLoading
+            )
+
+            // Выпадающее меню остается как было
+            DropdownMenu(
+                expanded = expandedAiMenu,
+                onDismissRequest = { expandedAiMenu = false },
+                modifier = Modifier.background(GhostSurfaceElevated)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("⚡️ Catch Up (Непрочитано: $unreadCount)", color = Color.White) },
+                    onClick = {
+                        expandedAiMenu = false
+                        onIntent(ChatDetailsIntent.OnCatchUpClick)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("💡 Сгенерировать ответы", color = Color.White) },
+                    onClick = {
+                        expandedAiMenu = false
+                        onIntent(ChatDetailsIntent.OnGenerateRepliesClick)
+                    }
+                )
+            }
+        }
+    }
+    /*if (smartReplies.isNotEmpty()) {
         // Показываем сгенерированные ответы (они заменяют кнопку ИИ, пока юзер не выберет один)
         androidx.compose.foundation.lazy.LazyRow(
             modifier = Modifier.padding(bottom = 8.dp),
@@ -109,5 +183,5 @@ fun AiTabs(
                 )
             }
         }
-    }
+    }*/
 }

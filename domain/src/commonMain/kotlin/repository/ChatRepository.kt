@@ -39,4 +39,15 @@ interface ChatRepository {
 
     suspend fun editMessageText(chatId: Long, messageId: Long, newText: String, useCrypto: Boolean = false)
 
+    suspend fun sendSticker(chatId: Long, stickerFileId: Int, replyToMessageId: Long = 0L)
+    suspend fun sendMediaAlbum(
+        chatId: Long,
+        media: List<Pair<ByteArray, String>>, // Список: байты + расширение
+        caption: String,
+        useCrypto: Boolean = false,
+        replyToMessageId: Long = 0L
+    )
+
+    fun openChat(chatId: Long)
+    fun closeChat(chatId: Long)
 }

@@ -65,7 +65,7 @@ fun GhostAlbumBubble(
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom
     ) {
-        if (!isOutgoing) {
+        /*if (!isOutgoing) {
             if (isLastInGroup) {
                 if (chatAvatarPath != null) {
                     AsyncImage(
@@ -92,7 +92,7 @@ fun GhostAlbumBubble(
                 Spacer(modifier = Modifier.width(34.dp))
             }
             Spacer(modifier = Modifier.width(8.dp))
-        }
+        }*/
 
         val cornerRadius = 16.dp
         val smallRadius = 4.dp
@@ -165,24 +165,6 @@ fun GhostAlbumBubble(
                     }
                 }
                 // 💥 РИСУЕМ КАРТИНКИ СЕТКОЙ (По 2 в ряд)
-                /*albumMessages.chunked(2).forEach { rowMessages ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        rowMessages.forEach { msg ->
-                            val model =
-                                if (msg.photoPath?.startsWith("/") == true) "file://${msg.photoPath}" else msg.photoPath
-                            AsyncImage(
-                                model = model,
-                                contentDescription = "Фото альбома",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f) // Квадратные картинки
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { if (model != null) onMediaClick(model) }
-                            )
-                        }
-                    }
-                }*/
                 albumMessages.chunked(2).forEach { rowMessages ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         rowMessages.forEach { msg ->
@@ -291,7 +273,7 @@ fun GhostAlbumBubble(
                 }
             }
         }
-        if (isOutgoing) {
+        /*if (isOutgoing) {
             Spacer(modifier = Modifier.width(8.dp))
             if (isLastInGroup) {
                 if (myAvatarPath != null && !myAvatarPath.startsWith("INITIALS:")) {
@@ -318,6 +300,6 @@ fun GhostAlbumBubble(
             } else {
                 Spacer(modifier = Modifier.width(34.dp))
             }
-        }
+        }*/
     }
 }
