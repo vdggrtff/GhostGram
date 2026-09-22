@@ -149,21 +149,6 @@ class MessageUpdateHandler(
                 }
                 return true
             }
-            // 💥 4. СООБЩЕНИЕ ОТРЕДАКТИРОВАНО (Фиксим текст в базе)
-            /*"updateMessageContent" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
-                val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
-                val newContent = jsonObject["new_content"]?.jsonObject ?: return true
-
-                val newText = newContent["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content
-
-                if (newText != null) {
-                    repoScope.launch {
-                        messageDao.updateMessageText(chatId, msgId, newText)
-                    }
-                }
-                return true
-            }*/
             // 💥 5. ANTI-REVOKE (Собеседник удалил сообщение)
             "updateDeleteMessages" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
@@ -355,8 +340,20 @@ class MessageUpdateHandler(
             }
 
             "messageVoiceNote" -> {
-                val caption =
-                    contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                val voiceObj = contentObj["voice_note"]?.jsonObject
+                val duration = voiceObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
+                val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+
+                // 💥 ДОСТАЕМ АУДИОФАЙЛ (.ogg)
+                val fileObj = voiceObj?.get("voice")?.jsonObject
+                val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
+                val filePath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // Если файла нет на диске — качаем на максимальной скорости!
+                if (filePath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.messageFiles[fileId] = msgId // 💥 Записываем в трекер файлов!
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
@@ -364,6 +361,8 @@ class MessageUpdateHandler(
                     text = caption,
                     isOutgoing = isOutgoing,
                     mediaType = "VOICE",
+                    fileExtraInfo = formatDuration(duration),
+                    fileName = filePath, // 💥 СОХРАНЯЕМ ПУТЬ К ЗВУКУ!
                     date = date,
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,

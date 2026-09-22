@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.presentation.components.bauble.content
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box

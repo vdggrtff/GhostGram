@@ -1,3 +1,3 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.utils
 
 expect fun openVideoInSystemPlayer(filePath: String)

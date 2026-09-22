@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.presentation.components.utils
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ghostgram.app.ui.theme.GhostPrimary
@@ -55,7 +56,7 @@ fun ReplyToMessage(
                 color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else GhostTextSecondary,
                 fontSize = 12.sp,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

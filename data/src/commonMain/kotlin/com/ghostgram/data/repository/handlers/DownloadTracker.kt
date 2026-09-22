@@ -5,5 +5,6 @@ class DownloadTracker {
     val chatAvatars = mutableMapOf<Int, Long>()   // fileId -> chatId
     val messagePhotos = mutableMapOf<Int, Long>() // Для картинок и превьюшек (photoPath)
     val messageFiles = mutableMapOf<Int, Long>()
+    val stickerThumbnails = mutableMapOf<Int, Int>()
     var myAvatarFileId: Int? = null               // fileId твоей личной аватарки
 }

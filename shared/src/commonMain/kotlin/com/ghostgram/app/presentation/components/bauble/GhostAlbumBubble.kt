@@ -34,7 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.ghostgram.app.presentation.components.openVideoInSystemPlayer
+import com.ghostgram.app.utils.openVideoInSystemPlayer
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSecondary

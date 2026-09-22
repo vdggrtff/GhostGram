@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.utils
 
 import java.awt.Desktop
 import java.io.File

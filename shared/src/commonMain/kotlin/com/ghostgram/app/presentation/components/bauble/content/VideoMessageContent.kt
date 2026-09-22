@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.presentation.components.bauble.content
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.ghostgram.app.utils.openVideoInSystemPlayer
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 

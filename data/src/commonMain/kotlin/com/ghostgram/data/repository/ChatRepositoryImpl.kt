@@ -9,12 +9,14 @@ import com.ghostgram.data.repository.handlers.DownloadTracker
 import com.ghostgram.data.repository.handlers.MessageUpdateHandler
 import com.ghostgram.data.repository.handlers.ProfileAndFileHandler
 import com.ghostgram.data.repository.handlers.SearchUpdateHandler
+import com.ghostgram.data.repository.handlers.StickerUpdateHandler
 import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
 import entity.Chat
 import entity.Message
 import entity.MessageMediaType
 import entity.MyProfile
 import entity.PublicChat
+import entity.TelegramSticker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -67,11 +69,14 @@ class ChatRepositoryImpl(
 
     private val _messageSearchResults = MutableStateFlow<List<Chat>>(emptyList())
 
+    private val _recentStickers = MutableStateFlow<List<TelegramSticker>>(emptyList())
+
     private val handlers: List<TdlibUpdateHandler> = listOf(
         SearchUpdateHandler(_searchResults, _messageSearchResults, _chatsMap),
         MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker, cryptoLayer),
         ChatUpdateHandler(_chatsMap, lastReadOutboxMap, tdlibClient, messageDao, repoScope, downloadTracker),
         ProfileAndFileHandler(_myProfile, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker),
+        StickerUpdateHandler(_recentStickers, tdlibClient, downloadTracker),
     )
 
 
@@ -550,8 +555,15 @@ class ChatRepositoryImpl(
         tdlibClient.send(request)
     }
 
+    override fun observeRecentStickers(): Flow<List<TelegramSticker>> = _recentStickers.asStateFlow()
+
+    override fun loadRecentStickers() {
+        // 💥 Просим у TDLib твои недавние стикеры!
+        tdlibClient.send("""{"@type": "getRecentStickers", "is_attached": false}""")
+    }
+
     override suspend fun sendSticker(chatId: Long, stickerFileId: Int, replyToMessageId: Long) {
-        val request = buildJsonObject {
+        val requestJson = buildJsonObject {
             put("@type", "sendMessage")
             put("chat_id", chatId)
 
@@ -564,15 +576,50 @@ class ChatRepositoryImpl(
 
             put("input_message_content", buildJsonObject {
                 put("@type", "inputMessageSticker")
+
+                // 💥 ТА САМАЯ МАТРЕШКА ДЛЯ СТИКЕРОВ!
                 put("sticker", buildJsonObject {
-                    // 💥 Магия! Мы отправляем не локальный файл, а ID файла на сервере ТГ!
-                    put("@type", "inputFileRemote")
-                    put("id", stickerFileId.toString()) // В JSON TDLib remote_id часто передается как строка
+                    put("@type", "inputSticker") // 💥 ОБЕРТКА!
+
+                    put("sticker", buildJsonObject {
+                        // Используем локальный ID, так как TDLib его уже знает!
+                        put("@type", "inputFileId")
+                        put("id", stickerFileId) // Передаем как Int
+                    })
                 })
             })
         }
 
-        tdlibClient.send(request.toString())
+        println("🎭 [СТИКЕР] Отправляем стикер в TDLib: $requestJson")
+        tdlibClient.send(requestJson.toString())
+    }
+
+    override suspend fun sendVoiceNote(chatId: Long, filePath: String, replyToMessageId: Long) {
+        val requestJson = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                put("@type", "inputMessageVoiceNote")
+                put("voice_note", buildJsonObject {
+                    put("@type", "inputVoiceNote") // 💥 НАША ЛЮБИМАЯ МАТРЕШКА
+                    put("voice_note", buildJsonObject {
+                        put("@type", "inputFileLocal")
+                        put("path", filePath)
+                    })
+                })
+            })
+        }
+
+        println("🎤 [ОТПРАВКА] Шлем голосовое: $requestJson")
+        tdlibClient.send(requestJson.toString())
     }
 
     override fun openChat(chatId: Long) {

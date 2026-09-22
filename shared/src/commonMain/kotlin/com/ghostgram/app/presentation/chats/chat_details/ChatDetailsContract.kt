@@ -23,7 +23,9 @@ data class ChatDetailsState(
     val pendingCaption: String = "",                 // Подпись в диалоге
     val sendAsDocument: Boolean = false,              // Галочка "Отправить как файл"
     val replyingToMessage: Message? = null,
-    val editingMessage: Message? = null
+    val editingMessage: Message? = null,
+    val recentStickers: List<entity.TelegramSticker> = emptyList(), // 💥 Список стикеров
+    val isStickersOpen: Boolean = false
 )
 
 // Действия на экране чата
@@ -53,4 +55,8 @@ sealed interface ChatDetailsIntent {
     data object OnCancelReply : ChatDetailsIntent // 💥 Передумали отвечать
     data class OnEditMessageClick(val message: Message) : ChatDetailsIntent // 💥 Клик в меню
     data object OnCancelEdit : ChatDetailsIntent
+    data object OnToggleStickers : ChatDetailsIntent // 💥 Клик по смайлику
+    data class OnSendSticker(val remoteFileId: Int) : ChatDetailsIntent
+    data class OnStartRecording(val filePath: String) : ChatDetailsIntent
+    data class OnStopRecording(val send: Boolean, val filePath: String) : ChatDetailsIntent
 }

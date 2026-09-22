@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.presentation.components.bauble.content
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth

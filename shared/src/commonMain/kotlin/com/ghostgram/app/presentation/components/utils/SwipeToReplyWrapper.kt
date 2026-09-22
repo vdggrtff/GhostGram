@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.presentation.components.utils
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background

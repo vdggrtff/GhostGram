@@ -32,7 +32,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ghostgram.app.presentation.components.SwipeToReplyWrapper
+import com.ghostgram.app.presentation.components.bottom_sheet.StickerBottomSheet
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
+import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
 import com.ghostgram.app.presentation.components.dialog.FullScreenImageDialog
@@ -280,7 +283,7 @@ fun ChatDetailsScreen(
                             state.messages.find { it.id == item.message.replyToMessageId }
                         } else null
                         SwipeToReplyWrapper(
-                            onSwipe = { onIntent(ChatDetailsIntent.OnSwipeToReply(item.message)) }
+                            onSwipe = { onIntent(OnSwipeToReply(item.message)) }
                         ) {
                             GhostMessageBubble(
                                 message = item.message,
@@ -302,7 +305,7 @@ fun ChatDetailsScreen(
                             state.messages.find { it.id == baseMsg.replyToMessageId }
                         } else null
                         SwipeToReplyWrapper(
-                            onSwipe = { onIntent(ChatDetailsIntent.OnSwipeToReply(baseMsg)) }
+                            onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
                         ) {
                             GhostAlbumBubble(
                                 albumMessages = item.messages,
@@ -368,6 +371,13 @@ fun ChatDetailsScreen(
             clipboardManager = clipboardManager,
             onIntent = onIntent,
             onDismiss = { selectedMessageForMenu = null }
+        )
+    }
+    if (state.isStickersOpen) {
+        StickerBottomSheet(
+            stickers = state.recentStickers,
+            onDismiss = { onIntent(OnToggleStickers) },
+            onIntent = onIntent
         )
     }
 }

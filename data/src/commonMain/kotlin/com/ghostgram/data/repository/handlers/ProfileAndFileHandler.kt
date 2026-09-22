@@ -88,6 +88,9 @@ class ProfileAndFileHandler(
                         messageDao.updateMessageFileName(messageId, path) // 💥 Обновляем в SQLite!
                     }
                 }
+                tracker.stickerThumbnails.remove(fileId)?.let { stickerFileId ->
+                    // Обновляем превью в памяти (если прокинешь recentStickers, либо оставляем как есть)
+                }
             }
             return true
         }

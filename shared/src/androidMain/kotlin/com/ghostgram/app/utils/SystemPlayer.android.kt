@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.components
+package com.ghostgram.app.utils
 
 import android.content.Context
 import android.content.Intent
@@ -7,7 +7,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.io.File
 
-private object AndroidContextProvider : KoinComponent {
+object AndroidContextProvider : KoinComponent {
     val context: Context by inject()
 }
 

@@ -70,6 +70,7 @@ class ChatDetailsViewModel(
                     loadMessages(repo)
                     loadMyAvatar(session)
                     observeGhostMode(repo)
+                    observeStickers(repo)
                 }
             }
         }
@@ -208,8 +209,45 @@ class ChatDetailsViewModel(
             is OnCancelEdit -> {
                 _state.update { it.copy(editingMessage = null, inputText = "") }
             }
+            is ChatDetailsIntent.OnToggleStickers -> {
+                val isOpen = !_state.value.isStickersOpen
+                _state.update { it.copy(isStickersOpen = isOpen) }
+                if (isOpen) {
+                    val repo = sessionManager.currentSession.value?.chatRepository
+                    repo?.loadRecentStickers() // Загружаем при открытии
+                }
+            }
+
+            is ChatDetailsIntent.OnSendSticker -> {
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L
+                viewModelScope.launch {
+                    repo.sendSticker(chatId, intent.remoteFileId, replyToId) // 💥
+                    _state.update { it.copy(isStickersOpen = false, replyingToMessage = null) }
+                }
+            }
+            is ChatDetailsIntent.OnStartRecording -> {
+                // (В реальном проекте тут запускается диктофон, но мы сделаем это из UI для скорости)
+            }
+            is ChatDetailsIntent.OnStopRecording -> {
+                if (intent.send) {
+                    val replyToId = _state.value.replyingToMessage?.id ?: 0L
+                    viewModelScope.launch {
+                        repo.sendVoiceNote(chatId, intent.filePath, replyToId)
+                        _state.update { it.copy(replyingToMessage = null) }
+                    }
+                }
+            }
         }
     }
+
+    private fun observeStickers(repo: ChatRepository) {
+        viewModelScope.launch {
+            repo.observeRecentStickers().collect { stickers ->
+                _state.update { it.copy(recentStickers = stickers) }
+            }
+        }
+    }
+
 
     private fun loadChatInfo(repo: ChatRepository) {
         chatInfoJob?.cancel()
