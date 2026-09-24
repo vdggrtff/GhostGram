@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
@@ -25,11 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.ghostgram.app.presentation.components.bauble.content.DocumentMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.ImageMessageContent
 import com.ghostgram.app.presentation.components.utils.ReplyToMessage
@@ -48,6 +51,7 @@ fun GhostMessageBubble(
     chatAvatarPath: String?,
     myAvatarPath: String?, // 💥 Вернули твою аватарку!
     chatTitle: String,
+    isGroup: Boolean = false,
     isFirstInGroup: Boolean = true, // 💥 Новые параметры
     isLastInGroup: Boolean = true,
     replyMessage: Message? = null,
@@ -86,35 +90,42 @@ fun GhostMessageBubble(
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom // Аватарки прижаты к низу
     ) {
-        // 💥 1. АВАТАРКА СОБЕСЕДНИКА СЛЕВА (Для входящих)
-        /*if (!isOutgoing) {
+        if (isGroup && !isOutgoing) {
             if (isLastInGroup) {
-                if (chatAvatarPath != null) {
-                    AsyncImage(
-                        model = chatAvatarPath,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(34.dp).clip(CircleShape)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.size(34.dp).clip(CircleShape)
-                            .background(Color(0xFFE58235)), contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = chatTitle.take(1).uppercase().ifBlank { "💬" },
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                val avatarToShow = message.senderAvatarPath
+                val authorName = message.senderName.ifBlank { "Участник" }
+                val authorColor = com.ghostgram.app.ui.theme.TelegramColors.getColorForUser(message.senderId)
+
+                androidx.compose.runtime.key(avatarToShow, authorName) {
+                    if (!avatarToShow.isNullOrBlank() && !avatarToShow.startsWith("INITIALS:")) {
+                        val model = if (avatarToShow.startsWith("/")) "file://$avatarToShow" else avatarToShow
+                        AsyncImage(
+                            model = model,
+                            contentDescription = "Аватарка автора",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(34.dp).clip(CircleShape)
                         )
+                    } else {
+                        // Кружок цвета автора с его первой буквой имени
+                        Box(
+                            modifier = Modifier.size(34.dp).clip(CircleShape).background(authorColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = authorName.take(1).uppercase(),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             } else {
-                // Пустое место, чтобы пузыри не съезжали влево
+                // Отступ 34dp, чтобы пачка сообщений одного человека стояла ровно
                 Spacer(modifier = Modifier.width(34.dp))
             }
             Spacer(modifier = Modifier.width(8.dp))
-        }*/
+        }
 
         val cornerRadius = 10.dp
         val sharpCorner = 2.dp // Острый хвостик у основания
@@ -170,42 +181,22 @@ fun GhostMessageBubble(
                 modifier = Modifier.wrapContentWidth(), // 💥 Пузырь плотно облегает контент
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (isGroup && !isOutgoing && isFirstInGroup) {
+                    val authorColor = com.ghostgram.app.ui.theme.TelegramColors.getColorForUser(message.senderId)
+
+                    Text(
+                        text = message.senderName.ifBlank { "Участник" },
+                        color = authorColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
                 if (message.replyToMessageId != 0L) {
                     ReplyToMessage(
                         replyMessage = replyMessage,
                         isOutgoing = isOutgoing
                     )
-                    /*// Если оригинал есть в памяти - берем его данные, иначе пишем заглушку
-                    val replySenderName = replyMessage?.senderName ?: "Сообщение"
-                    val replyText = replyMessage?.text?.ifBlank { "Медиафайл" } ?: "Загрузка..."
-
-                    // Цвета зависят от того, исходящий ли это пузырь
-                    val accentColor = if (isOutgoing) Color.White else GhostPrimary
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(accentColor.copy(alpha = 0.1f)) // Легкий фон под цитатой
-                            .padding(end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Вертикальная полоска
-                        Box(modifier = Modifier.width(3.dp).height(36.dp).background(accentColor))
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Текст цитаты
-                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                            Text(text = replySenderName, color = accentColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(
-                                text = replyText,
-                                color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else GhostTextSecondary,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                    }*/
                 }
 
                 when (message.mediaType) {

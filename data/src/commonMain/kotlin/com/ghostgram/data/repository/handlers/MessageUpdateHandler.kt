@@ -24,6 +24,8 @@ class MessageUpdateHandler(
     private val cryptoLayer: CryptoLayer,
 ) : TdlibUpdateHandler {
 
+    private val usersCache = mutableMapOf<Long, Pair<String, String?>>()
+
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         when (type) {
             // 💥 1. ПРИШЛО НОВОЕ СООБЩЕНИЕ
@@ -41,6 +43,10 @@ class MessageUpdateHandler(
                 } else 0L
                 val editDate = messageObj["edit_date"]?.jsonPrimitive?.intOrNull ?: 0
                 val isEdited = editDate > 0
+                val senderObj = messageObj["sender_id"]?.jsonObject
+                val senderId = senderObj?.get("user_id")?.jsonPrimitive?.longOrNull
+                    ?: senderObj?.get("chat_id")?.jsonPrimitive?.longOrNull
+                    ?: 0L
 
                 val contentObj = messageObj["content"]?.jsonObject
 
@@ -56,7 +62,8 @@ class MessageUpdateHandler(
                         isLive = true,
                         isSending = isSending,
                         replyToMessageId = replyToMessageId,
-                        isEdited = isEdited
+                        isEdited = isEdited,
+                        senderId = senderId
                     )
 
                 if (entity != null) {
@@ -90,6 +97,10 @@ class MessageUpdateHandler(
                     val mediaAlbumId = msgObj["media_album_id"]?.jsonPrimitive?.longOrNull ?: 0L
                     val editDate = msgObj["edit_date"]?.jsonPrimitive?.intOrNull ?: 0
                     val isEdited = editDate > 0
+                    val senderObj = msgObj["sender_id"]?.jsonObject
+                    val senderId = senderObj?.get("user_id")?.jsonPrimitive?.longOrNull
+                        ?: senderObj?.get("chat_id")?.jsonPrimitive?.longOrNull
+                        ?: 0L
 
                     parseSingleMessageToEntity(
                         msgId,
@@ -101,7 +112,8 @@ class MessageUpdateHandler(
                         isLive = false,
                         isSending = isSending,
                         replyToMessageId = replyToMessageId,
-                        isEdited = isEdited
+                        isEdited = isEdited,
+                        senderId = senderId
                     )
                 }
 
@@ -197,6 +209,34 @@ class MessageUpdateHandler(
                 }
                 return true
             }
+            "user", "updateUser" -> {
+                if (jsonObject["@extra"]?.jsonPrimitive?.content == "get_me_avatar") return false
+                val userObj = if (type == "updateUser") jsonObject["user"]?.jsonObject else jsonObject
+                val userId = userObj?.get("id")?.jsonPrimitive?.longOrNull ?: return true
+                val firstName = userObj["first_name"]?.jsonPrimitive?.content ?: ""
+                val lastName = userObj["last_name"]?.jsonPrimitive?.content ?: ""
+                val fullName = "$firstName $lastName".trim().ifBlank { "Участник" }
+
+                val photoObj = userObj["profile_photo"]?.jsonObject
+                val smallPhoto = photoObj?.get("small")?.jsonObject
+                val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
+                val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // Если фото нет на диске — качаем
+                if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.chatAvatars[fileId] = userId // Юзаем трекер
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 16, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                val finalPath = if (!avatarPath.isNullOrBlank()) avatarPath else null
+                usersCache[userId] = fullName to finalPath
+
+                // Обновляем все старые сообщения этого человека в базе данных!
+                repoScope.launch {
+                    messageDao.updateSenderInfo(userId, fullName, finalPath)
+                }
+                return true
+            }
         }
         return false // Если тип другой — мы его не трогаем
     }
@@ -211,10 +251,27 @@ class MessageUpdateHandler(
         isLive: Boolean = false,
         isSending: Boolean = false,
         replyToMessageId: Long = 0L,
-        isEdited: Boolean = false
+        isEdited: Boolean = false,
+        senderId: Long = 0L
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
         val senderName = if (isOutgoing) "Вы" else "Собеседник"
+
+        var realSenderName = "Собеседник"
+        var realSenderAvatar: String? = null
+
+        if (isOutgoing) {
+            realSenderName = "Вы"
+        } else if (senderId != 0L) {
+            val cachedUser = usersCache[senderId]
+            if (cachedUser != null) {
+                realSenderName = cachedUser.first
+                realSenderAvatar = cachedUser.second
+            } else {
+                tdlibClient.send("""{"@type": "getUser", "user_id": $senderId}""")
+                realSenderName = "Участник"
+            }
+        }
 
         return when (contentType) {
             "messageText" -> {
@@ -274,7 +331,7 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
-                    senderName = senderName,
+                    senderName = realSenderName,
                     text = text,
                     isOutgoing = isOutgoing,
                     mediaType = "TEXT",
@@ -283,7 +340,9 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
 
@@ -305,7 +364,7 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
-                    senderName = senderName,
+                    senderName = realSenderName,
                     text = caption,
                     isOutgoing = isOutgoing,
                     photoPath = photoPath,
@@ -314,7 +373,9 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
 
@@ -326,7 +387,7 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
-                    senderName = senderName,
+                    senderName = realSenderName,
                     text = caption,
                     isOutgoing = isOutgoing,
                     mediaType = "DOCUMENT",
@@ -335,7 +396,9 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
 
@@ -357,7 +420,7 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
-                    senderName = senderName,
+                    senderName = realSenderName,
                     text = caption,
                     isOutgoing = isOutgoing,
                     mediaType = "VOICE",
@@ -367,7 +430,9 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
 
@@ -401,7 +466,7 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
-                    senderName = senderName,
+                    senderName = realSenderName,
                     text = caption,
                     isOutgoing = isOutgoing,
                     mediaType = if (contentType == "messageVideo") "VIDEO" else "VIDEO_NOTE",
@@ -412,7 +477,9 @@ class MessageUpdateHandler(
                     fileName = videoPath,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
 
@@ -432,12 +499,14 @@ class MessageUpdateHandler(
                 }
 
                 MessageEntity(
-                    id = msgId, chatId = chatId, senderName = senderName, text = "",
+                    id = msgId, chatId = chatId, senderName = realSenderName, text = "",
                     isOutgoing = isOutgoing, mediaType = "STICKER", fileExtraInfo = emoji,
                     photoPath = stickerPath, date = date,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
 
@@ -445,7 +514,7 @@ class MessageUpdateHandler(
                 MessageEntity(
                     id = msgId,
                     chatId = chatId,
-                    senderName = senderName,
+                    senderName = realSenderName,
                     text = "[Медиа]",
                     isOutgoing = isOutgoing,
                     mediaType = "TEXT",
@@ -453,7 +522,9 @@ class MessageUpdateHandler(
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
                     replyToMessageId = replyToMessageId,
-                    isEdited = isEdited
+                    isEdited = isEdited,
+                    senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
                 )
             }
         }

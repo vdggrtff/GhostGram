@@ -176,7 +176,9 @@ class ChatRepositoryImpl(
                         mediaAlbumId = entity.mediaAlbumId,
                         isSending = entity.isSending,
                         replyToMessageId = entity.replyToMessageId,
-                        isEdited = entity.isEdited
+                        isEdited = entity.isEdited,
+                        senderId = entity.senderId,
+                        senderAvatarPath = entity.senderAvatarPath
                     )
                 }
             }

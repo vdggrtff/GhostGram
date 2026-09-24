@@ -208,6 +208,7 @@ fun ChatDetailsScreen(
                 chatTitle = state.chatTitle,
                 isGhostMode = state.isGhostMode,
                 isCryptoMode = state.isCryptoMode,
+                isGroup = state.isGroup,
                 onIntent = onIntent,
                 onBackClick = onBackClick,
             )
@@ -250,12 +251,26 @@ fun ChatDetailsScreen(
                 val item = groupedMessages[index]
                 val itemDate = getDateFromItem(item)
 
-                val currentSender = when (item) {
+                /*val currentSender = when (item) {
                     is MessageListItem.Single -> item.message.isOutgoing to item.message.senderName
                     is MessageListItem.Album -> item.messages.first().isOutgoing to item.messages.first().senderName
-                }
+                }*/
+                val currentSenderKey = getSenderKey(item)
 
-                val topNeighbor = groupedMessages.getOrNull(index + 1)?.let {
+                // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
+                val topNeighborKey = groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
+
+                // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
+                val bottomNeighborKey = groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
+
+                // 💥 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
+                // Первое сообщение человека в пачке (над ним рисуем цветное имя):
+                val isFirstInGroup = currentSenderKey != topNeighborKey
+
+                // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
+                val isLastInGroup = currentSenderKey != bottomNeighborKey
+
+                /*val topNeighbor = groupedMessages.getOrNull(index + 1)?.let {
                     if (it is MessageListItem.Single) it.message.isOutgoing to it.message.senderName
                     else (it as MessageListItem.Album).messages.first().isOutgoing to it.messages.first().senderName
                 }
@@ -266,7 +281,7 @@ fun ChatDetailsScreen(
                 }
 
                 val isFirstInGroup = currentSender != topNeighbor    // Сверху чужое сообщение
-                val isLastInGroup = currentSender != bottomNeighbor  // Снизу чужое сообщение
+                val isLastInGroup = currentSender != bottomNeighbor  // Снизу чужое сообщение*/
 
                 // 💥 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
                 val showDateHeader = if (index == groupedMessages.size - 1) {
@@ -290,6 +305,7 @@ fun ChatDetailsScreen(
                                 chatAvatarPath = state.avatarPath,
                                 myAvatarPath = state.myAvatarPath,
                                 chatTitle = state.chatTitle,
+                                isGroup = state.isGroup,
                                 isFirstInGroup = isFirstInGroup, // 👈
                                 isLastInGroup = isLastInGroup,   // 👈
                                 onMediaClick = { fullScreenImage = it },
@@ -313,6 +329,7 @@ fun ChatDetailsScreen(
                                 myAvatarPath = state.myAvatarPath,
                                 chatTitle = state.chatTitle,
                                 onMediaClick = { fullScreenImage = it },
+                                isGroup = state.isGroup,
                                 isLastInGroup = isLastInGroup,
                                 isFirstInGroup = isFirstInGroup,
                                 replyMessage = repliedMsg,
@@ -379,5 +396,17 @@ fun ChatDetailsScreen(
             onDismiss = { onIntent(OnToggleStickers) },
             onIntent = onIntent
         )
+    }
+}
+
+fun getSenderKey(listItem: MessageListItem): Any {
+    val msg = when (listItem) {
+        is MessageListItem.Single -> listItem.message
+        is MessageListItem.Album -> listItem.messages.first()
+    }
+    return when {
+        msg.isOutgoing -> "MY_OUTGOING_MESSAGE" // Все свои группируем между собой
+        msg.senderId != 0L -> msg.senderId      // 💥 Чужих строго разделяем по их личному ID!
+        else -> msg.id                          // Если ID еще 0 — считаем каждого отдельным автором (не склеиваем!)
     }
 }

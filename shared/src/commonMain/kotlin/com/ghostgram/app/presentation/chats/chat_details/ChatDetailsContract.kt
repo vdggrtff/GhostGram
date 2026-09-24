@@ -25,7 +25,8 @@ data class ChatDetailsState(
     val replyingToMessage: Message? = null,
     val editingMessage: Message? = null,
     val recentStickers: List<entity.TelegramSticker> = emptyList(), // 💥 Список стикеров
-    val isStickersOpen: Boolean = false
+    val isStickersOpen: Boolean = false,
+    val isGroup: Boolean = false
 )
 
 // Действия на экране чата

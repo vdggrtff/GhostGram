@@ -54,4 +54,7 @@ interface MessageDao {
     // 💥 Ставит галочку "Изменено"
     @Query("UPDATE messages SET isEdited = 1 WHERE id = :msgId")
     suspend fun markMessageAsEdited(msgId: Long)
+
+    @Query("UPDATE messages SET senderName = :name, senderAvatarPath = :avatarPath WHERE senderId = :senderId")
+    suspend fun updateSenderInfo(senderId: Long, name: String, avatarPath: String?)
 }

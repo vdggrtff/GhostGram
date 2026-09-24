@@ -21,7 +21,9 @@ data class MessageEntity(
     val mediaAlbumId: Long = 0L,
     val isSending: Boolean = false,
     val replyToMessageId: Long = 0L,
-    val isEdited: Boolean = false
+    val isEdited: Boolean = false,
+    val senderId: Long = 0L,
+    val senderAvatarPath: String? = null
 )
 
 const val TABLE_NAME = "messages"

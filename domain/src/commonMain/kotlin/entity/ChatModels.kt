@@ -20,7 +20,9 @@ data class Message(
     val mediaAlbumId: Long = 0L,
     val isSending: Boolean = false,
     val replyToMessageId: Long = 0L,
-    val isEdited: Boolean = false
+    val isEdited: Boolean = false,
+    val senderId: Long = 0L,
+    val senderAvatarPath: String? = null
 )
 
 data class Chat(
@@ -30,5 +32,6 @@ data class Chat(
     val lastMessage: Message?,
     val avatarPath: String? = null, // 💥 Локальный путь к аватарке
     val isJoined: Boolean = false,
-    val order: Long = 0L
+    val order: Long = 0L,
+    val isGroup: Boolean = false
 )

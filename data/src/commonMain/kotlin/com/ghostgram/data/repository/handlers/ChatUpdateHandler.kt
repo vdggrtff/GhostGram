@@ -44,6 +44,9 @@ class ChatUpdateHandler(
                 val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
                 val positions = chatObj["positions"]?.jsonArray
                 val isJoined = positions != null && positions.isNotEmpty()
+                val typeObj = chatObj["type"]?.jsonObject
+                val chatTypeStr = typeObj?.get("@type")?.jsonPrimitive?.content ?: ""
+                val isGroup = chatTypeStr in listOf("chatTypeBasicGroup", "chatTypeSupergroup", "chatTypeChannel")
 
                 // Если фото нет на диске, но есть ID — качаем!
                 if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
@@ -54,15 +57,6 @@ class ChatUpdateHandler(
                 val lastMessage = if (previewText != null) {
                    Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
                 } else null
-
-                /*val chat = Chat(
-                    id = id,
-                    title = title,
-                    unreadCount = unreadCount,
-                    lastMessage = lastMessage,
-                    avatarPath = if (!avatarPath.isNullOrBlank()) avatarPath else null,
-                    isJoined = isJoined
-                )*/
 
                 //chatsMap.update { it + (id to chat) }
                 chatsMap.update { current ->
@@ -78,7 +72,8 @@ class ChatUpdateHandler(
                             unreadCount = unreadCount,
                             lastMessage = lastMessage,
                             avatarPath = path,
-                            isJoined = isJoined
+                            isJoined = isJoined,
+                            isGroup = isGroup
                         ))
                     } else {
                         current + (id to Chat(
@@ -87,7 +82,8 @@ class ChatUpdateHandler(
                             unreadCount = unreadCount,
                             lastMessage = lastMessage,
                             avatarPath = path,
-                            isJoined = isJoined
+                            isJoined = isJoined,
+                            isGroup = isGroup
                         ))
                     }
                 }

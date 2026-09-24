@@ -258,7 +258,8 @@ class ChatDetailsViewModel(
                         it.copy(
                             chatTitle = chat.title,
                             avatarPath = chat.avatarPath,
-                            unreadCount = chat.unreadCount
+                            unreadCount = chat.unreadCount,
+                            isGroup = chat.isGroup
                         )
                     }
                 }
