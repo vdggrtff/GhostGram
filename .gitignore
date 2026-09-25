@@ -23,3 +23,14 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+# Логи падения JVM
+hs_err_pid*.log
+
+# Кэш инспектора Android Studio
+*.asdb
+
+# Папка с готовыми релизами APK (они живут только в GitHub Releases)
+androidApp/release/
+**/release/*.apk
+**/release/*.dm
+**/release/*.json
