@@ -110,7 +110,7 @@ fun SettingsScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // 💥 1. НЕОНОВЫЙ ХЕДЕР ПРОФИЛЯ (ИЗ СТИЧА!)
+            // 1. НЕОНОВЫЙ ХЕДЕР ПРОФИЛЯ (ИЗ СТИЧА!)
             item {
                 SettingAvatar(
                     avatarPath = state.avatarPath,
@@ -120,7 +120,7 @@ fun SettingsScreen(
                 )
             }
 
-            // 💥 2. МУЛЬТИАККАУНТ-ХАБ (ТЕЛЕГРАМ-СТАЙЛ)
+            // 2. МУЛЬТИАККАУНТ-ХАБ (ТЕЛЕГРАМ-СТАЙЛ)
             item {
                 MultiAccountGroup(
                     accounts = state.accounts,
@@ -130,7 +130,7 @@ fun SettingsScreen(
                 )
             }
 
-            // 💥 3. СЕКЦИЯ GHOST ПРИВАТНОСТИ И КРИПТОГРАФИИ
+            // 3. СЕКЦИЯ GHOST ПРИВАТНОСТИ И КРИПТОГРАФИИ
             item {
                 PrivacyGroup(
                     isStealthMode = state.isStealthMode,
@@ -139,7 +139,7 @@ fun SettingsScreen(
                 )
             }
 
-            // 💥 4. ХРАНИЛИЩЕ И AI АССИСТЕНТ
+            // 4. ХРАНИЛИЩЕ И AI АССИСТЕНТ
             item {
                 SettingsGroup(title = "Система и AI") {
                     SettingsNavigationItem(
@@ -174,7 +174,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 💥 5. КНОПКА ВЫХОДА (ОПАСНАЯ ЗОНА)
+            // 5. КНОПКА ВЫХОДА (ОПАСНАЯ ЗОНА)
             item {
                 LogoutButton(
                     onLogOut = onLogOut

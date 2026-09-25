@@ -7,7 +7,7 @@ actual fun openVideoInSystemPlayer(filePath: String) {
     try {
         val file = File(filePath)
         if (file.exists()) {
-            // 💥 Открывает файл в стандартном плеере Windows/Linux/Mac!
+            // Открывает файл в стандартном плеере Windows/Linux/Mac!
             Desktop.getDesktop().open(file)
         }
     } catch (e: Exception) {

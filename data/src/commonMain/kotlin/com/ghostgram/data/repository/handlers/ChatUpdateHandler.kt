@@ -27,7 +27,7 @@ class ChatUpdateHandler(
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         when (type) {
 
-            // 💥 1. ЗАГРУЗКА ИЛИ ОБНОВЛЕНИЕ ЧАТА
+            // 1. ЗАГРУЗКА ИЛИ ОБНОВЛЕНИЕ ЧАТА
             "updateNewChat", "chat" -> {
                 val chatObj = if (type == "chat") jsonObject else jsonObject["chat"]?.jsonObject ?: return true
                 val id = chatObj["id"]?.jsonPrimitive?.longOrNull ?: return true
@@ -148,7 +148,7 @@ class ChatUpdateHandler(
                 return true
             }
 
-            // 💥 2. МЫ ПРОЧИТАЛИ СООБЩЕНИЯ (Сбрасываем счетчик)
+            // 2. МЫ ПРОЧИТАЛИ СООБЩЕНИЯ (Сбрасываем счетчик)
             "updateChatReadInbox" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val unreadCount = jsonObject["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
@@ -160,7 +160,7 @@ class ChatUpdateHandler(
                 return true
             }
 
-            // 💥 3. СОБЕСЕДНИК ПРОЧИТАЛ НАШИ СООБЩЕНИЯ (Ставим ✓✓)
+            // 3. СОБЕСЕДНИК ПРОЧИТАЛ НАШИ СООБЩЕНИЯ (Ставим ✓✓)
             "updateChatReadOutbox" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val lastReadId = jsonObject["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: return true

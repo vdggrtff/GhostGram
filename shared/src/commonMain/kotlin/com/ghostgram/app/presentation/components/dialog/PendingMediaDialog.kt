@@ -59,7 +59,7 @@ fun PendingMediaDialog(
                 Text("Отправить фото", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 💥 Превью первой картинки (Coil умеет читать ByteArray!)
+                // Превью первой картинки (Coil умеет читать ByteArray!)
                 AsyncImage(
                     model = pendingMedia.first().bytes,
                     contentDescription = "Preview",

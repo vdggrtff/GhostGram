@@ -50,7 +50,7 @@ fun VoiceMessageContent(message: Message) {
             .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 💥 ИНТЕРАКТИВНАЯ КНОПКА PLAY / PAUSE
+        // ИНТЕРАКТИВНАЯ КНОПКА PLAY / PAUSE
         Box(
             modifier = Modifier
                 .size(40.dp)

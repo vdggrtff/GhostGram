@@ -16,7 +16,7 @@ class StickerUpdateHandler(
 ) : TdlibUpdateHandler {
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
-        // 💥 ЛОВИМ ОТВЕТ С НЕСТАНДАРТНЫМИ / НЕДАВНИМИ СТИКЕРАМИ
+        // ЛОВИМ ОТВЕТ С НЕСТАНДАРТНЫМИ / НЕДАВНИМИ СТИКЕРАМИ
         if (type == "stickers") {
             val stickersArray = jsonObject["stickers"]?.jsonArray ?: return true
             val list = mutableListOf<TelegramSticker>()
@@ -26,7 +26,7 @@ class StickerUpdateHandler(
                 val fileObj = stickerObj["sticker"]?.jsonObject
                 val stickerFileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull ?: return@forEach
 
-                // 💥 ДОСТАЕМ НАСТОЯЩИЙ ОБЛАЧНЫЙ REMOTE ID!
+                // ДОСТАЕМ НАСТОЯЩИЙ ОБЛАЧНЫЙ REMOTE ID!
                 val remoteFileId = fileObj["remote"]?.jsonObject?.get("id")?.jsonPrimitive?.content ?: return@forEach
 
                 val emoji = stickerObj["emoji"]?.jsonPrimitive?.content ?: "✨"
@@ -43,7 +43,7 @@ class StickerUpdateHandler(
                 list.add(
                     TelegramSticker(
                         fileId = stickerFileId,
-                        remoteFileId = remoteFileId, // 💥 Сохраняем облачный ID!
+                        remoteFileId = remoteFileId, // Сохраняем облачный ID!
                         emoji = emoji,
                         thumbnailPath = if (!thumbPath.isNullOrBlank()) thumbPath else null
                     )

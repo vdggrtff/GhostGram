@@ -39,7 +39,7 @@ class ContactRepositoryImpl(
             val type = jsonObject["@type"]?.jsonPrimitive?.content ?: return
 
             when (type) {
-                // 💥 1. Список ID всех контактов
+                // 1. Список ID всех контактов
                 "users" -> {
                     val userIds = jsonObject["user_ids"]?.jsonArray ?: return
                     userIds.forEach { idElem ->
@@ -49,7 +49,7 @@ class ContactRepositoryImpl(
                     }
                 }
 
-                // 💥 2. Информация о конкретном юзере (Имя, юзернейм, аватарка, статус)
+                // 2. Информация о конкретном юзере (Имя, юзернейм, аватарка, статус)
                 "user", "updateUser" -> {
                     val userObj = if (type == "updateUser") jsonObject["user"]?.jsonObject else jsonObject
                     val id = userObj?.get("id")?.jsonPrimitive?.longOrNull ?: return
@@ -115,7 +115,7 @@ class ContactRepositoryImpl(
     }
 
     override fun observeContacts(): Flow<List<Contact>> {
-        // 💥 Просим у Telegram список контактов
+        // Просим у Telegram список контактов
         tdlibClient.send("""{"@type": "getContacts"}""")
         return _contactsMap.map { it.values.toList() }
     }

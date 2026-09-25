@@ -35,7 +35,7 @@ import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
 
 class ChatDetailsViewModel(
-    savedStateHandle: SavedStateHandle, // 💥 Koin сам отдаст его сюда!
+    savedStateHandle: SavedStateHandle, // Koin сам отдаст его сюда!
     private val sessionManager: SessionManager,
     private val generateSmartRepliesUseCase: GenerateSmartRepliesUseCase,
     private val generateCatchUpSummaryUseCase: GenerateCatchUpSummaryUseCase,
@@ -86,7 +86,7 @@ class ChatDetailsViewModel(
                     val isCurrentlyCrypto = _state.value.isCryptoMode
 
                     if (!isCurrentlyCrypto) {
-                        // 💥 Если режим БЫЛ ВЫКЛЮЧЕН, то мы его включаем и шлем публичный ключ собеседнику!
+                        // Если режим БЫЛ ВЫКЛЮЧЕН, то мы его включаем и шлем публичный ключ собеседнику!
                         viewModelScope.launch {
                             repo.requestKeyExchange(chatId)
                         }
@@ -161,7 +161,7 @@ class ChatDetailsViewModel(
                         repo.sendMediaAlbum(chatId, payload, caption, useCrypto, replyToId)
                     } else {
                         mediaItems.forEach { item ->
-                            // 💥 Передаем байты и расширение!
+                            // Передаем байты и расширение!
                             repo.sendMedia(
                                 chatId,
                                 item.bytes,
@@ -198,14 +198,14 @@ class ChatDetailsViewModel(
                 _state.update {
                     it.copy(
                         editingMessage = msg,
-                        inputText = msg.text, // 💥 Кидаем старый текст в инпут!
+                        inputText = msg.text, // Кидаем старый текст в инпут!
                         isCryptoMode = isEncrypted, // Включаем замок, если это была шифровка!
                         replyingToMessage = null // Сбрасываем reply, если был
                     )
                 }
             }
 
-            // 💥 ОТМЕНА РЕДАКТИРОВАНИЯ
+            // ОТМЕНА РЕДАКТИРОВАНИЯ
             is OnCancelEdit -> {
                 _state.update { it.copy(editingMessage = null, inputText = "") }
             }
@@ -221,7 +221,7 @@ class ChatDetailsViewModel(
             is ChatDetailsIntent.OnSendSticker -> {
                 val replyToId = _state.value.replyingToMessage?.id ?: 0L
                 viewModelScope.launch {
-                    repo.sendSticker(chatId, intent.remoteFileId, replyToId) // 💥
+                    repo.sendSticker(chatId, intent.remoteFileId, replyToId) //
                     _state.update { it.copy(isStickersOpen = false, replyingToMessage = null) }
                 }
             }
@@ -291,7 +291,7 @@ class ChatDetailsViewModel(
     private fun generateCatchUp() {
         val currentLastMessageId = _state.value.messages.lastOrNull()?.id
 
-        // 💥 ПРОВЕРКА КЭША: если сообщений не прибавилось — отдаем старую выжимку бесплатно!
+        // ПРОВЕРКА КЭША: если сообщений не прибавилось — отдаем старую выжимку бесплатно!
         if (currentLastMessageId != null && currentLastMessageId == lastSummarizedMessageId && cachedSummaryText != null) {
             _state.update { it.copy(catchUpSummary = cachedSummaryText) }
             return

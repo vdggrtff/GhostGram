@@ -38,13 +38,13 @@ fun StickerMessageContent(
             spec = LottieCompositionSpec.JsonString(tgsJson!!)
         )
 
-        // 💥 2. Создаем независимый стейт анимации (Крутим бесконечно)
+        // 2. Создаем независимый стейт анимации (Крутим бесконечно)
         val progress by animateLottieCompositionAsState(
             composition = composition,
             iterations = Int.MAX_VALUE // Вместо красного Compottie.IterateForever
         )
 
-        // 💥 3. Передаем прогресс в отрисовщик
+        // 3. Передаем прогресс в отрисовщик
         val painter = rememberLottiePainter(
             composition = composition,
             progress = { progress }

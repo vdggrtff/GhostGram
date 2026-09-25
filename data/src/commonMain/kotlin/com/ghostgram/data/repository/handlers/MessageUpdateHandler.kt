@@ -28,7 +28,7 @@ class MessageUpdateHandler(
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         when (type) {
-            // 💥 1. ПРИШЛО НОВОЕ СООБЩЕНИЕ
+            // 1. ПРИШЛО НОВОЕ СООБЩЕНИЕ
             "updateNewMessage" -> {
                 val messageObj = jsonObject["message"]?.jsonObject ?: return true
                 val chatId = messageObj["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
@@ -73,7 +73,7 @@ class MessageUpdateHandler(
                 }
                 return true
             }
-            // 💥 2. ПРИЛЕТЕЛА ИСТОРИЯ ЧАТА (ПАЧКА СООБЩЕНИЙ)
+            // 2. ПРИЛЕТЕЛА ИСТОРИЯ ЧАТА (ПАЧКА СООБЩЕНИЙ)
             "messages" -> {
                 val messagesArray = jsonObject["messages"]?.jsonArray ?: return true
                 if (messagesArray.isEmpty()) return true
@@ -93,7 +93,7 @@ class MessageUpdateHandler(
                     val contentObj = msgObj["content"]?.jsonObject
 
                     val date = msgObj["date"]?.jsonPrimitive?.intOrNull ?: 0
-                    // 💥 ДОСТАЕМ АЛЬБОМ ИЗ ИСТОРИИ!
+                    // ДОСТАЕМ АЛЬБОМ ИЗ ИСТОРИИ!
                     val mediaAlbumId = msgObj["media_album_id"]?.jsonPrimitive?.longOrNull ?: 0L
                     val editDate = msgObj["edit_date"]?.jsonPrimitive?.intOrNull ?: 0
                     val isEdited = editDate > 0
@@ -129,7 +129,7 @@ class MessageUpdateHandler(
                 }
                 return true
             }
-            // 💥 3. УБИВАЕМ ФАНТОМА (Сообщение успешно доставлено на сервер)
+            // 3. УБИВАЕМ ФАНТОМА (Сообщение успешно доставлено на сервер)
             "updateMessageSendSucceeded" -> {
                 val oldId = jsonObject["old_message_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val messageObj = jsonObject["message"]?.jsonObject ?: return true
@@ -161,7 +161,7 @@ class MessageUpdateHandler(
                 }
                 return true
             }
-            // 💥 5. ANTI-REVOKE (Собеседник удалил сообщение)
+            // 5. ANTI-REVOKE (Собеседник удалил сообщение)
             "updateDeleteMessages" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val messageIds =
@@ -184,7 +184,7 @@ class MessageUpdateHandler(
                     var text = newContent["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                     var extraInfo: String? = null
 
-                    // 💥 РАСШИФРОВЫВАЕМ НОВЫЙ ТЕКСТ, ЕСЛИ ЭТО КРИПТА!
+                    // РАСШИФРОВЫВАЕМ НОВЫЙ ТЕКСТ, ЕСЛИ ЭТО КРИПТА!
                     // (Предполагается, что в MessageUpdateHandler у тебя прокинут cryptoLayer)
                     if (text.contains("👻 ")) {
                         val decrypted = cryptoLayer.revealAndDecrypt(chatId, text)
@@ -201,7 +201,7 @@ class MessageUpdateHandler(
                 return true
             }
 
-            // 💥 2. ТЕЛЕГРАМ СКАЗАЛ, ЧТО СООБЩЕНИЕ ИЗМЕНЕНО
+            // 2. ТЕЛЕГРАМ СКАЗАЛ, ЧТО СООБЩЕНИЕ ИЗМЕНЕНО
             "updateMessageEdited" -> {
                 val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
                 repoScope.launch {
@@ -278,9 +278,9 @@ class MessageUpdateHandler(
                 var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 var extraInfo: String? = null
 
-                // 💥 1. КТО-ТО ПРЕДЛАГАЕТ НАМ ОБМЕН КЛЮЧАМИ
+                // 1. КТО-ТО ПРЕДЛАГАЕТ НАМ ОБМЕН КЛЮЧАМИ
                 if (text.startsWith("👻🔑 ")) {
-                    // 💥 ТОЛЬКО ДЛЯ ЧУЖИХ СООБЩЕНИЙ СОХРАНЯЕМ СЕКРЕТ! (чтобы не сломать ключ о самого себя)
+                    // ТОЛЬКО ДЛЯ ЧУЖИХ СООБЩЕНИЙ СОХРАНЯЕМ СЕКРЕТ! (чтобы не сломать ключ о самого себя)
                     if (!isOutgoing) {
                         val otherPubKeyHex = text.removePrefix("👻🔑 ")
                         cryptoLayer.establishSecret(chatId, otherPubKeyHex)
@@ -306,9 +306,9 @@ class MessageUpdateHandler(
                     text = "🔐 Запрос E2EE отправлен..."
                     extraInfo = "SYSTEM"
                 }
-                // 💥 2. СОБЕСЕДНИК ПОДТВЕРДИЛ ОБМЕН
+                // 2. СОБЕСЕДНИК ПОДТВЕРДИЛ ОБМЕН
                 else if (text.startsWith("👻🤝 ")) {
-                    // 💥 ТОЛЬКО ДЛЯ ЧУЖИХ СООБЩЕНИЙ!
+                    // ТОЛЬКО ДЛЯ ЧУЖИХ СООБЩЕНИЙ!
                     if (!isOutgoing) {
                         val otherPubKeyHex = text.removePrefix("👻🤝 ")
                         cryptoLayer.establishSecret(chatId, otherPubKeyHex)
@@ -316,7 +316,7 @@ class MessageUpdateHandler(
                     text = "✅ Защищенный E2EE канал установлен!"
                     extraInfo = "SYSTEM"
                 }
-                // 💥 3. РАСШИФРОВКА ТЕКСТА
+                // 3. РАСШИФРОВКА ТЕКСТА
                 else if (text.contains("👻 ")) {
                     val decrypted = cryptoLayer.revealAndDecrypt(chatId, text)
                     if (decrypted != null) {
@@ -357,7 +357,7 @@ class MessageUpdateHandler(
 
                 // Просим TDLib скачать фотку, если её нет на диске
                 if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.messagePhotos[fileId] = msgId // 💥 Записали в трекер!
+                    tracker.messagePhotos[fileId] = msgId // Записали в трекер!
                     tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
 
@@ -407,14 +407,14 @@ class MessageUpdateHandler(
                 val duration = voiceObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
                 val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
 
-                // 💥 ДОСТАЕМ АУДИОФАЙЛ (.ogg)
+                // ДОСТАЕМ АУДИОФАЙЛ (.ogg)
                 val fileObj = voiceObj?.get("voice")?.jsonObject
                 val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
                 val filePath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
                 // Если файла нет на диске — качаем на максимальной скорости!
                 if (filePath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.messageFiles[fileId] = msgId // 💥 Записываем в трекер файлов!
+                    tracker.messageFiles[fileId] = msgId // Записываем в трекер файлов!
                     tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
                 MessageEntity(
@@ -425,7 +425,7 @@ class MessageUpdateHandler(
                     isOutgoing = isOutgoing,
                     mediaType = "VOICE",
                     fileExtraInfo = formatDuration(duration),
-                    fileName = filePath, // 💥 СОХРАНЯЕМ ПУТЬ К ЗВУКУ!
+                    fileName = filePath, // СОХРАНЯЕМ ПУТЬ К ЗВУКУ!
                     date = date,
                     mediaAlbumId = mediaAlbumId,
                     isSending = isSending,
@@ -443,7 +443,7 @@ class MessageUpdateHandler(
                 val caption =
                     contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
 
-                // 💥 ДОСТАЕМ КАРТИНКУ-ПРЕВЬЮШКУ ВИДЕО!
+                // ДОСТАЕМ КАРТИНКУ-ПРЕВЬЮШКУ ВИДЕО!
                 val thumbObj = videoObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
                 val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
                 val photoPath =
@@ -459,7 +459,7 @@ class MessageUpdateHandler(
                 val videoPath = mainVideoObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
                 if (videoPath.isNullOrBlank() && videoFileId != null && videoFileId != 0) {
-                    tracker.messageFiles[videoFileId] = msgId // 💥 КЛАДЕМ В FILES!
+                    tracker.messageFiles[videoFileId] = msgId // КЛАДЕМ В FILES!
                     tdlibClient.send("""{"@type": "downloadFile", "file_id": $videoFileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
 
@@ -471,7 +471,7 @@ class MessageUpdateHandler(
                     isOutgoing = isOutgoing,
                     mediaType = if (contentType == "messageVideo") "VIDEO" else "VIDEO_NOTE",
                     fileExtraInfo = formatDuration(duration),
-                    photoPath = photoPath, // 💥 Сохраняем путь к превьюшке!
+                    photoPath = photoPath, // Сохраняем путь к превьюшке!
                     date = date,
                     mediaAlbumId = mediaAlbumId,
                     fileName = videoPath,
@@ -487,7 +487,7 @@ class MessageUpdateHandler(
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
 
-                // 💥 КАЧАЕМ ПОЛНОЦЕННЫЙ СТИКЕР (не thumbnail!)
+                // КАЧАЕМ ПОЛНОЦЕННЫЙ СТИКЕР (не thumbnail!)
                 val fileObj = stickerObj?.get("sticker")?.jsonObject
                 val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
                 val stickerPath =

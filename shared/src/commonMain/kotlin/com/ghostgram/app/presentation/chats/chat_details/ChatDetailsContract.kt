@@ -14,8 +14,8 @@ data class ChatDetailsState(
     val errorMessage: String? = null,
     val smartReplies: List<String> = emptyList(), // Готовые ответы
     val isRepliesLoading: Boolean = false,        // Грузятся ли они сейчас
-    val unreadCount: Int = 0,               // 💥 Число непрочитанных
-    val catchUpSummary: String? = null,     // 💥 Текст выжимки от ИИ
+    val unreadCount: Int = 0,               // Число непрочитанных
+    val catchUpSummary: String? = null,     // Текст выжимки от ИИ
     val isCatchUpLoading: Boolean = false,
     val isGhostMode: Boolean = true,
     val isCryptoMode: Boolean = false,
@@ -24,7 +24,7 @@ data class ChatDetailsState(
     val sendAsDocument: Boolean = false,              // Галочка "Отправить как файл"
     val replyingToMessage: Message? = null,
     val editingMessage: Message? = null,
-    val recentStickers: List<entity.TelegramSticker> = emptyList(), // 💥 Список стикеров
+    val recentStickers: List<entity.TelegramSticker> = emptyList(), // Список стикеров
     val isStickersOpen: Boolean = false,
     val isGroup: Boolean = false
 )
@@ -52,11 +52,11 @@ sealed interface ChatDetailsIntent {
 
     data class OnDeleteMessage(val messageId: Long, val revoke: Boolean) : ChatDetailsIntent
 
-    data class OnSwipeToReply(val message: Message) : ChatDetailsIntent // 💥 Свайпнули!
-    data object OnCancelReply : ChatDetailsIntent // 💥 Передумали отвечать
-    data class OnEditMessageClick(val message: Message) : ChatDetailsIntent // 💥 Клик в меню
+    data class OnSwipeToReply(val message: Message) : ChatDetailsIntent // Свайпнули!
+    data object OnCancelReply : ChatDetailsIntent // Передумали отвечать
+    data class OnEditMessageClick(val message: Message) : ChatDetailsIntent // Клик в меню
     data object OnCancelEdit : ChatDetailsIntent
-    data object OnToggleStickers : ChatDetailsIntent // 💥 Клик по смайлику
+    data object OnToggleStickers : ChatDetailsIntent // Клик по смайлику
     data class OnSendSticker(val remoteFileId: Int) : ChatDetailsIntent
     data class OnStartRecording(val filePath: String) : ChatDetailsIntent
     data class OnStopRecording(val send: Boolean, val filePath: String) : ChatDetailsIntent

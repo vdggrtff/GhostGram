@@ -46,7 +46,7 @@ fun MultiAccountGroup(
         accounts.forEachIndexed { index, session ->
             val isCurrent = session.accountId == currentAccountId
 
-            // 💥 МАГИЯ: Реактивно получаем профиль для КАЖДОГО аккаунта в списке!
+            // МАГИЯ: Реактивно получаем профиль для КАЖДОГО аккаунта в списке!
             val profile by session.chatRepository.observeMyProfile()
                 .collectAsState(initial = MyProfile())
 

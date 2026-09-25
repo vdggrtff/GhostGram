@@ -82,7 +82,7 @@ class ChatListViewModel(
                 } else {
                     _state.update { it.copy(isSearching = true) }
 
-                    // 💥 Ждем 400мс и шлем ОДИН запрос
+                    // Ждем 400мс и шлем ОДИН запрос
                     searchDebounceJob = viewModelScope.launch {
                         delay(400)
                         repo?.searchPublicChats(intent.query)

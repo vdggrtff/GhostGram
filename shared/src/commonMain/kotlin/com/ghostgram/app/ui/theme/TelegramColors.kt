@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 import kotlin.math.absoluteValue
 
 object TelegramColors {
-    // 💥 7 ТОЧНЫХ ЦВЕТОВ ИМЕН ИЗ ОФИЦИАЛЬНОГО TELEGRAM
+    // 7 ТОЧНЫХ ЦВЕТОВ ИМЕН ИЗ ОФИЦИАЛЬНОГО TELEGRAM
     val userColors = listOf(
         Color(0xFFE56555), // Красный
         Color(0xFFF28537), // Оранжевый

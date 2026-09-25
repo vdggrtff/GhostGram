@@ -140,7 +140,7 @@ fun GhostTextField(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
-            onClick = { fileLauncher.launch() }, // 💥 Открываем системный выбор файлов
+            onClick = { fileLauncher.launch() }, // Открываем системный выбор файлов
             modifier = Modifier.size(42.dp)
                 .clip(CircleShape)
                 .background(GhostCard)
@@ -207,7 +207,7 @@ fun GhostTextField(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onPress = {
-                                // 💥 1. ЗАЖАЛИ (НАЧАЛО ЗАПИСИ)
+                                // 1. ЗАЖАЛИ (НАЧАЛО ЗАПИСИ)
                                 isRecording = true
                                 val tempDir = okio.FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "ghostgram_temp"
                                 if (!okio.FileSystem.SYSTEM.exists(tempDir)) okio.FileSystem.SYSTEM.createDirectories(tempDir)
@@ -218,10 +218,10 @@ fun GhostTextField(
                                 recorder.startRecording(currentVoicePath)
                                 // (Опционально) onIntent(ChatDetailsIntent.OnStartRecording(currentVoicePath))
 
-                                // 💥 ЖДЕМ, ПОКА ОТПУСТИТ МЫШКУ ИЛИ ПАЛЕЦ...
+                                // ЖДЕМ, ПОКА ОТПУСТИТ МЫШКУ ИЛИ ПАЛЕЦ...
                                 val success = tryAwaitRelease()
 
-                                // 💥 2. ОТПУСТИЛИ (КОНЕЦ ЗАПИСИ И ОТПРАВКА)
+                                // 2. ОТПУСТИЛИ (КОНЕЦ ЗАПИСИ И ОТПРАВКА)
                                 isRecording = false
                                 recorder.stopRecording()
 

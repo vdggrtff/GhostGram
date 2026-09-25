@@ -51,7 +51,7 @@ fun AuthScreen(
                 title = { Text("Добавление аккаунта", color = Color.White, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
                 navigationIcon = {
-                    // 💥 КНОПКА ОТМЕНЫ (НАЗАД)
+                    // КНОПКА ОТМЕНЫ (НАЗАД)
                     IconButton(onClick = { onIntent(AuthIntent.OnCancelClick) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
                     }
@@ -60,7 +60,7 @@ fun AuthScreen(
             TopAppBar(
                 title = { Text(if (state.isFirstAccount) "Вход в GhostGRAM" else "Добавление аккаунта", color = Color.White, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
-                // 💥 РИСУЕМ КНОПКУ "НАЗАД" ТОЛЬКО ЕСЛИ ЕСТЬ КУДА ВОЗВРАЩАТЬСЯ!
+                // РИСУЕМ КНОПКУ "НАЗАД" ТОЛЬКО ЕСЛИ ЕСТЬ КУДА ВОЗВРАЩАТЬСЯ!
                 navigationIcon = if (!state.isFirstAccount) {
                     {
                         IconButton(onClick = { onIntent(AuthIntent.OnCancelClick) }) {

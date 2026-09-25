@@ -27,7 +27,7 @@ object TgsDecoder {
 
                 if (!fileSystem.exists(path)) return@withContext null
 
-                // 💥 Магия Okio: читаем файл, прогоняем через GzipSource и конвертируем в строку!
+                // Магия Okio: читаем файл, прогоняем через GzipSource и конвертируем в строку!
                 /*fileSystem.source(path).let { GzipSource(it) }.buffer().use {
                     it.readUtf8()
                 }*/

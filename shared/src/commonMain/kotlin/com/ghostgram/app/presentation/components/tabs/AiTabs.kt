@@ -67,7 +67,7 @@ fun AiTabs(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp) // 💥 Всего 2dp высоты вместо 50dp! Фон убран!
+                .padding(horizontal = 16.dp, vertical = 2.dp) // Всего 2dp высоты вместо 50dp! Фон убран!
         ) {
             SuggestionChip(
                 onClick = { expandedAiMenu = true },
@@ -143,7 +143,7 @@ fun AiTabs(
             }
         }
     } else {
-        // 💥 ОДНА ЕДИНСТВЕННАЯ КНОПКА!
+        // ОДНА ЕДИНСТВЕННАЯ КНОПКА!
         Box(modifier = Modifier.padding(bottom = 8.dp)) {
             SuggestionChip(
                 onClick = { expandedAiMenu = true },
@@ -161,7 +161,7 @@ fun AiTabs(
                 enabled = !isCatchUpLoading && !isRepliesLoading
             )
 
-            // 💥 ВЫПАДАЮЩЕЕ МЕНЮ
+            // ВЫПАДАЮЩЕЕ МЕНЮ
             DropdownMenu(
                 expanded = expandedAiMenu,
                 onDismissRequest = { expandedAiMenu = false },

@@ -52,7 +52,7 @@ class GeminiApiClient(
     }*/
 
     suspend fun generateText(prompt: String): String {
-        // 💥 ДОСТАЕМ ЛИЧНЫЙ КЛЮЧ ЮЗЕРА
+        // ДОСТАЕМ ЛИЧНЫЙ КЛЮЧ ЮЗЕРА
         val personalKey = settingsManager.getGeminiKey().trim()
 
         println("🤖 [GEMINI CLIENT] Старт генерации! Длина промпта: ${prompt.length} символов")

@@ -26,6 +26,6 @@ fun ImageMessageContent(
             .fillMaxWidth()
             .heightIn(max = 240.dp)
             .clip(RoundedCornerShape(10.dp))
-            .clickable { onMediaClick(model ?: "") } // 💥 КЛИКАБЕЛЬНО!
+            .clickable { onMediaClick(model ?: "") } // КЛИКАБЕЛЬНО!
     )
 }

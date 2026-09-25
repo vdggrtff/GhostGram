@@ -45,13 +45,13 @@ fun GhostBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit
 ) {
-    // 💥 Внешний контейнер для позиционирования
+    // Внешний контейнер для позиционирования
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(GhostBackground)
             .navigationBarsPadding()
-            .padding(start = 48.dp, end = 48.dp, bottom = 24.dp), // 💥 Идеальный синтаксис
+            .padding(start = 48.dp, end = 48.dp, bottom = 24.dp), // Идеальный синтаксис
         contentAlignment = Alignment.BottomCenter
     ) {
         Row(
@@ -59,9 +59,9 @@ fun GhostBottomBar(
                 // Мягкая фиолетовая тень под панелью
                 .shadow(24.dp, RoundedCornerShape(32.dp), spotColor = GhostPrimary, ambientColor = GhostPrimary)
                 .clip(RoundedCornerShape(32.dp))
-                // 💥 ЦВЕТ СТЕКЛА (Светлее фона, с альфа-каналом 60%)
+                // ЦВЕТ СТЕКЛА (Светлее фона, с альфа-каналом 60%)
                 .background(Color(0xFF2A3040).copy(alpha = 0.6f))
-                // 💥 БЛИК ПО КРАЯМ (Тонкая полупрозрачная белая рамка дает эффект объема!)
+                // БЛИК ПО КРАЯМ (Тонкая полупрозрачная белая рамка дает эффект объема!)
                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(32.dp))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

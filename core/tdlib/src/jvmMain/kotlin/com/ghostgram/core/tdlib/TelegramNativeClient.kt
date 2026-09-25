@@ -22,7 +22,7 @@ actual class TelegramNativeClient actual constructor() {
 
     init {
         try {
-            // 💥 Kоманда загрузки C++ бинарника!
+            // Kоманда загрузки C++ бинарника!
             // На Windows он будет искать tdjson.dll, на Linux - libtdjson.so, на Mac - libtdjson.dylib
             tdApi = Native.load("tdjson", TdNative::class.java)
             clientPtr = tdApi.td_json_client_create()

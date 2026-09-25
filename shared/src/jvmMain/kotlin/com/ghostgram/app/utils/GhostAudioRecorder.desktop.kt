@@ -31,7 +31,7 @@ actual class GhostAudioRecorder {
 
             println("🎤 [RECORDER-PC] Запись звука началась: $filePath")
 
-            // 💥 Запускаем запись в фоновом потоке, чтобы не повесить UI!
+            // Запускаем запись в фоновом потоке, чтобы не повесить UI!
             recordingThread = thread(start = true) {
                 try {
                     val audioStream = AudioInputStream(targetLine)

@@ -29,7 +29,7 @@ fun GhostInput(
         modifier = Modifier.fillMaxWidth().navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        // 💥 ПЛАВАЮЩИЙ РЯД AI-ЧИПОВ
+        // ПЛАВАЮЩИЙ РЯД AI-ЧИПОВ
         AiTabs(
             smartReplies = smartReplies,
             isCatchUpLoading = isCatchUpLoading,

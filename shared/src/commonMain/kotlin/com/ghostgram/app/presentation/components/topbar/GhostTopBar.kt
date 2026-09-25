@@ -45,7 +45,7 @@ import com.ghostgram.app.ui.theme.GhostTextSecondary
 fun GhostTopBar(
     avatarPath: String?,
     chatTitle: String,
-    isGroup: Boolean = false, // 💥 Флаг группы
+    isGroup: Boolean = false, // Флаг группы
     isGhostMode: Boolean,
     isCryptoMode: Boolean,
     onBackClick: () -> Unit,
@@ -87,7 +87,7 @@ fun GhostTopBar(
                         }
                     }
 
-                    // 💥 2. Зеленая точка онлайна (ТОЛЬКО В ЛИЧКЕ, В ГРУППАХ ЕЁ НЕТ!)
+                    // 2. Зеленая точка онлайна (ТОЛЬКО В ЛИЧКЕ, В ГРУППАХ ЕЁ НЕТ!)
                     if (!isGroup) {
                         Box(
                             modifier = Modifier
@@ -113,7 +113,7 @@ fun GhostTopBar(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    // 💥 3. ДИНАМИЧЕСКИЙ ПОДЗАГОЛОВОК
+                    // 3. ДИНАМИЧЕСКИЙ ПОДЗАГОЛОВОК
                     Text(
                         text = if (isGroup) "группа" else "в сети",
                         color = if (isGroup) GhostTextSecondary else GhostAccentGreen,
@@ -124,7 +124,7 @@ fun GhostTopBar(
             }
         },
         actions = {
-            // 💥 4. ЗАМОК ШИФРОВАНИЯ ТОЛЬКО ДЛЯ ЛИЧНЫХ ЧАТОВ 1-НА-1
+            // 4. ЗАМОК ШИФРОВАНИЯ ТОЛЬКО ДЛЯ ЛИЧНЫХ ЧАТОВ 1-НА-1
             if (!isGroup) {
                 IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleCryptoMode) }, modifier = Modifier.size(34.dp)) {
                     Text(if (isCryptoMode) "🔒" else "🔓", fontSize = 15.sp)

@@ -40,7 +40,7 @@ fun SwipeToReplyWrapper(
 
     LaunchedEffect(offsetX) {
         if (offsetX <= triggerThreshold) {
-            onSwipe() // 💥 Срабатывает коллбэк!
+            onSwipe() // Срабатывает коллбэк!
             offsetX = 0f // Возвращаем пузырь на место
         }
     }
@@ -64,7 +64,7 @@ fun SwipeToReplyWrapper(
             },
         contentAlignment = Alignment.CenterEnd
     ) {
-        // 💥 ИКОНКА ОТВЕТА (Появляется из-под сообщения)
+        // ИКОНКА ОТВЕТА (Появляется из-под сообщения)
         if (animatedOffsetX < -20f) {
             Box(
                 modifier = Modifier

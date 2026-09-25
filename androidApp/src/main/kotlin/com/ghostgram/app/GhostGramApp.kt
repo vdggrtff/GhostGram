@@ -15,7 +15,7 @@ class GhostGramApp: Application() {
         super.onCreate()
         appContext = this
 
-        // 💥 ЗАПУСКАЕМ KOIN И ПЕРЕДАЕМ ЕМУ НАШУ БАЗУ И DATASTORE
+         ЗАПУСКАЕМ KOIN И ПЕРЕДАЕМ ЕМУ НАШУ БАЗУ И DATASTORE
         initKoin(appStoragePath = this@GhostGramApp.filesDir.absolutePath) {
             androidContext(this@GhostGramApp)
         }

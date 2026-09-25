@@ -49,10 +49,10 @@ import entity.MessageMediaType
 fun GhostMessageBubble(
     message: Message,
     chatAvatarPath: String?,
-    myAvatarPath: String?, // 💥 Вернули твою аватарку!
+    myAvatarPath: String?, // Вернули твою аватарку!
     chatTitle: String,
     isGroup: Boolean = false,
-    isFirstInGroup: Boolean = true, // 💥 Новые параметры
+    isFirstInGroup: Boolean = true, // Новые параметры
     isLastInGroup: Boolean = true,
     replyMessage: Message? = null,
     onLongClick: () -> Unit,
@@ -79,7 +79,7 @@ fun GhostMessageBubble(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
-        return // 💥 Выходим из функции, чтобы не рисовать синий пузырь!
+        return // Выходим из функции, чтобы не рисовать синий пузырь!
     }
 
     // Внешний ряд, который держит Аватарки и Пузырь
@@ -157,7 +157,7 @@ fun GhostMessageBubble(
             modifier = Modifier
                 .widthIn(min = if (isVideo) 240.dp else 0.dp, max = 290.dp) // Ограничиваем только максимум, чтобы он сжимался под текст
                 .clip(bubbleShape)
-                .combinedClickable( // 💥 ЛОВИМ ДОЛГИЙ ТАП
+                .combinedClickable( // ЛОВИМ ДОЛГИЙ ТАП
                     onClick = {},
                     onLongClick = onLongClick
                 )
@@ -178,7 +178,7 @@ fun GhostMessageBubble(
                 .padding(horizontal = 12.dp, vertical = 7.dp)
         ) {
             Column(
-                modifier = Modifier.wrapContentWidth(), // 💥 Пузырь плотно облегает контент
+                modifier = Modifier.wrapContentWidth(), // Пузырь плотно облегает контент
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (isGroup && !isOutgoing && isFirstInGroup) {
@@ -256,7 +256,7 @@ fun GhostMessageBubble(
                             Text(
                                 text = if (isEncrypted) "🔒 ${message.text}" else message.text,
                                 color = if (isEncrypted) GhostSecureGreen else Color.White,
-                                // 💥 Читаемый размер шрифта Telegram:
+                                // Читаемый размер шрифта Telegram:
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Normal,
                                 lineHeight = 21.sp
@@ -326,14 +326,14 @@ fun MessageTimeAndStatus(
     val timeString = TimeFormatter.formatTime(message.date)
 
     if (timeString.isNotBlank() || message.isOutgoing) {
-        // 💥 Делаем цвет времени мягким и приглушенным (как в Telegram!)
+        // Делаем цвет времени мягким и приглушенным (как в Telegram!)
         val mutedColor = textColor.copy(alpha = 0.6f)
 
         Row(
             modifier = modifier,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 💥 ВАРИАНТ А: Полное слово "изменено" (как в Telegram Desktop на твоем скрине)
+            // ВАРИАНТ А: Полное слово "изменено" (как в Telegram Desktop на твоем скрине)
             if (message.isEdited) {
                 Text(
                     text = "изменено",
@@ -367,7 +367,7 @@ fun MessageTimeAndStatus(
                         imageVector = if (message.isRead) androidx.compose.material.icons.Icons.Default.DoneAll else androidx.compose.material.icons.Icons.Default.Done,
                         contentDescription = null,
                         tint = if (message.isRead) Color(0xFF4FC3F7) else iconColor.copy(alpha = 0.65f),
-                        modifier = Modifier.size(12.dp) // 💥 12dp сидит идеально по высоте с 11.sp шрифтом!
+                        modifier = Modifier.size(12.dp) // 12dp сидит идеально по высоте с 11.sp шрифтом!
                     )
                 }
             }
@@ -393,12 +393,12 @@ private fun ChatMessageLayout(
 
         val spacing = 7.dp.roundToPx()
 
-        // 💥 Проверяем: это одна строка? (Высота 1 строки <= 24dp)
+        // Проверяем: это одна строка? (Высота 1 строки <= 24dp)
         val isSingleLine = textPlaceable.height <= 28.dp.roundToPx()
         val fitsOnSingleLine = isSingleLine && (textPlaceable.width + spacing + timePlaceable.width <= constraints.maxWidth)
 
         if (fitsOnSingleLine) {
-            // 💥 ОДНА СТРОКА: Высота пузыря СТРОГО равна высоте текста! Никаких раздуваний!
+            // ОДНА СТРОКА: Высота пузыря СТРОГО равна высоте текста! Никаких раздуваний!
             val totalWidth = textPlaceable.width + spacing + timePlaceable.width
             val totalHeight = textPlaceable.height
 
@@ -412,7 +412,7 @@ private fun ChatMessageLayout(
                 timePlaceable.placeRelative(textPlaceable.width + spacing, timeY)
             }
         } else {
-            // 💥 МНОГОСТРОЧНЫЙ ТЕКСТ: Время под текстом справа
+            // МНОГОСТРОЧНЫЙ ТЕКСТ: Время под текстом справа
             val totalWidth = maxOf(textPlaceable.width, timePlaceable.width)
             val totalHeight = textPlaceable.height + timePlaceable.height + 2.dp.roundToPx()
 

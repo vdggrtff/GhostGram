@@ -37,7 +37,7 @@ fun MainLayout() {
     val currentSession by sessionManager.currentSession.collectAsState()
 
     LaunchedEffect(Unit) {
-        // 💥 Грузим аккаунты с диска!
+        // Грузим аккаунты с диска!
         sessionManager.loadSavedAccounts()
     }
 

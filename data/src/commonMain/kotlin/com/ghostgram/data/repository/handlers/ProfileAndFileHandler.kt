@@ -21,12 +21,12 @@ class ProfileAndFileHandler(
     private val tdlibClient: TelegramFlowClient,
     private val messageDao: MessageDao,
     private val repoScope: CoroutineScope,
-    private val tracker: DownloadTracker // 💥 Наш трекер
+    private val tracker: DownloadTracker // Наш трекер
 ) : TdlibUpdateHandler {
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
 
-        // 💥 1. ПЕРЕХВАТ ТВОЕГО ПРОФИЛЯ
+        // 1. ПЕРЕХВАТ ТВОЕГО ПРОФИЛЯ
         val extra = jsonObject["@extra"]?.jsonPrimitive?.content
         if (extra == "get_me_avatar" && type == "user") {
             val firstName = jsonObject["first_name"]?.jsonPrimitive?.content ?: "Ghost"
@@ -53,7 +53,7 @@ class ProfileAndFileHandler(
             return true
         }
 
-        // 💥 2. ФАЙЛ СКАЧАЛСЯ
+        // 2. ФАЙЛ СКАЧАЛСЯ
         if (type == "updateFile") {
             val fileObj = jsonObject["file"]?.jsonObject ?: return true
             val fileId = fileObj["id"]?.jsonPrimitive?.intOrNull ?: return true
@@ -79,13 +79,13 @@ class ProfileAndFileHandler(
                 // В) Это фотка в сообщении?
                 tracker.messagePhotos.remove(fileId)?.let { messageId ->
                     repoScope.launch {
-                        messageDao.updateMessagePhoto(messageId, path) // 💥 Обновляем в SQLite!
+                        messageDao.updateMessagePhoto(messageId, path) // Обновляем в SQLite!
                     }
                 }
 
                 tracker.messageFiles.remove(fileId)?.let { messageId ->
                     repoScope.launch {
-                        messageDao.updateMessageFileName(messageId, path) // 💥 Обновляем в SQLite!
+                        messageDao.updateMessageFileName(messageId, path) // Обновляем в SQLite!
                     }
                 }
                 tracker.stickerThumbnails.remove(fileId)?.let { stickerFileId ->

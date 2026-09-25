@@ -110,7 +110,7 @@ class SettingsViewModel(
             sessionManager.addNewAccount()
             onNavigateToAuth()
         } else {
-            // 💥 Если остались другие аккаунты - выкидываем юзера на список чатов нового активного профиля!
+            // Если остались другие аккаунты - выкидываем юзера на список чатов нового активного профиля!
             onNavigateToChatList()
         }
     }

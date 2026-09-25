@@ -22,7 +22,7 @@ actual class GhostAudioPlayer {
                 start()
                 setOnCompletionListener {
                     stop()
-                    onFinished() // 💥 Когда доиграло, возвращаем иконку ▶
+                    onFinished() // Когда доиграло, возвращаем иконку ▶
                 }
             }
             println("🔊 [AUDIO-ANDROID] Играет звук: $filePath")

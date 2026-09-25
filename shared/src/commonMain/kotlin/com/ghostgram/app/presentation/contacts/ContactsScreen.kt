@@ -92,7 +92,7 @@ fun ContactsScreen(
             ) {
                 // Итерируемся по буквам алфавита ('А', 'Б', 'В'...)
                 state.groupedContacts.forEach { (letter, contactsInGroup) ->
-                    // 💥 Заголовок секции (Буква алфавита)
+                    // Заголовок секции (Буква алфавита)
                     item(key = "header_$letter") {
                         Text(
                             text = letter.toString(),
@@ -119,7 +119,7 @@ fun ContactsScreen(
     }
 }
 
-// 💥 Компонент строки контакта
+// Компонент строки контакта
 @Composable
 fun GhostContactItem(
     contact: Contact,

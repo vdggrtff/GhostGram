@@ -50,7 +50,7 @@ class SessionManager(
                     val sessions = savedIds.map { sessionFactory(it) }
                     _accounts.value = sessions
 
-                    // 💥 ИЩЕМ ТОТ АККАУНТ, НА КОТОРОМ МЫ БЫЛИ В ПРОШЛЫЙ РАЗ
+                    // ИЩЕМ ТОТ АККАУНТ, НА КОТОРОМ МЫ БЫЛИ В ПРОШЛЫЙ РАЗ
                     _currentSession.value = sessions.find { it.accountId == currentId } ?: sessions.firstOrNull()
                     println("💾 Загружены аккаунты. Активный: ${_currentSession.value?.accountId}")
                     return
@@ -79,7 +79,7 @@ class SessionManager(
 
         _accounts.value = _accounts.value + newSession
         _currentSession.value = newSession
-        saveAccountsToDisk() // 💥 Сохраняем после добавления
+        saveAccountsToDisk() // Сохраняем после добавления
     }
 
     fun removeCurrentAccount() {
@@ -88,14 +88,14 @@ class SessionManager(
 
         _accounts.value = remaining
         _currentSession.value = remaining.firstOrNull()
-        saveAccountsToDisk() // 💥 Сохраняем после удаления
+        saveAccountsToDisk() // Сохраняем после удаления
     }
 
     fun switchAccount(accountId: String) {
         val session = _accounts.value.find { it.accountId == accountId }
         if (session != null) {
             _currentSession.value = session
-            // 💥 ОБЯЗАТЕЛЬНО СОХРАНЯЕМ ВЫБОР НА ДИСК!
+            // ОБЯЗАТЕЛЬНО СОХРАНЯЕМ ВЫБОР НА ДИСК!
             saveAccountsToDisk()
             println("🔄 Переключились на: $accountId")
         }

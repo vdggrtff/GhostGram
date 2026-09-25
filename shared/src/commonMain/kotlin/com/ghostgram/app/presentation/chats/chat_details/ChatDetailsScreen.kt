@@ -60,7 +60,7 @@ sealed class MessageListItem {
     data class Album(val messages: List<Message>) : MessageListItem()
 }
 
-// 💥 Тот самый Route
+// Тот самый Route
 @Composable
 fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
@@ -76,7 +76,7 @@ fun ChatDetailsRoute(
 }
 
 
-// 💥 Тупой (Dumb) Screen
+// Тупой (Dumb) Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailsScreen(
@@ -88,7 +88,7 @@ fun ChatDetailsScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    // 💥 Кнопка "Вниз" видна, если мы отскроллили наверх больше чем на 3 сообщения
+    // Кнопка "Вниз" видна, если мы отскроллили наверх больше чем на 3 сообщения
     val showScrollToBottom by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
     }
@@ -103,7 +103,7 @@ fun ChatDetailsScreen(
         }
     }
     val fileLauncher = rememberFilePickerLauncher(
-        type = PickerType.ImageAndVideo, // 💥 ТЕПЕРЬ МОЖНО И ФОТО, И ВИДЕО!
+        type = PickerType.ImageAndVideo, // ТЕПЕРЬ МОЖНО И ФОТО, И ВИДЕО!
         mode = PickerMode.Multiple()
     ) { files ->
         if (!files.isNullOrEmpty()) {
@@ -112,7 +112,7 @@ fun ChatDetailsScreen(
                     val bytes = file.readBytes()
                     // Достаем расширение из имени файла (например, "video.mp4" -> "mp4")
                     val ext = file.name.substringAfterLast('.', "jpg")
-                    MediaItem(bytes, ext) // 💥 Наш новый дата-класс
+                    MediaItem(bytes, ext) // Наш новый дата-класс
                 }
                 onIntent(ChatDetailsIntent.OnMediaSelected(mediaList))
             }
@@ -125,7 +125,7 @@ fun ChatDetailsScreen(
     val clipboardManager = LocalClipboardManager.current
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
 
-    // 💥 УМНЫЙ СКРОЛЛ: если есть непрочитанные — скроллим к началу непрочитанных, если нет — в самый низ (к 0)
+    // УМНЫЙ СКРОЛЛ: если есть непрочитанные — скроллим к началу непрочитанных, если нет — в самый низ (к 0)
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty() && listState.firstVisibleItemIndex <= 1) {
             val targetIndex =
@@ -136,7 +136,7 @@ fun ChatDetailsScreen(
 
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore && state.messages.isNotEmpty()) {
-            // 💥 БЕРЕМ .first(), ТАК КАК ОНО САМОЕ СТАРОЕ В БАЗЕ!
+            // БЕРЕМ .first(), ТАК КАК ОНО САМОЕ СТАРОЕ В БАЗЕ!
             val oldestMessage = state.messages.first()
             onIntent(ChatDetailsIntent.LoadMoreMessages(oldestMessage.id))
         }
@@ -146,13 +146,13 @@ fun ChatDetailsScreen(
         if (state.messages.isEmpty()) return@LaunchedEffect
 
         if (!isInitialScrollDone) {
-            // 💥 Только при ПЕРВОМ входе прыгаем к началу непрочитанных
+            // Только при ПЕРВОМ входе прыгаем к началу непрочитанных
             isInitialScrollDone = true
             val targetIndex =
                 if (state.unreadCount > 0) (state.unreadCount - 1).coerceAtLeast(0) else 0
             listState.scrollToItem(targetIndex)
         } else {
-            // 💥 А когда чат УЖЕ открыт и приходит НОВОЕ сообщение:
+            // А когда чат УЖЕ открыт и приходит НОВОЕ сообщение:
             // Мягко остаемся внизу (index 0), НИКАКИХ ПРЫЖКОВ НАВЕРХ!
             if (listState.firstVisibleItemIndex <= 1) {
                 listState.animateScrollToItem(0)
@@ -263,7 +263,7 @@ fun ChatDetailsScreen(
                 // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
                 val bottomNeighborKey = groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
 
-                // 💥 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
+                // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
                 // Первое сообщение человека в пачке (над ним рисуем цветное имя):
                 val isFirstInGroup = currentSenderKey != topNeighborKey
 
@@ -283,7 +283,7 @@ fun ChatDetailsScreen(
                 val isFirstInGroup = currentSender != topNeighbor    // Сверху чужое сообщение
                 val isLastInGroup = currentSender != bottomNeighbor  // Снизу чужое сообщение*/
 
-                // 💥 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
+                // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
                 val showDateHeader = if (index == groupedMessages.size - 1) {
                     true
                 } else {
@@ -291,7 +291,7 @@ fun ChatDetailsScreen(
                     !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
                 }
 
-                // 💥 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
+                // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
                 when (item) {
                     is MessageListItem.Single -> {
                         val repliedMsg = if (item.message.replyToMessageId != 0L) {
@@ -406,7 +406,7 @@ fun getSenderKey(listItem: MessageListItem): Any {
     }
     return when {
         msg.isOutgoing -> "MY_OUTGOING_MESSAGE" // Все свои группируем между собой
-        msg.senderId != 0L -> msg.senderId      // 💥 Чужих строго разделяем по их личному ID!
+        msg.senderId != 0L -> msg.senderId      // Чужих строго разделяем по их личному ID!
         else -> msg.id                          // Если ID еще 0 — считаем каждого отдельным автором (не склеиваем!)
     }
 }

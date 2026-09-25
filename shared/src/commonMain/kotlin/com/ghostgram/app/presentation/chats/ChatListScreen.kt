@@ -82,7 +82,7 @@ fun ChatListScreen(
             .statusBarsPadding()
             .background(GhostBackground)
     ) {
-        // 💥 1. КАСТОМНЫЙ TOP BAR ИЗ МАКЕТА
+        // 1. КАСТОМНЫЙ TOP BAR ИЗ МАКЕТА
         if (isSearchActive) {
             // РЕЖИМ ПОИСКА (Строка + Кнопка Назад)
             Row(
@@ -146,7 +146,7 @@ fun ChatListScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 💥 ИКОНКА ПОИСКА (Открывает строку!)
+                // ИКОНКА ПОИСКА (Открывает строку!)
                 IconButton(onClick = { isSearchActive = true }) {
                     Icon(Icons.Default.Search, contentDescription = "Поиск", tint = Color.White)
                 }
@@ -161,7 +161,7 @@ fun ChatListScreen(
             }
         }
 
-        // 💥 3. СПИСОК ЧАТОВ ОТ КРАЯ ДО КРАЯ
+        // 3. СПИСОК ЧАТОВ ОТ КРАЯ ДО КРАЯ
         if (state.isLoading && state.chats.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = GhostPrimary)
@@ -176,7 +176,7 @@ fun ChatListScreen(
                     bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 )
             ) {
-                // 💥 РАЗВИЛКА: ЕСЛИ ВВЕДЕН ТЕКСТ ПОИСКА
+                // РАЗВИЛКА: ЕСЛИ ВВЕДЕН ТЕКСТ ПОИСКА
                 if (state.searchQuery.isNotBlank()) {
 
                     // 1. ЛОКАЛЬНЫЕ ЧАТЫ (Мои чаты)
@@ -270,7 +270,7 @@ fun ChatListScreen(
                             )
                         }
 
-                        // 💥 ФИКС КРАША: Ключ = ChatID + MessageID (абсолютно уникальный!)
+                        // ФИКС КРАША: Ключ = ChatID + MessageID (абсолютно уникальный!)
                         items(
                             state.messageSearchResults,
                             key = { "msg_${it.id}_${it.lastMessage?.id}" }) { chat ->
@@ -290,7 +290,7 @@ fun ChatListScreen(
                         }
                     }
                 }
-                // 💥 ИНАЧЕ - ОБЫЧНЫЙ СПИСОК ТВОИХ ЧАТОВ
+                // ИНАЧЕ - ОБЫЧНЫЙ СПИСОК ТВОИХ ЧАТОВ
                 else {
                     items(state.chats, key = { it.id }) { chat ->
                         GhostChatListItem(

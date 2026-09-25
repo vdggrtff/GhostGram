@@ -41,7 +41,7 @@ fun VideoMessageContent(
     isOutgoing: Boolean
 ) {
     val thumbModel = message.photoPath?.let { if (it.startsWith("/")) "file://$it" else it }
-    // 💥 ПУТЬ К САМОМУ ВИДЕО (Который мы сохранили в fileName)
+    // ПУТЬ К САМОМУ ВИДЕО (Который мы сохранили в fileName)
     val videoPath = message.fileName
 
     Box(
@@ -70,7 +70,7 @@ fun VideoMessageContent(
         // Затемнение
         Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
 
-        // 💥 КНОПКА PLAY ИЛИ СПИННЕР ПО ЦЕНТРУ
+        // КНОПКА PLAY ИЛИ СПИННЕР ПО ЦЕНТРУ
         if (message.isSending) {
             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(44.dp), strokeWidth = 3.dp)
         } else {
@@ -82,7 +82,7 @@ fun VideoMessageContent(
             }
         }
 
-        // 💥 ХРОНОМЕТРАЖ В ВЕРХНЕМ ЛЕВОМ УГЛУ (КАК НА СКРИНЕ!)
+        // ХРОНОМЕТРАЖ В ВЕРХНЕМ ЛЕВОМ УГЛУ (КАК НА СКРИНЕ!)
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -99,7 +99,7 @@ fun VideoMessageContent(
             )
         }
 
-        // 💥 ВРЕМЯ И ГАЛОЧКА В ПРАВОМ НИЖНЕМ УГЛУ (КАК НА СКРИНЕ!)
+        // ВРЕМЯ И ГАЛОЧКА
         if (!hasText) {
             Box(
                 modifier = Modifier
