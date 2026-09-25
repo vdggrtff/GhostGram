@@ -50,7 +50,7 @@ class ContactsViewModel(
                 viewModelScope.launch {
                     val repo = sessionManager.currentSession.value?.contactRepository ?: return@launch
                     val chatId = repo.createPrivateChat(intent.userId)
-                    onNavigateToChat(chatId) // 💥 Мгновенно летим в диалог с этим человеком!
+                    onNavigateToChat(chatId) // Мгновенно летим в диалог с этим человеком!
                 }
             }
         }

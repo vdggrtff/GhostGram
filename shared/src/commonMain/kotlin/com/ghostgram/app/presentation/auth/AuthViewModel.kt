@@ -27,6 +27,8 @@ class AuthViewModel(
         // Подписываемся на обновления от Telegram ядра
 
         viewModelScope.launch {
+            val accountsCount = sessionManager.accounts.value.size
+            _state.update { it.copy(isFirstAccount = accountsCount <= 1) }
             sessionManager.currentSession.collect { session ->
                 if (session != null) {
                     listenToAuth(session.authRepository)

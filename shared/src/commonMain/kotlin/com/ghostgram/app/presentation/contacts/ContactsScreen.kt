@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -58,6 +59,7 @@ fun ContactsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .background(GhostBackground)
     ) {
         // Шапка с заголовком и тонким поиском
@@ -90,7 +92,7 @@ fun ContactsScreen(
             ) {
                 // Итерируемся по буквам алфавита ('А', 'Б', 'В'...)
                 state.groupedContacts.forEach { (letter, contactsInGroup) ->
-                    // 💥 Заголовок секции (Буква алфавита)
+                    // Заголовок секции (Буква алфавита)
                     item(key = "header_$letter") {
                         Text(
                             text = letter.toString(),
@@ -117,7 +119,7 @@ fun ContactsScreen(
     }
 }
 
-// 💥 Компонент строки контакта
+// Компонент строки контакта
 @Composable
 fun GhostContactItem(
     contact: Contact,

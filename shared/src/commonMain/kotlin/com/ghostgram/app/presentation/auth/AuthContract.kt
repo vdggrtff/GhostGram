@@ -8,7 +8,8 @@ data class AuthScreenState(
     val step: AuthStep = AuthStep.WaitPhoneNumber,
     val inputText: String = "", // Сюда юзер пишет номер, код или пароль
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isFirstAccount: Boolean = true
 )
 
 sealed interface AuthIntent {

@@ -12,7 +12,7 @@ class CryptoLayer(databasePath: String) {
 
     private val fallbackKey = ByteArray(32) { 42 }
 
-    // 💥 1. Наша личная пара ключей (в идеале потом сохраним в зашифрованный DataStore, пока держим в памяти)
+    // 1. Наша личная пара ключей (в идеале потом сохраним в зашифрованный DataStore, пока держим в памяти)
     val myKeyPair: Pair<ByteArray, ByteArray> = try {
         loadOrGenerateKeys(databasePath)
     } catch (e: Exception) {
@@ -23,7 +23,7 @@ class CryptoLayer(databasePath: String) {
     }
 
 
-    // 💥 2. Храним вычисленные AES-секреты для каждого чата: ChatID -> Секретный Ключ
+    // 2. Храним вычисленные AES-секреты для каждого чата: ChatID -> Секретный Ключ
     private val activeSecureChats = mutableMapOf<Long, ByteArray>()
 
     // Проверяем, есть ли у нас ключ с этим чатом
@@ -69,7 +69,7 @@ class CryptoLayer(databasePath: String) {
         }
     }
 
-    // 💥 4. Шифруем и расшифровываем с использованием УНИКАЛЬНОГО ключа чата
+    // 4. Шифруем и расшифровываем с использованием УНИКАЛЬНОГО ключа чата
     fun encryptAndHide(chatId: Long, text: String): String {
         val key = activeSecureChats[chatId] ?: return text // Если нет ключа - шлем как есть
         val rawBytes = text.encodeToByteArray()
@@ -94,7 +94,7 @@ class CryptoLayer(databasePath: String) {
         val encryptedBytes = cryptoEngine.encryptAES(sharedKey, rawBytes)
         val hiddenWords = WordCoder.encode(encryptedBytes)
 
-        // 💥 НАША ВИРУСНАЯ РЕКЛАМА ДЛЯ ОФИЦИАЛЬНОГО ТЕЛЕГРАМА:
+        // НАША ВИРУСНАЯ РЕКЛАМА ДЛЯ ОФИЦИАЛЬНОГО ТЕЛЕГРАМА:
         val promoFooter = """
             
             

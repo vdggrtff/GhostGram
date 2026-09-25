@@ -37,7 +37,7 @@ fun GhostSearchBar(
     BasicTextField(
         value = query,
         onValueChange = { newText ->
-            // 💥 ДИАГНОСТИЧЕСКИЙ ЛОГ №1 (Срабатывает ли клавиатура вообще)
+            // ДИАГНОСТИЧЕСКИЙ ЛОГ №1 (Срабатывает ли клавиатура вообще)
             println("⌨️ [1. UI SearchBar] Нажата клавиша: '$newText'")
             onQueryChange(newText)
         },

@@ -1,20 +1,18 @@
 package com.ghostgram.app.presentation.chats.chat_details
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,16 +28,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import coil3.compose.AsyncImage
+import com.ghostgram.app.presentation.components.bottom_sheet.StickerBottomSheet
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
+import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
+import com.ghostgram.app.presentation.components.dialog.FullScreenImageDialog
 import com.ghostgram.app.presentation.components.dialog.GhostAlertDialog
+import com.ghostgram.app.presentation.components.dialog.PendingMediaDialog
+import com.ghostgram.app.presentation.components.dialog.SelectedMessageForMenuDialog
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
@@ -47,6 +49,9 @@ import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
+import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.core.PickerMode
+import io.github.vinceglb.filekit.core.PickerType
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -55,7 +60,7 @@ sealed class MessageListItem {
     data class Album(val messages: List<Message>) : MessageListItem()
 }
 
-// 💥 Тот самый Route
+// Тот самый Route
 @Composable
 fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
@@ -71,7 +76,7 @@ fun ChatDetailsRoute(
 }
 
 
-// 💥 Тупой (Dumb) Screen
+// Тупой (Dumb) Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailsScreen(
@@ -83,7 +88,7 @@ fun ChatDetailsScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    // 💥 Кнопка "Вниз" видна, если мы отскроллили наверх больше чем на 3 сообщения
+    // Кнопка "Вниз" видна, если мы отскроллили наверх больше чем на 3 сообщения
     val showScrollToBottom by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
     }
@@ -97,10 +102,30 @@ fun ChatDetailsScreen(
             totalItems > 0 && lastVisibleItem >= totalItems - 5
         }
     }
+    val fileLauncher = rememberFilePickerLauncher(
+        type = PickerType.ImageAndVideo, // ТЕПЕРЬ МОЖНО И ФОТО, И ВИДЕО!
+        mode = PickerMode.Multiple()
+    ) { files ->
+        if (!files.isNullOrEmpty()) {
+            coroutineScope.launch {
+                val mediaList = files.map { file ->
+                    val bytes = file.readBytes()
+                    // Достаем расширение из имени файла (например, "video.mp4" -> "mp4")
+                    val ext = file.name.substringAfterLast('.', "jpg")
+                    MediaItem(bytes, ext) // Наш новый дата-класс
+                }
+                onIntent(ChatDetailsIntent.OnMediaSelected(mediaList))
+            }
+        }
+    }
 
     var fullScreenImage by remember { mutableStateOf<String?>(null) }
 
-    // 💥 УМНЫЙ СКРОЛЛ: если есть непрочитанные — скроллим к началу непрочитанных, если нет — в самый низ (к 0)
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+
+    // УМНЫЙ СКРОЛЛ: если есть непрочитанные — скроллим к началу непрочитанных, если нет — в самый низ (к 0)
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty() && listState.firstVisibleItemIndex <= 1) {
             val targetIndex =
@@ -111,7 +136,7 @@ fun ChatDetailsScreen(
 
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore && state.messages.isNotEmpty()) {
-            // 💥 БЕРЕМ .first(), ТАК КАК ОНО САМОЕ СТАРОЕ В БАЗЕ!
+            // БЕРЕМ .first(), ТАК КАК ОНО САМОЕ СТАРОЕ В БАЗЕ!
             val oldestMessage = state.messages.first()
             onIntent(ChatDetailsIntent.LoadMoreMessages(oldestMessage.id))
         }
@@ -121,13 +146,13 @@ fun ChatDetailsScreen(
         if (state.messages.isEmpty()) return@LaunchedEffect
 
         if (!isInitialScrollDone) {
-            // 💥 Только при ПЕРВОМ входе прыгаем к началу непрочитанных
+            // Только при ПЕРВОМ входе прыгаем к началу непрочитанных
             isInitialScrollDone = true
             val targetIndex =
                 if (state.unreadCount > 0) (state.unreadCount - 1).coerceAtLeast(0) else 0
             listState.scrollToItem(targetIndex)
         } else {
-            // 💥 А когда чат УЖЕ открыт и приходит НОВОЕ сообщение:
+            // А когда чат УЖЕ открыт и приходит НОВОЕ сообщение:
             // Мягко остаемся внизу (index 0), НИКАКИХ ПРЫЖКОВ НАВЕРХ!
             if (listState.firstVisibleItemIndex <= 1) {
                 listState.animateScrollToItem(0)
@@ -173,6 +198,9 @@ fun ChatDetailsScreen(
     }
 
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
         containerColor = GhostBackground,
         topBar = {
             GhostTopBar(
@@ -180,6 +208,7 @@ fun ChatDetailsScreen(
                 chatTitle = state.chatTitle,
                 isGhostMode = state.isGhostMode,
                 isCryptoMode = state.isCryptoMode,
+                isGroup = state.isGroup,
                 onIntent = onIntent,
                 onBackClick = onBackClick,
             )
@@ -192,6 +221,9 @@ fun ChatDetailsScreen(
                 isRepliesLoading = state.isRepliesLoading,
                 inputText = state.inputText,
                 onIntent = onIntent,
+                fileLauncher = fileLauncher,
+                replyingToMessage = state.replyingToMessage,
+                editingMessage = state.editingMessage
             )
         },
         floatingActionButton = {
@@ -204,8 +236,8 @@ fun ChatDetailsScreen(
         LazyColumn(
             state = listState,
             reverseLayout = true,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()), /*.padding(innerPadding)*/
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = innerPadding.calculateBottomPadding() + 28.dp  /*8.dp*/),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Итерируемся по альбомам и одиночным сообщениям
@@ -219,7 +251,39 @@ fun ChatDetailsScreen(
                 val item = groupedMessages[index]
                 val itemDate = getDateFromItem(item)
 
-                // 💥 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
+                /*val currentSender = when (item) {
+                    is MessageListItem.Single -> item.message.isOutgoing to item.message.senderName
+                    is MessageListItem.Album -> item.messages.first().isOutgoing to item.messages.first().senderName
+                }*/
+                val currentSenderKey = getSenderKey(item)
+
+                // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
+                val topNeighborKey = groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
+
+                // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
+                val bottomNeighborKey = groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
+
+                // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
+                // Первое сообщение человека в пачке (над ним рисуем цветное имя):
+                val isFirstInGroup = currentSenderKey != topNeighborKey
+
+                // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
+                val isLastInGroup = currentSenderKey != bottomNeighborKey
+
+                /*val topNeighbor = groupedMessages.getOrNull(index + 1)?.let {
+                    if (it is MessageListItem.Single) it.message.isOutgoing to it.message.senderName
+                    else (it as MessageListItem.Album).messages.first().isOutgoing to it.messages.first().senderName
+                }
+
+                val bottomNeighbor = groupedMessages.getOrNull(index - 1)?.let {
+                    if (it is MessageListItem.Single) it.message.isOutgoing to it.message.senderName
+                    else (it as MessageListItem.Album).messages.first().isOutgoing to it.messages.first().senderName
+                }
+
+                val isFirstInGroup = currentSender != topNeighbor    // Сверху чужое сообщение
+                val isLastInGroup = currentSender != bottomNeighbor  // Снизу чужое сообщение*/
+
+                // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
                 val showDateHeader = if (index == groupedMessages.size - 1) {
                     true
                 } else {
@@ -227,25 +291,51 @@ fun ChatDetailsScreen(
                     !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
                 }
 
-                // 💥 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
+                // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
                 when (item) {
                     is MessageListItem.Single -> {
-                        GhostMessageBubble(
-                            message = item.message,
-                            chatAvatarPath = state.avatarPath,
-                            myAvatarPath = state.myAvatarPath,
-                            chatTitle = state.chatTitle,
-                            onMediaClick = { fullScreenImage = it }
-                        )
+                        val repliedMsg = if (item.message.replyToMessageId != 0L) {
+                            state.messages.find { it.id == item.message.replyToMessageId }
+                        } else null
+                        SwipeToReplyWrapper(
+                            onSwipe = { onIntent(OnSwipeToReply(item.message)) }
+                        ) {
+                            GhostMessageBubble(
+                                message = item.message,
+                                chatAvatarPath = state.avatarPath,
+                                myAvatarPath = state.myAvatarPath,
+                                chatTitle = state.chatTitle,
+                                isGroup = state.isGroup,
+                                isFirstInGroup = isFirstInGroup, // 👈
+                                isLastInGroup = isLastInGroup,   // 👈
+                                onMediaClick = { fullScreenImage = it },
+                                onLongClick = { selectedMessageForMenu = item.message },
+                                replyMessage = repliedMsg,
+                            )
+                        }
                     }
+
                     is MessageListItem.Album -> {
-                        GhostAlbumBubble(
-                            albumMessages = item.messages,
-                            chatAvatarPath = state.avatarPath,
-                            myAvatarPath = state.myAvatarPath,
-                            chatTitle = state.chatTitle,
-                            onMediaClick = { fullScreenImage = it }
-                        )
+                        val baseMsg = item.messages.first()
+                        val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
+                            state.messages.find { it.id == baseMsg.replyToMessageId }
+                        } else null
+                        SwipeToReplyWrapper(
+                            onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
+                        ) {
+                            GhostAlbumBubble(
+                                albumMessages = item.messages,
+                                chatAvatarPath = state.avatarPath,
+                                myAvatarPath = state.myAvatarPath,
+                                chatTitle = state.chatTitle,
+                                onMediaClick = { fullScreenImage = it },
+                                isGroup = state.isGroup,
+                                isLastInGroup = isLastInGroup,
+                                isFirstInGroup = isFirstInGroup,
+                                replyMessage = repliedMsg,
+                                onLongClick = { selectedMessageForMenu = baseMsg }
+                            )
+                        }
                     }
                 }
 
@@ -253,10 +343,18 @@ fun ChatDetailsScreen(
                 if (showDateHeader) {
                     val dateText = TimeFormatter.formatDateHeader(itemDate)
                     if (dateText.isNotBlank()) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = dateText, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(GhostCard.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 4.dp)
+                                text = dateText,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(GhostCard.copy(alpha = 0.6f))
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
                             )
                         }
                     }
@@ -271,25 +369,44 @@ fun ChatDetailsScreen(
         }
     }
     if (fullScreenImage != null) {
-        Dialog(
-            onDismissRequest = { fullScreenImage = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.9f))
-                    .clickable { fullScreenImage = null },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(model = fullScreenImage, contentDescription = "Full Screen", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-                IconButton(
-                    onClick = { fullScreenImage = null },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                ) {
-                    Text("✖", color = Color.White)
-                }
-            }
-        }
+        FullScreenImageDialog(
+            imageUrl = fullScreenImage!!,
+            onDismiss = { fullScreenImage = null }
+        )
+    }
+    if (state.pendingMedia.isNotEmpty()) {
+        PendingMediaDialog(
+            pendingMedia = state.pendingMedia,
+            sendAsDocument = state.sendAsDocument,
+            pendingCaption = state.pendingCaption,
+            onIntent = onIntent
+        )
+    }
+    if (selectedMessageForMenu != null) {
+        SelectedMessageForMenuDialog(
+            msg = selectedMessageForMenu!!,
+            clipboardManager = clipboardManager,
+            onIntent = onIntent,
+            onDismiss = { selectedMessageForMenu = null }
+        )
+    }
+    if (state.isStickersOpen) {
+        StickerBottomSheet(
+            stickers = state.recentStickers,
+            onDismiss = { onIntent(OnToggleStickers) },
+            onIntent = onIntent
+        )
+    }
+}
+
+fun getSenderKey(listItem: MessageListItem): Any {
+    val msg = when (listItem) {
+        is MessageListItem.Single -> listItem.message
+        is MessageListItem.Album -> listItem.messages.first()
+    }
+    return when {
+        msg.isOutgoing -> "MY_OUTGOING_MESSAGE" // Все свои группируем между собой
+        msg.senderId != 0L -> msg.senderId      // Чужих строго разделяем по их личному ID!
+        else -> msg.id                          // Если ID еще 0 — считаем каждого отдельным автором (не склеиваем!)
     }
 }

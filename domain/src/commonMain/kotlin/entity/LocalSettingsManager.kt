@@ -10,13 +10,13 @@ class LocalSettingsManager(
 ) {
     private val settingsFile = "${appStorage.basePath}/ghostgram_settings.txt".toPath()
 
-    // 💥 Сохраняем ключ
+    // Сохраняем ключ
     fun saveGeminiKey(key: String) {
         val fs = FileSystem.SYSTEM
         fs.write(settingsFile) { writeUtf8(key) }
     }
 
-    // 💥 Читаем ключ (если файла нет - вернет пустую строку)
+    // Читаем ключ (если файла нет - вернет пустую строку)
     fun getGeminiKey(): String {
         val fs = FileSystem.SYSTEM
         if (!fs.exists(settingsFile)) return ""

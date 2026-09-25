@@ -27,9 +27,9 @@ class ChatUpdateHandler(
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         when (type) {
 
-            // 💥 1. ЗАГРУЗКА ИЛИ ОБНОВЛЕНИЕ ЧАТА
-            "updateNewChat" -> {
-                val chatObj = jsonObject["chat"]?.jsonObject ?: return true
+            // 1. ЗАГРУЗКА ИЛИ ОБНОВЛЕНИЕ ЧАТА
+            "updateNewChat", "chat" -> {
+                val chatObj = if (type == "chat") jsonObject else jsonObject["chat"]?.jsonObject ?: return true
                 val id = chatObj["id"]?.jsonPrimitive?.longOrNull ?: return true
                 val title = chatObj["title"]?.jsonPrimitive?.content ?: "Без названия"
                 val unreadCount = chatObj["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
@@ -37,34 +37,76 @@ class ChatUpdateHandler(
                 val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
                 val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
                 val lastReadOutbox = chatObj["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
-                lastReadOutboxMap[id] = lastReadOutbox
+                if (lastReadOutbox != 0L) lastReadOutboxMap[id] = lastReadOutbox
                 val photoObj = chatObj["photo"]?.jsonObject
                 val smallPhoto = photoObj?.get("small")?.jsonObject
                 val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
                 val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
                 val positions = chatObj["positions"]?.jsonArray
                 val isJoined = positions != null && positions.isNotEmpty()
+                val typeObj = chatObj["type"]?.jsonObject
+                val chatTypeStr = typeObj?.get("@type")?.jsonPrimitive?.content ?: ""
+                val isGroup = chatTypeStr in listOf("chatTypeBasicGroup", "chatTypeSupergroup", "chatTypeChannel")
 
                 // Если фото нет на диске, но есть ID — качаем!
                 if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.chatAvatars[fileId] = id // 💥 Записали в трекер!
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
+                    tracker.chatAvatars[fileId] = id
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
                 }
 
                 val lastMessage = if (previewText != null) {
                    Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
                 } else null
 
-                val chat = Chat(
-                    id = id,
-                    title = title,
-                    unreadCount = unreadCount,
-                    lastMessage = lastMessage,
-                    avatarPath = if (!avatarPath.isNullOrBlank()) avatarPath else null,
-                    isJoined = isJoined
-                )
+                //chatsMap.update { it + (id to chat) }
+                chatsMap.update { current ->
+                    val existing = current[id]
+                    val path = if (!avatarPath.isNullOrBlank()) avatarPath else existing?.avatarPath
+                    val lastMessage = if (previewText != null) {
+                        Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
+                    } else existing?.lastMessage
 
-                chatsMap.update { it + (id to chat) }
+                    if (existing != null) {
+                        current + (id to existing.copy(
+                            title = title,
+                            unreadCount = unreadCount,
+                            lastMessage = lastMessage,
+                            avatarPath = path,
+                            isJoined = isJoined,
+                            isGroup = isGroup
+                        ))
+                    } else {
+                        current + (id to Chat(
+                            id = id,
+                            title = title,
+                            unreadCount = unreadCount,
+                            lastMessage = lastMessage,
+                            avatarPath = path,
+                            isJoined = isJoined,
+                            isGroup = isGroup
+                        ))
+                    }
+                }
+                return true
+            }
+            "updateChatPhoto" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val photoObj = jsonObject["photo"]?.jsonObject
+                val smallPhoto = photoObj?.get("small")?.jsonObject
+                val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
+                val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.chatAvatars[fileId] = chatId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                if (!avatarPath.isNullOrBlank()) {
+                    chatsMap.update { current ->
+                        val chat = current[chatId]
+                        if (chat != null) current + (chatId to chat.copy(avatarPath = avatarPath)) else current
+                    }
+                }
                 return true
             }
             "updateChatPosition" -> {
@@ -106,7 +148,7 @@ class ChatUpdateHandler(
                 return true
             }
 
-            // 💥 2. МЫ ПРОЧИТАЛИ СООБЩЕНИЯ (Сбрасываем счетчик)
+            // 2. МЫ ПРОЧИТАЛИ СООБЩЕНИЯ (Сбрасываем счетчик)
             "updateChatReadInbox" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val unreadCount = jsonObject["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
@@ -118,7 +160,7 @@ class ChatUpdateHandler(
                 return true
             }
 
-            // 💥 3. СОБЕСЕДНИК ПРОЧИТАЛ НАШИ СООБЩЕНИЯ (Ставим ✓✓)
+            // 3. СОБЕСЕДНИК ПРОЧИТАЛ НАШИ СООБЩЕНИЯ (Ставим ✓✓)
             "updateChatReadOutbox" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val lastReadId = jsonObject["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: return true

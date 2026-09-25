@@ -9,12 +9,14 @@ import com.ghostgram.data.repository.handlers.DownloadTracker
 import com.ghostgram.data.repository.handlers.MessageUpdateHandler
 import com.ghostgram.data.repository.handlers.ProfileAndFileHandler
 import com.ghostgram.data.repository.handlers.SearchUpdateHandler
+import com.ghostgram.data.repository.handlers.StickerUpdateHandler
 import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
 import entity.Chat
 import entity.Message
 import entity.MessageMediaType
 import entity.MyProfile
 import entity.PublicChat
+import entity.TelegramSticker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -29,9 +31,18 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.serializer
+import okio.FileSystem
+import okio.Path
+import okio.SYSTEM
 import repository.ChatRepository
+import kotlin.time.Clock
+import kotlin.time.Clock.System
 
 class ChatRepositoryImpl(
     private val tdlibClient: TelegramFlowClient,
@@ -58,11 +69,14 @@ class ChatRepositoryImpl(
 
     private val _messageSearchResults = MutableStateFlow<List<Chat>>(emptyList())
 
+    private val _recentStickers = MutableStateFlow<List<TelegramSticker>>(emptyList())
+
     private val handlers: List<TdlibUpdateHandler> = listOf(
         SearchUpdateHandler(_searchResults, _messageSearchResults, _chatsMap),
         MessageUpdateHandler(messageDao, repoScope, tdlibClient, lastReadOutboxMap, downloadTracker, cryptoLayer),
         ChatUpdateHandler(_chatsMap, lastReadOutboxMap, tdlibClient, messageDao, repoScope, downloadTracker),
         ProfileAndFileHandler(_myProfile, _chatsMap, tdlibClient, messageDao, repoScope, downloadTracker),
+        StickerUpdateHandler(_recentStickers, tdlibClient, downloadTracker),
     )
 
 
@@ -73,7 +87,7 @@ class ChatRepositoryImpl(
                     val jsonObject = jsonParser.parseToJsonElement(rawJson).jsonObject
                     val type = jsonObject["@type"]?.jsonPrimitive?.content ?: return@onEach
 
-                    // 💥 Просто перебираем хэндлеры
+                    // Просто перебираем хэндлеры
                     for (handler in handlers) {
                         if (handler.handle(type, jsonObject)) break
                     }
@@ -88,8 +102,8 @@ class ChatRepositoryImpl(
 
         return _chatsMap.map { map ->
             map.values
-                .filter { it.order > 0L } // 💥 ВЫКИДЫВАЕМ ВЕСЬ МУСОР ИЗ КЭША!
-                .sortedByDescending { it.order } // 💥 Сортируем (свежие чаты сверху!)
+                .filter { it.order > 0L } // ВЫКИДЫВАЕМ ВЕСЬ МУСОР ИЗ КЭША!
+                .sortedByDescending { it.order } // Сортируем (свежие чаты сверху!)
         }
     }
 
@@ -134,7 +148,7 @@ class ChatRepositoryImpl(
             }
         }
 
-        // 💥 3. ЕДИНЫЙ ПОТОК ИЗ ROOM С АВТОМАТИЧЕСКОЙ ПРОВЕРКОЙ GHOST MODE
+        // 3. ЕДИНЫЙ ПОТОК ИЗ ROOM С АВТОМАТИЧЕСКОЙ ПРОВЕРКОЙ GHOST MODE
         return messageDao.observeMessages(chatId)
             .onEach { entities ->
                 // Как только из базы прилетают сообщения — проверяем Ghost Mode и шлем прочтение
@@ -159,7 +173,12 @@ class ChatRepositoryImpl(
                         fileExtraInfo = entity.fileExtraInfo,
                         isRead = entity.isRead,
                         date = entity.date,
-                        mediaAlbumId = entity.mediaAlbumId
+                        mediaAlbumId = entity.mediaAlbumId,
+                        isSending = entity.isSending,
+                        replyToMessageId = entity.replyToMessageId,
+                        isEdited = entity.isEdited,
+                        senderId = entity.senderId,
+                        senderAvatarPath = entity.senderAvatarPath
                     )
                 }
             }
@@ -171,7 +190,7 @@ class ChatRepositoryImpl(
     }
 
     override suspend fun getChatHistory(chatId: Long, limit: Int): String {
-        // 💥 ТЕПЕРЬ МЫ БЕРЕМ ИСТОРИЮ ПРЯМО ИЗ БАЗЫ ДАННЫХ ROOM!
+        // ТЕПЕРЬ МЫ БЕРЕМ ИСТОРИЮ ПРЯМО ИЗ БАЗЫ ДАННЫХ ROOM!
         val entities = messageDao.observeMessages(chatId).firstOrNull() ?: emptyList()
 
         if (entities.isEmpty()) return ""
@@ -191,7 +210,7 @@ class ChatRepositoryImpl(
     }
 
     override fun markChatAsRead(chatId: Long, messageIds: List<Long>) {
-        // 💥 ЕСЛИ РЕЖИМ ПРИЗРАКА ВКЛЮЧЕН — МЫ БЛОКИРУЕМ ПРОЧТЕНИЕ!
+        // ЕСЛИ РЕЖИМ ПРИЗРАКА ВКЛЮЧЕН — МЫ БЛОКИРУЕМ ПРОЧТЕНИЕ!
         if (_isGhostModeEnabled.value) {
             println("👻 Ghost Mode активен: прочтение заблокировано!")
             return
@@ -214,9 +233,9 @@ class ChatRepositoryImpl(
         println("👁 Ghost Mode выключен: отправлен статус прочтения для $chatId")
     }
 
-    override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean) {
+    override suspend fun sendMessage(chatId: Long, text: String, useCrypto: Boolean, replyToMessageId: Long) {
         val finalText = if (useCrypto) {
-            // 💥 ПРОВЕРЯЕМ: если рукопожатие еще не завершено — шлем запрос ключей вместо мусора!
+            // ПРОВЕРЯЕМ: если рукопожатие еще не завершено — шлем запрос ключей вместо мусора!
             if (!cryptoLayer.isChatSecure(chatId)) {
                 println("⚠️ E2EE: Ключ для чата $chatId еще не готов! Сначала завершите рукопожатие.")
                 text // Шлем как обычный текст, либо блокируем
@@ -228,8 +247,8 @@ class ChatRepositoryImpl(
         }
 
 
-        // 💥 ДОБАВЛЯЕМ link_preview_options, чтобы убить карточку GitHub!
-        val request = """
+        // ДОБАВЛЯЕМ link_preview_options, чтобы убить карточку GitHub!
+        /*val request = """
             {
                 "@type": "sendMessage",
                 "chat_id": $chatId,
@@ -245,15 +264,40 @@ class ChatRepositoryImpl(
                     }
                 }
             }
-        """.trimIndent()
-        tdlibClient.send(request)
+        """.trimIndent()*/
+        val request = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+
+            // ЕСЛИ ЭТО ОТВЕТ — ДОБАВЛЯЕМ БЛОК REPLY_TO
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                put("@type", "inputMessageText")
+                put("text", buildJsonObject {
+                    put("@type", "formattedText")
+                    put("text", finalText)
+                })
+                put("link_preview_options", buildJsonObject {
+                    put("@type", "linkPreviewOptions")
+                    put("is_disabled", true)
+                })
+            })
+        }
+        tdlibClient.send(request.toString())
+        //tdlibClient.send(request)
     }
 
     override suspend fun requestKeyExchange(chatId: Long) {
         // Достаем наш публичный ключ в виде строки
         val myPubKeyHex = cryptoLayer.myKeyPair.second.toHex()
 
-        // 💥 Отправляем спец-сообщение (Префикс 👻🔑)
+        // Отправляем спец-сообщение (Префикс 👻🔑)
         val text = "👻🔑 $myPubKeyHex"
 
         val request = """
@@ -271,7 +315,7 @@ class ChatRepositoryImpl(
     }
 
     override fun observeMyProfile(): Flow<MyProfile> {
-        // 💥 Запрашиваем профиль КАЖДЫЙ РАЗ, когда UI на него подписывается!
+        // Запрашиваем профиль КАЖДЫЙ РАЗ, когда UI на него подписывается!
         // Теперь никаких 404, потому что в настройки мы заходим уже залогиненными.
         tdlibClient.send("""{"@type": "getMe", "@extra": "get_me_avatar"}""")
         return _myProfile.asStateFlow()
@@ -287,15 +331,7 @@ class ChatRepositoryImpl(
 
         println("📡 [3. Repo -> TDLib] Шлем команду searchPublicChats в C++: '$query'")
 
-        // 💥 Отправляем запрос с фиксированной меткой!
-       /* val request = """
-            {
-                "@type": "searchPublicChats",
-                "query": "$query",
-                "@extra": "search_public" 
-            }
-        """.trimIndent()*/
-
+        // Отправляем запрос с фиксированной меткой!
         val request = """
             {
                 "@type": "searchPublicChats",
@@ -315,19 +351,6 @@ class ChatRepositoryImpl(
         }
 
         println("🔍 [ПОИСК СООБЩЕНИЙ] Отправляем запрос в TDLib: '$query'")
-
-        // 💥 Запрашиваем у Telegram поиск по текстам!
-        /*val request = """
-            {
-                "@type": "searchMessages",
-                "query": "$query",
-                "offset_date": 0,
-                "offset_chat_id": 0,
-                "offset_message_id": 0,
-                "limit": 20,
-                "@extra": "search_msg_$query"
-            }
-        """.trimIndent()*/
         val request = """
             {
                 "@type": "searchMessages",
@@ -342,5 +365,272 @@ class ChatRepositoryImpl(
 
         tdlibClient.send(request)
     }
+    override suspend fun sendMedia(chatId: Long, bytes: ByteArray, extension: String, caption: String, useCrypto: Boolean, asDocument: Boolean, replyToMessageId: Long) {
+        if (bytes.isEmpty()) return
 
+        val finalCaption = if (useCrypto) cryptoLayer.encryptAndHide(chatId, caption) else caption
+
+        // 1. Пишем файл ПРЯМО В ПАПКУ TDLIB (У ядра туда 100% есть права доступа!)
+        val fs = FileSystem.SYSTEM
+        val tempDir = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "ghostgram_temp"
+        if (!fs.exists(tempDir)) fs.createDirectories(tempDir)
+
+        val ext = extension.lowercase().ifBlank { if (asDocument) "png" else "jpg" }
+        val tempFile = tempDir / "ghost_${System.now().toEpochMilliseconds()}.$ext"
+        fs.write(tempFile) { write(bytes) }
+        val absolutePath = tempFile.toString().replace("\\", "/")
+
+        val isVideo = ext in listOf("mp4", "mov", "mkv", "avi")
+
+        val requestJson = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                when {
+                    asDocument -> {
+                        put("@type", "inputMessageDocument")
+                        put("document", buildJsonObject {
+                            put("@type", "inputDocument")
+                            put("document", buildJsonObject { put("@type", "inputFileLocal"); put("path", absolutePath) })
+                        })
+                    }
+                    isVideo -> {
+                        // НОВОЕ: ОТПРАВКА ВИДЕО
+                        put("@type", "inputMessageVideo")
+                        put("video", buildJsonObject {
+                            put("@type", "inputVideo") // ВОТ ЭТА ОБЕРТКА БЫЛА ПРОПУЩЕНА!
+                            put("video", buildJsonObject {
+                                put("@type", "inputFileLocal")
+                                put("path", absolutePath)
+                            })
+                        })
+                    }
+                    else -> {
+                        put("@type", "inputMessagePhoto")
+                        put("photo", buildJsonObject {
+                            put("@type", "inputPhoto")
+                            put("photo", buildJsonObject { put("@type", "inputFileLocal"); put("path", absolutePath) })
+                        })
+                    }
+                }
+
+                if (finalCaption.isNotBlank()) {
+                    put("caption", buildJsonObject {
+                        put("@type", "formattedText")
+                        put("text", finalCaption.trim())
+                    })
+                }
+            })
+        }
+
+
+        println("📸 [ОТПРАВКА] Шлем: $requestJson")
+        tdlibClient.send(requestJson.toString())
+    }
+
+    override suspend fun sendMediaAlbum(
+        chatId: Long,
+        media: List<Pair<ByteArray, String>>,
+        caption: String,
+        useCrypto: Boolean,
+        replyToMessageId: Long
+    ) {
+        if (media.isEmpty()) return
+
+        val finalCaption = if (useCrypto) cryptoLayer.encryptAndHide(chatId, caption) else caption
+
+        val fs = FileSystem.SYSTEM
+        val tempDir = FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "ghostgram_temp"
+        if (!fs.exists(tempDir)) fs.createDirectories(tempDir)
+
+        // Telegram разрешает максимум 10 файлов в одном альбоме (делим на чанки если больше)
+        media.chunked(10).forEach { chunk ->
+
+            // 1. Сохраняем файлы на диск и формируем элементы альбома
+            val inputContents = chunk.mapIndexed { index, (bytes, extension) ->
+                val ext = extension.lowercase().ifBlank { "jpg" }
+                val tempFile = tempDir / "ghost_album_${System.now().toEpochMilliseconds()}_$index.$ext"
+                fs.write(tempFile) { write(bytes) }
+                val absolutePath = tempFile.toString().replace("\\", "/")
+                val isVideo = ext in listOf("mp4", "mov", "mkv", "avi")
+
+                buildJsonObject {
+                    if (isVideo) {
+                        put("@type", "inputMessageVideo")
+                        put("video", buildJsonObject {
+                            put("@type", "inputVideo")
+                            put("video", buildJsonObject {
+                                put("@type", "inputFileLocal")
+                                put("path", absolutePath)
+                            })
+                        })
+                    } else {
+                        put("@type", "inputMessagePhoto")
+                        put("photo", buildJsonObject {
+                            put("@type", "inputPhoto")
+                            put("photo", buildJsonObject {
+                                put("@type", "inputFileLocal")
+                                put("path", absolutePath)
+                            })
+                        })
+                    }
+
+                    // Подпись крепим ТОЛЬКО к первому элементу альбома (как в Telegram!)
+                    if (index == 0 && finalCaption.isNotBlank()) {
+                        put("caption", buildJsonObject {
+                            put("@type", "formattedText")
+                            put("text", finalCaption.trim())
+                        })
+                    }
+                }
+            }
+
+            // 2. ОТПРАВЛЯЕМ КАК ЕДИНЫЙ АЛЬБОМ: sendMessageAlbum
+            val requestJson = buildJsonObject {
+                put("@type", "sendMessageAlbum")
+                put("chat_id", chatId)
+
+                if (replyToMessageId != 0L) {
+                    put("reply_to", buildJsonObject {
+                        put("@type", "inputMessageReplyToMessage")
+                        put("message_id", replyToMessageId)
+                    })
+                }
+
+                put("input_message_contents", buildJsonArray {
+                    inputContents.forEach { add(it) }
+                })
+            }
+
+            println("📸 [АЛЬБОМ] Шлем альбом из ${chunk.size} медиа: $requestJson")
+            tdlibClient.send(requestJson.toString())
+        }
+    }
+
+    override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
+        val request = """
+            {
+                "@type": "deleteMessages",
+                "chat_id": $chatId,
+                "message_ids": [$messageId],
+                "revoke": $revoke
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
+    }
+
+    override suspend fun clearLocalCache(clearNormal: Boolean, clearAntiRevoke: Boolean) {
+        if (clearNormal) messageDao.clearNormalMessages()
+        if (clearAntiRevoke) messageDao.clearAntiRevokeMessages()
+    }
+
+    override suspend fun editMessageText(chatId: Long, messageId: Long, newText: String, useCrypto: Boolean) {
+        // Если редактируем крипто-сообщение — шифруем новый текст!
+        val finalText = if (useCrypto) {
+            cryptoLayer.encryptAndHide(chatId, newText)
+        } else {
+            newText
+        }
+
+        val request = """
+            {
+                "@type": "editMessageText",
+                "chat_id": $chatId,
+                "message_id": $messageId,
+                "input_message_content": {
+                    "@type": "inputMessageText",
+                    "text": {
+                        "@type": "formattedText",
+                        "text": "$finalText"
+                    }
+                }
+            }
+        """.trimIndent()
+
+        tdlibClient.send(request)
+    }
+
+    override fun observeRecentStickers(): Flow<List<TelegramSticker>> = _recentStickers.asStateFlow()
+
+    override fun loadRecentStickers() {
+        // Просим у TDLib твои недавние стикеры!
+        tdlibClient.send("""{"@type": "getRecentStickers", "is_attached": false}""")
+    }
+
+    override suspend fun sendSticker(chatId: Long, stickerFileId: Int, replyToMessageId: Long) {
+        val requestJson = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                put("@type", "inputMessageSticker")
+
+                // ТА САМАЯ МАТРЕШКА ДЛЯ СТИКЕРОВ!
+                put("sticker", buildJsonObject {
+                    put("@type", "inputSticker") // ОБЕРТКА!
+
+                    put("sticker", buildJsonObject {
+                        // Используем локальный ID, так как TDLib его уже знает!
+                        put("@type", "inputFileId")
+                        put("id", stickerFileId) // Передаем как Int
+                    })
+                })
+            })
+        }
+
+        println("🎭 [СТИКЕР] Отправляем стикер в TDLib: $requestJson")
+        tdlibClient.send(requestJson.toString())
+    }
+
+    override suspend fun sendVoiceNote(chatId: Long, filePath: String, replyToMessageId: Long) {
+        val requestJson = buildJsonObject {
+            put("@type", "sendMessage")
+            put("chat_id", chatId)
+
+            if (replyToMessageId != 0L) {
+                put("reply_to", buildJsonObject {
+                    put("@type", "inputMessageReplyToMessage")
+                    put("message_id", replyToMessageId)
+                })
+            }
+
+            put("input_message_content", buildJsonObject {
+                put("@type", "inputMessageVoiceNote")
+                put("voice_note", buildJsonObject {
+                    put("@type", "inputVoiceNote") // НАША ЛЮБИМАЯ МАТРЕШКА
+                    put("voice_note", buildJsonObject {
+                        put("@type", "inputFileLocal")
+                        put("path", filePath)
+                    })
+                })
+            })
+        }
+
+        println("🎤 [ОТПРАВКА] Шлем голосовое: $requestJson")
+        tdlibClient.send(requestJson.toString())
+    }
+
+    override fun openChat(chatId: Long) {
+        // Говорим TDLib: "Юзер смотрит на этот чат! Дай инфу и начни скачивать всё необходимое!"
+        tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
+        tdlibClient.send("""{"@type": "getChat", "chat_id": $chatId}""")
+    }
+
+    override fun closeChat(chatId: Long) {
+        tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
+    }
 }

@@ -45,7 +45,7 @@ fun GhostChatListItem(
             .padding(horizontal = 16.dp, vertical = 12.dp), // От края до края!
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 💥 АВАТАРКА
+        // АВАТАРКА
         if (chat.avatarPath != null) {
             AsyncImage(
                 model = chat.avatarPath,
@@ -72,7 +72,7 @@ fun GhostChatListItem(
 
         Spacer(modifier = Modifier.width(14.dp))
 
-        // 💥 ИМЯ И ПОСЛЕДНЕЕ СООБЩЕНИЕ
+        // ИМЯ И ПОСЛЕДНЕЕ СООБЩЕНИЕ
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = chat.title,
@@ -96,7 +96,7 @@ fun GhostChatListItem(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // 💥 ВРЕМЯ И СЧЕТЧИК НЕПРОЧИТАННЫХ
+        // ВРЕМЯ И СЧЕТЧИК НЕПРОЧИТАННЫХ
         Column(
             horizontalAlignment = Alignment.End,
             modifier = Modifier.height(44.dp), // Фиксируем высоту, чтобы элементы не прыгали

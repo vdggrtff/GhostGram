@@ -28,7 +28,7 @@ class SearchUpdateHandler(
         }
 
 
-        // 💥 ЛОВИМ ОТВЕТ ПО МЕТКЕ
+        // ЛОВИМ ОТВЕТ ПО МЕТКЕ
         if (extra?.startsWith("search_public") == true && type == "chats") {
             val chatIds = jsonObject["chat_ids"]?.jsonArray ?: return true
             println("✅ [ПОИСК] TDLib вернул ${chatIds.size} результатов!")

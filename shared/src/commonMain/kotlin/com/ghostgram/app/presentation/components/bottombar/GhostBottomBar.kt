@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ghostgram.app.navigation.Screen
+import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostSurface
 import com.ghostgram.app.ui.theme.GhostTextSecondary
@@ -43,11 +45,13 @@ fun GhostBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit
 ) {
-    // 💥 Внешний контейнер для позиционирования
+    // Внешний контейнер для позиционирования
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 48.dp, end = 48.dp, bottom = 24.dp), // 💥 Идеальный синтаксис
+            .background(GhostBackground)
+            .navigationBarsPadding()
+            .padding(start = 48.dp, end = 48.dp, bottom = 24.dp), // Идеальный синтаксис
         contentAlignment = Alignment.BottomCenter
     ) {
         Row(
@@ -55,9 +59,9 @@ fun GhostBottomBar(
                 // Мягкая фиолетовая тень под панелью
                 .shadow(24.dp, RoundedCornerShape(32.dp), spotColor = GhostPrimary, ambientColor = GhostPrimary)
                 .clip(RoundedCornerShape(32.dp))
-                // 💥 ЦВЕТ СТЕКЛА (Светлее фона, с альфа-каналом 60%)
+                // ЦВЕТ СТЕКЛА (Светлее фона, с альфа-каналом 60%)
                 .background(Color(0xFF2A3040).copy(alpha = 0.6f))
-                // 💥 БЛИК ПО КРАЯМ (Тонкая полупрозрачная белая рамка дает эффект объема!)
+                // БЛИК ПО КРАЯМ (Тонкая полупрозрачная белая рамка дает эффект объема!)
                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(32.dp))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

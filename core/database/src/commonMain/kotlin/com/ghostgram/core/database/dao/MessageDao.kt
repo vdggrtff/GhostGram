@@ -21,7 +21,7 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY id ASC")
     fun observeMessages(chatId: Long): Flow<List<MessageEntity>>
 
-    // 💥 МАГИЯ ANTI-REVOKE: Мы НЕ делаем DELETE. Мы делаем UPDATE!
+    // МАГИЯ ANTI-REVOKE: Мы НЕ делаем DELETE. Мы делаем UPDATE!
     @Query("UPDATE messages SET isDeletedLocally = 1 WHERE id = :messageId AND chatId = :chatId")
     suspend fun markAsDeleted(chatId: Long, messageId: Long)
 
@@ -31,10 +31,30 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE chatId = :chatId AND id = :messageId")
     suspend fun deleteMessage(chatId: Long, messageId: Long)
 
-    // 💥 2. Обновляем текст, если сообщение отредактировали
+    // 2. Обновляем текст, если сообщение отредактировали
     @Query("UPDATE messages SET text = :newText WHERE chatId = :chatId AND id = :messageId")
     suspend fun updateMessageText(chatId: Long, messageId: Long, newText: String)
 
     @Query("UPDATE messages SET photoPath = :path WHERE id = :messageId")
     suspend fun updateMessagePhoto(messageId: Long, path: String)
+
+    @Query("UPDATE messages SET fileName = :path WHERE id = :messageId")
+    suspend fun updateMessageFileName(messageId: Long, path: String)
+
+    @Query("DELETE FROM messages WHERE isDeletedLocally = 0")
+    suspend fun clearNormalMessages()
+
+    // Удаляет ТОЛЬКО сохраненные Anti-Revoke сообщения
+    @Query("DELETE FROM messages WHERE isDeletedLocally = 1")
+    suspend fun clearAntiRevokeMessages()
+
+    @Query("UPDATE messages SET text = :newText, fileExtraInfo = :extraInfo WHERE id = :msgId")
+    suspend fun updateMessageText(msgId: Long, newText: String, extraInfo: String?)
+
+    // Ставит галочку "Изменено"
+    @Query("UPDATE messages SET isEdited = 1 WHERE id = :msgId")
+    suspend fun markMessageAsEdited(msgId: Long)
+
+    @Query("UPDATE messages SET senderName = :name, senderAvatarPath = :avatarPath WHERE senderId = :senderId")
+    suspend fun updateSenderInfo(senderId: Long, name: String, avatarPath: String?)
 }

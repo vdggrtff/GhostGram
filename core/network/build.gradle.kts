@@ -4,7 +4,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidMultiplatformLibrary) // Если плагин версии 8.2+, используем его для KMP-библиотек
+    alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.buildConfig)
 }
@@ -19,7 +19,7 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.ghostgram.core.network" // Свой уникальный namespace!
+        namespace = "com.ghostgram.core.network"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
 
@@ -62,9 +62,8 @@ if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
 
-// 💥 3. Генерируем BuildConfig ДЛЯ СЕТЕВОГО МОДУЛЯ
 buildConfig {
-    packageName("com.ghostgram.core.network") // Пакет совпадает с модулем!
+    packageName("com.ghostgram.core.network")
 
     val supabaseUrlKey = localProperties.getProperty("SUPABASE_URL") ?: ""
     val supabaseAnonKey = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""

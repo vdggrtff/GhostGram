@@ -27,7 +27,7 @@ fun AppNavGraph(navController: NavHostController) {
                         popUpTo(Screen.LoginScreen.route) { inclusive = true }
                     }
                 },
-                onNavigateBack = { // 💥 ВОЗВРАТ В НАСТРОЙКИ
+                onNavigateBack = { // ВОЗВРАТ В НАСТРОЙКИ
                     navController.popBackStack()
                 }
             )
@@ -64,7 +64,7 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToAuth = { navController.navigate(Screen.LoginScreen.route){
                     popUpTo(navController.graph.id) { inclusive = true }
                 } },
-                onNavigateToChatList = { // 💥 ДОБАВИЛИ МАРШРУТ
+                onNavigateToChatList = { // ДОБАВИЛИ МАРШРУТ
                     navController.navigate(Screen.ChatList.route) {
                         popUpTo(navController.graph.id) { inclusive = true }
                     }

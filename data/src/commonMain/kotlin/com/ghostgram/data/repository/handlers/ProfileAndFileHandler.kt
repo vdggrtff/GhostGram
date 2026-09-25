@@ -21,20 +21,14 @@ class ProfileAndFileHandler(
     private val tdlibClient: TelegramFlowClient,
     private val messageDao: MessageDao,
     private val repoScope: CoroutineScope,
-    private val tracker: DownloadTracker // 💥 Наш трекер
+    private val tracker: DownloadTracker // Наш трекер
 ) : TdlibUpdateHandler {
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
 
-        // 💥 1. ПЕРЕХВАТ ТВОЕГО ПРОФИЛЯ
+        // 1. ПЕРЕХВАТ ТВОЕГО ПРОФИЛЯ
         val extra = jsonObject["@extra"]?.jsonPrimitive?.content
         if (extra == "get_me_avatar" && type == "user") {
-            /*val firstName = jsonObject["first_name"]?.jsonPrimitive?.content ?: "Я"
-            val photoObj = jsonObject["profile_photo"]?.jsonObject
-            val smallPhoto = photoObj?.get("small")?.jsonObject
-            val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
-            val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content*/
-
             val firstName = jsonObject["first_name"]?.jsonPrimitive?.content ?: "Ghost"
             val lastName = jsonObject["last_name"]?.jsonPrimitive?.content ?: ""
             val phoneNumber = jsonObject["phone_number"]?.jsonPrimitive?.content ?: ""
@@ -44,14 +38,6 @@ class ProfileAndFileHandler(
             val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
             val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
-            /*if (!path.isNullOrBlank()) {
-                myAvatarPath.value = path
-            } else if (fileId != null && fileId != 0) {
-                tracker.myAvatarFileId = fileId // Запомнили ID
-                tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
-            } else {
-                myAvatarPath.value = "INITIALS:$firstName"
-            }*/
             myProfileFlow.value = MyProfile(
                 firstName = firstName,
                 lastName = lastName,
@@ -67,7 +53,7 @@ class ProfileAndFileHandler(
             return true
         }
 
-        // 💥 2. ФАЙЛ СКАЧАЛСЯ
+        // 2. ФАЙЛ СКАЧАЛСЯ
         if (type == "updateFile") {
             val fileObj = jsonObject["file"]?.jsonObject ?: return true
             val fileId = fileObj["id"]?.jsonPrimitive?.intOrNull ?: return true
@@ -78,9 +64,6 @@ class ProfileAndFileHandler(
             if (isCompleted && path.isNotBlank()) {
 
                 // А) Это твоя аватарка?
-                /*if (fileId == tracker.myAvatarFileId) {
-                    myAvatarPath.value = path
-                }*/
                 if (fileId == tracker.myAvatarFileId) {
                     myProfileFlow.update { it.copy(avatarPath = path) }
                 }
@@ -96,8 +79,17 @@ class ProfileAndFileHandler(
                 // В) Это фотка в сообщении?
                 tracker.messagePhotos.remove(fileId)?.let { messageId ->
                     repoScope.launch {
-                        messageDao.updateMessagePhoto(messageId, path) // 💥 Обновляем в SQLite!
+                        messageDao.updateMessagePhoto(messageId, path) // Обновляем в SQLite!
                     }
+                }
+
+                tracker.messageFiles.remove(fileId)?.let { messageId ->
+                    repoScope.launch {
+                        messageDao.updateMessageFileName(messageId, path) // Обновляем в SQLite!
+                    }
+                }
+                tracker.stickerThumbnails.remove(fileId)?.let { stickerFileId ->
+                    // Обновляем превью в памяти (если прокинешь recentStickers, либо оставляем как есть)
                 }
             }
             return true

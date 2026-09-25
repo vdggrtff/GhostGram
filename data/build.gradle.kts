@@ -28,6 +28,7 @@ kotlin {
             implementation(project(":core:crypto"))
             implementation(libs.koin.core)
             implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.okio)
         }
     }
 }

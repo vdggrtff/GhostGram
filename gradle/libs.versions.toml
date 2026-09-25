@@ -20,15 +20,17 @@ kotlinx-serialization = "1.11.0"
 material3 = "1.11.0-alpha07"
 ktor = "3.5.2"
 koin = "4.2.2"
-buildConfigPlugin = "6.0.10"
-androidx-room = "2.8.4"
+buildConfigPlugin = "6.1.0"
+androidx-room = "2.8.5"
 ksp = "2.3.4"
 materialIconsExtended = "1.7.3"
-sqlite = "2.7.0"
+sqlite = "2.7.1"
 datastore = "1.2.1"
 okio = "3.18.1"
 navigationCompose = "2.9.2"
 coil = "3.5.0"
+compottie = "2.2.1"
+filekit = "0.8.8"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -89,9 +91,8 @@ coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" 
 coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
 
-
-
-
+compottie = { module = "io.github.alexzhirkevich:compottie", version.ref = "compottie" }
+filekit-compose = { module = "io.github.vinceglb:filekit-compose", version.ref = "filekit" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

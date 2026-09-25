@@ -5,14 +5,25 @@ import SessionManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelEdit
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelMediaSend
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCatchUpClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmMediaSend
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissCatchUpDialog
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEditMessageClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +35,7 @@ import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
 
 class ChatDetailsViewModel(
-    savedStateHandle: SavedStateHandle, // 💥 Koin сам отдаст его сюда!
+    savedStateHandle: SavedStateHandle, // Koin сам отдаст его сюда!
     private val sessionManager: SessionManager,
     private val generateSmartRepliesUseCase: GenerateSmartRepliesUseCase,
     private val generateCatchUpSummaryUseCase: GenerateCatchUpSummaryUseCase,
@@ -54,10 +65,12 @@ class ChatDetailsViewModel(
             sessionManager.currentSession.collect { session ->
                 if (session != null) {
                     val repo = session.chatRepository
+                    repo.openChat(chatId)
                     loadChatInfo(repo)
                     loadMessages(repo)
                     loadMyAvatar(session)
                     observeGhostMode(repo)
+                    observeStickers(repo)
                 }
             }
         }
@@ -73,7 +86,7 @@ class ChatDetailsViewModel(
                     val isCurrentlyCrypto = _state.value.isCryptoMode
 
                     if (!isCurrentlyCrypto) {
-                        // 💥 Если режим БЫЛ ВЫКЛЮЧЕН, то мы его включаем и шлем публичный ключ собеседнику!
+                        // Если режим БЫЛ ВЫКЛЮЧЕН, то мы его включаем и шлем публичный ключ собеседнику!
                         viewModelScope.launch {
                             repo.requestKeyExchange(chatId)
                         }
@@ -87,14 +100,23 @@ class ChatDetailsViewModel(
             is OnSendMessage -> {
                 val text = _state.value.inputText.trim()
                 val useCrypto = _state.value.isCryptoMode
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L
+                val editMsg = _state.value.editingMessage
+
                 if (text.isBlank()) return
 
                 viewModelScope.launch {
-                    repo.sendMessage(chatId, text, useCrypto)
-                    _state.update { it.copy(inputText = "") }
+                    if (editMsg != null) {
+                        // ✏️ ЕСЛИ МЫ В РЕЖИМЕ РЕДАКТИРОВАНИЯ - МЕНЯЕМ ТЕКСТ!
+                        repo.editMessageText(chatId, editMsg.id, text, useCrypto)
+                    } else {
+                        // 📨 ИНАЧЕ - ШЛЕМ НОВОЕ
+                        repo.sendMessage(chatId, text, useCrypto, replyToId)
+                    }
+                    // Очищаем всё после отправки
+                    _state.update { it.copy(inputText = "", replyingToMessage = null, editingMessage = null) }
                 }
             }
-
             is OnGenerateRepliesClick -> generateReplies()
             is OnSmartReplyClick -> _state.update {
                 it.copy(
@@ -105,7 +127,7 @@ class ChatDetailsViewModel(
 
             is OnCatchUpClick -> generateCatchUp()
             is OnDismissCatchUpDialog -> _state.update { it.copy(catchUpSummary = null) }
-            is ChatDetailsIntent.LoadMoreMessages -> {
+            is LoadMoreMessages -> {
                 if (isLoadingMore) return
                 isLoadingMore = true
                 viewModelScope.launch {
@@ -114,8 +136,118 @@ class ChatDetailsViewModel(
                     isLoadingMore = false
                 }
             }
+            is OnMediaSelected -> {
+                _state.update { it.copy(pendingMedia = intent.media, pendingCaption = "") }
+            }
+            is OnConfirmMediaSend -> {
+                val mediaItems = _state.value.pendingMedia
+                val caption = _state.value.pendingCaption.trim()
+                val useCrypto = _state.value.isCryptoMode
+                val asDocument = _state.value.sendAsDocument
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L
+
+                _state.update {
+                    it.copy(
+                        pendingMedia = emptyList(),
+                        pendingCaption = "",
+                        sendAsDocument = false,
+                        replyingToMessage = null
+                    )
+                }
+
+                viewModelScope.launch {
+                    if (mediaItems.size > 1 && !asDocument) {
+                        val payload = mediaItems.map { it.bytes to it.extension }
+                        repo.sendMediaAlbum(chatId, payload, caption, useCrypto, replyToId)
+                    } else {
+                        mediaItems.forEach { item ->
+                            // Передаем байты и расширение!
+                            repo.sendMedia(
+                                chatId,
+                                item.bytes,
+                                item.extension,
+                                caption,
+                                useCrypto,
+                                asDocument,
+                                replyToId
+                            )
+                        }
+                    }
+                }
+            }
+            is OnPendingCaptionChanged -> {
+                _state.update { it.copy(pendingCaption = intent.text) }
+            }
+            is OnToggleSendAsDocument -> {
+                _state.update { it.copy(sendAsDocument = intent.isChecked) }
+            }
+            is OnCancelMediaSend -> {
+                _state.update { it.copy(pendingMedia = emptyList()) }
+            }
+            is OnDeleteMessage -> {
+                viewModelScope.launch {
+                    repo.deleteMessage(chatId, intent.messageId, intent.revoke)
+                }
+            }
+            is OnSwipeToReply -> _state.update { it.copy(replyingToMessage = intent.message) }
+            is OnCancelReply -> _state.update { it.copy(replyingToMessage = null) }
+            is OnEditMessageClick -> {
+                val msg = intent.message
+                val isEncrypted = msg.fileExtraInfo == "ENCRYPTED"
+
+                _state.update {
+                    it.copy(
+                        editingMessage = msg,
+                        inputText = msg.text, // Кидаем старый текст в инпут!
+                        isCryptoMode = isEncrypted, // Включаем замок, если это была шифровка!
+                        replyingToMessage = null // Сбрасываем reply, если был
+                    )
+                }
+            }
+
+            // ОТМЕНА РЕДАКТИРОВАНИЯ
+            is OnCancelEdit -> {
+                _state.update { it.copy(editingMessage = null, inputText = "") }
+            }
+            is ChatDetailsIntent.OnToggleStickers -> {
+                val isOpen = !_state.value.isStickersOpen
+                _state.update { it.copy(isStickersOpen = isOpen) }
+                if (isOpen) {
+                    val repo = sessionManager.currentSession.value?.chatRepository
+                    repo?.loadRecentStickers() // Загружаем при открытии
+                }
+            }
+
+            is ChatDetailsIntent.OnSendSticker -> {
+                val replyToId = _state.value.replyingToMessage?.id ?: 0L
+                viewModelScope.launch {
+                    repo.sendSticker(chatId, intent.remoteFileId, replyToId) //
+                    _state.update { it.copy(isStickersOpen = false, replyingToMessage = null) }
+                }
+            }
+            is ChatDetailsIntent.OnStartRecording -> {
+                // (В реальном проекте тут запускается диктофон, но мы сделаем это из UI для скорости)
+            }
+            is ChatDetailsIntent.OnStopRecording -> {
+                if (intent.send) {
+                    val replyToId = _state.value.replyingToMessage?.id ?: 0L
+                    viewModelScope.launch {
+                        repo.sendVoiceNote(chatId, intent.filePath, replyToId)
+                        _state.update { it.copy(replyingToMessage = null) }
+                    }
+                }
+            }
         }
     }
+
+    private fun observeStickers(repo: ChatRepository) {
+        viewModelScope.launch {
+            repo.observeRecentStickers().collect { stickers ->
+                _state.update { it.copy(recentStickers = stickers) }
+            }
+        }
+    }
+
 
     private fun loadChatInfo(repo: ChatRepository) {
         chatInfoJob?.cancel()
@@ -126,7 +258,8 @@ class ChatDetailsViewModel(
                         it.copy(
                             chatTitle = chat.title,
                             avatarPath = chat.avatarPath,
-                            unreadCount = chat.unreadCount
+                            unreadCount = chat.unreadCount,
+                            isGroup = chat.isGroup
                         )
                     }
                 }
@@ -140,7 +273,7 @@ class ChatDetailsViewModel(
             session.chatRepository.observeMyProfile().collect { profile ->
                 _state.update {
                     it.copy(
-                        avatarPath = profile.avatarPath, // В ChatDetails тебе нужен только avatarPath и myAvatarPath
+                        myAvatarPath = profile.avatarPath  // В ChatDetails тебе нужен только avatarPath и myAvatarPath
                     )
                 }
             }
@@ -158,7 +291,7 @@ class ChatDetailsViewModel(
     private fun generateCatchUp() {
         val currentLastMessageId = _state.value.messages.lastOrNull()?.id
 
-        // 💥 ПРОВЕРКА КЭША: если сообщений не прибавилось — отдаем старую выжимку бесплатно!
+        // ПРОВЕРКА КЭША: если сообщений не прибавилось — отдаем старую выжимку бесплатно!
         if (currentLastMessageId != null && currentLastMessageId == lastSummarizedMessageId && cachedSummaryText != null) {
             _state.update { it.copy(catchUpSummary = cachedSummaryText) }
             return
@@ -200,5 +333,11 @@ class ChatDetailsViewModel(
                 _state.update { it.copy(isGhostMode = isGhost) }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // При закрытии экрана закрываем чат в ядре
+        sessionManager.currentSession.value?.chatRepository?.closeChat(chatId)
     }
 }

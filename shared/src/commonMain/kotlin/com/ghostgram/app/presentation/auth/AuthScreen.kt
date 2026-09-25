@@ -47,14 +47,28 @@ fun AuthScreen(
     Scaffold(
         containerColor = GhostBackground, // Из твоей темы
         topBar = {
-            TopAppBar(
+            /*TopAppBar(
                 title = { Text("Добавление аккаунта", color = Color.White, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
                 navigationIcon = {
-                    // 💥 КНОПКА ОТМЕНЫ (НАЗАД)
+                    // КНОПКА ОТМЕНЫ (НАЗАД)
                     IconButton(onClick = { onIntent(AuthIntent.OnCancelClick) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
                     }
+                }
+            )*/
+            TopAppBar(
+                title = { Text(if (state.isFirstAccount) "Вход в GhostGRAM" else "Добавление аккаунта", color = Color.White, fontSize = 18.sp) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
+                // РИСУЕМ КНОПКУ "НАЗАД" ТОЛЬКО ЕСЛИ ЕСТЬ КУДА ВОЗВРАЩАТЬСЯ!
+                navigationIcon = if (!state.isFirstAccount) {
+                    {
+                        IconButton(onClick = { onIntent(AuthIntent.OnCancelClick) }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
+                        }
+                    }
+                } else {
+                    {} // Пустая заглушка для первого входа
                 }
             )
         }

@@ -27,7 +27,7 @@ val dataModule = module {
 
             AccountSession(
                 accountId = accountId,
-                // 💥 Отдаем ОДИН И ТОТ ЖЕ tdlibClient обоим репозиториям!
+                // Отдаем ОДИН И ТОТ ЖЕ tdlibClient обоим репозиториям!
                 chatRepository = ChatRepositoryImpl(
                     tdlibClient = tdlibClient,
                     messageDao = database.messageDao(),
@@ -36,7 +36,7 @@ val dataModule = module {
                 authRepository = AuthRepositoryImpl(
                     tdlibClient = tdlibClient
                 ),
-                contactRepository = ContactRepositoryImpl( // 💥 Добавили контакт-репозиторий!
+                contactRepository = ContactRepositoryImpl( // Добавили контакт-репозиторий!
                     tdlibClient = tdlibClient
                 )
             )

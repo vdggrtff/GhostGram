@@ -7,7 +7,7 @@ data class ContactsState(
     val searchQuery: String = "",
     val isLoading: Boolean = false
 ) {
-    // 💥 Отфильтрованные и сгруппированные по буквам контакты
+    // Отфильтрованные и сгруппированные по буквам контакты
     val groupedContacts: Map<Char, List<Contact>>
         get() {
             val filtered = if (searchQuery.isBlank()) contacts else {

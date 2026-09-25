@@ -23,7 +23,9 @@ data class SettingsState(
     val showAiDialog: Boolean = false,
     val aiApiKeyInput: String = "",
     val showStorageDialog: Boolean = false,
-    val showCryptoDialog: Boolean = false
+    val showCryptoDialog: Boolean = false,
+    val clearNormalCache: Boolean = true, // По умолчанию чистим обычный
+    val clearAntiRevokeCache: Boolean = false
 )
 
 class SettingsViewModel(
@@ -108,7 +110,7 @@ class SettingsViewModel(
             sessionManager.addNewAccount()
             onNavigateToAuth()
         } else {
-            // 💥 Если остались другие аккаунты - выкидываем юзера на список чатов нового активного профиля!
+            // Если остались другие аккаунты - выкидываем юзера на список чатов нового активного профиля!
             onNavigateToChatList()
         }
     }
@@ -127,4 +129,20 @@ class SettingsViewModel(
     }
 
     fun setCryptoDialogOpen(isOpen: Boolean) = _state.update { it.copy(showCryptoDialog = isOpen) }
+
+    fun toggleNormalCacheClear() = _state.update { it.copy(clearNormalCache = !it.clearNormalCache) }
+    fun toggleAntiRevokeCacheClear() = _state.update { it.copy(clearAntiRevokeCache = !it.clearAntiRevokeCache) }
+
+    fun executeCacheClear() {
+        viewModelScope.launch {
+            val repo = sessionManager.currentSession.value?.chatRepository
+            val normal = _state.value.clearNormalCache
+            val antiRevoke = _state.value.clearAntiRevokeCache
+
+            repo?.clearLocalCache(clearNormal = normal, clearAntiRevoke = antiRevoke)
+
+            println("🗑️ [КЭШ] Очистка выполнена! Обычный: $normal, Anti-Revoke: $antiRevoke")
+            _state.update { it.copy(showStorageDialog = false) }
+        }
+    }
 }

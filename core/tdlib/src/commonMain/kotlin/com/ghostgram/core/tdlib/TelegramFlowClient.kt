@@ -30,7 +30,7 @@ class TelegramFlowClient(
     private var pollingJob: Job? = null
 
     init {
-        // 💥 Автоматический старт при создании клиента!
+        // Автоматический старт при создании клиента!
         startReceiving()
     }
 
@@ -80,7 +80,7 @@ class TelegramFlowClient(
         val apiId = 2040 // (Тут твои ключи)
         val apiHash = "b18441a1ff607e10a989891a5462e627"
 
-        // 💥 БЕРЕМ ПУТЬ ИЗ КОНФИГА
+        // БЕРЕМ ПУТЬ ИЗ КОНФИГА
         val dbPath = config.databasePath
 
         val request = """
