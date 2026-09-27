@@ -42,28 +42,42 @@ Official messaging clients increasingly prioritize corporate monetization, leavi
 
 ## ⚡ Highlights & Killer Features
 
-### 1. 🥷 Steganographic E2EE Layer (Ghost Shield)
-Standard end-to-end encrypted chats produce visible binary entropy that flags traffic for network observers (DPI/ISP inspection). GhostGRAM implements a zero-metadata steganographic protocol:
-* **Key Exchange:** Ephemeral **ECDH (NIST P-256 / secp256r1)** performed over standard chat channels.
-* **Payload Encryption:** Symmetric **AES-256-GCM** authenticated encryption.
-* **Steganography:** The ciphertext is encoded using a deterministic dictionary cipher (`WordCoder`), converting raw encrypted bytes into grammatically innocent Russian prose before leaving the device. Network monitors only see ordinary conversation.
+### 🥷 E2EE Steganography (Ghost Shield)
+Custom end-to-end encryption layer (ECDH P-256 + AES-GCM-256) encoding encrypted payloads into innocent natural Russian dictionary words (`WordCoder`) to avoid metadata leakage.
 
-### 2. 🛡️ Reactive Local Anti-Revoke (Room KMP)
-When an interlocutor deletes a message on the server, GhostGRAM intercepts the `updateDeleteMessages` event, prevents deletion from the local **Room KMP (SQLite)** database, and flags the message with an immutable `🗑️ Deleted by sender` badge.
+<p align="center">
+  <img src="docs/assets/steganography.gif" width="360" alt="Steganography Demo" />
+</p>
+
+| 📱 GhostGRAM (Decrypted View) | 💬 Official Telegram (Network / Server View) |
+| :---: | :---: |
+| <img src="docs/assets/from_other.png" width="320" /> | <img src="docs/assets/in_off_tg.png" width="320" /> |
+| *Recipient sees the decrypted message with a secure lock badge.* | *Any external observer or server only sees benign dictionary words.* |
+
+### 🛡️ Smart Anti-Revoke
+Deleted messages are never lost. They remain safely stored in your local Room KMP database and tagged with a visible `🗑️ Deleted` badge.
+
+<p align="center">
+  <img src="docs/assets/anti_revoke.gif" width="360" alt="Anti-Revoke Demo" />
+</p>
 * Includes **granular storage controls**: clean temporary cached media while preserving critical audit logs forever.
 
-### 3. 🧠 On-Device AI Intelligence (BYOK Architecture)
-Integrated directly into the chat view without third-party bot subscriptions:
-* **1-Tap Catch-Up:** Automatically analyzes up to 500 unread messages and generates a structured summary via Google Gemini.
-* **Contextual Smart Replies:** Real-time AI response suggestions matching the tone of conversation.
-* **Bring-Your-Own-Key (BYOK):** Zero telemetry. Users can provide personal API keys directly stored in sandboxed local storage.
+### 🧠 On-Device AI Assistant (BYOK)
+Instant chat summarization (**Catch-Up**) and contextual smart replies powered by Google Gemini with private Bring-Your-Own-Key architecture.
 
-### 4. 🔍 Clean Global Search (Client-Side Regex Engine)
+<p align="center">
+  <img src="docs/assets/ai_catchup.gif" width="360" alt="AI Catch-Up Demo" />
+</p>
+
+### 🔍 Clean Global Search (Client-Side Regex Engine)
 Eliminates search pollution (SEO keyword stuffing, fraudulent crypto channels, spam bots) using deterministic regex filtering, presenting users with pure, legitimate channels and chats.
 
-### 5. 🎨 Fluid 120 FPS Declarative UI
-* Built completely from scratch without Telegram's 10-year-old legacy codebase.
-* Sub-pixel layout measurements (`ChatMessageLayout`), gesture-driven swipe-to-reply, grouping logic, and in-memory LRU vector caching for 60+ FPS Lottie animated stickers (`.tgs`).
+### 🎨 Fluid 120 FPS UI & Gestures
+100% declarative UI in Compose Multiplatform with custom layout pixel measurements, swipe-to-reply physics, dynamic message bubble tails, and RAM-cached Lottie animated stickers.
+
+<p align="center">
+  <img src="docs/assets/ui_demo.gif" width="360" alt="UI & Stickers Demo" />
+</p>
 
 ---
 
