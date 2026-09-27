@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -29,6 +31,9 @@ fun AiDialog(
     updateAiKeyInput: (String) -> Unit,
     saveAiKey: () -> Unit,
 ){
+
+    val scrollState = rememberScrollState()
+
     AlertDialog(
         onDismissRequest = { setAiDialogOpen(false) },
         containerColor = GhostCard,
@@ -40,7 +45,11 @@ fun AiDialog(
             )
         },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+            ) {
                 Text(
                     "Для безопасности и обхода лимитов вы можете использовать свой личный ключ Google Gemini API.",
                     color = GhostTextSecondary, fontSize = 14.sp

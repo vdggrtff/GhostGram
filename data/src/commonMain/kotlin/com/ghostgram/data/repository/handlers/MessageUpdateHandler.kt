@@ -138,12 +138,17 @@ class MessageUpdateHandler(
                 val date = messageObj["date"]?.jsonPrimitive?.intOrNull ?: 0
                 val mediaAlbumId = messageObj["media_album_id"]?.jsonPrimitive?.longOrNull ?: 0L
                 val contentObj = messageObj["content"]?.jsonObject
+                val replyToObj = messageObj["reply_to"]?.jsonObject
+                val replyToMessageId = if (replyToObj?.get("@type")?.jsonPrimitive?.content == "messageReplyToMessage") {
+                    replyToObj["message_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                } else 0L
 
                 val entity = parseSingleMessageToEntity(
                     newId,
                     chatId,
                     true,
                     contentObj,
+                    replyToMessageId = replyToMessageId,
                     date = date,
                     mediaAlbumId = mediaAlbumId,
                     isLive = false,
