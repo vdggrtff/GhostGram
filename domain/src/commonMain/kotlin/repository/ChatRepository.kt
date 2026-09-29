@@ -1,6 +1,7 @@
 package repository
 
 import entity.Chat
+import entity.ChatFullProfile
 import entity.Message
 import entity.MyProfile
 import entity.PublicChat
@@ -18,6 +19,28 @@ interface ChatRepository {
         useCrypto: Boolean = false,
         replyToMessageId: Long,
     )
+
+    suspend fun sendMedia(
+        chatId: Long,
+        bytes: ByteArray,
+        extension: String,
+        caption: String,
+        useCrypto: Boolean,
+        asDocument: Boolean,
+        replyToMessageId: Long = 0L,
+    )
+
+    suspend fun sendMediaAlbum(
+        chatId: Long,
+        media: List<Pair<ByteArray, String>>, // Список: байты + расширение
+        caption: String,
+        useCrypto: Boolean = false,
+        replyToMessageId: Long = 0L,
+    )
+
+    suspend fun sendSticker(chatId: Long, stickerFileId: Int, replyToMessageId: Long = 0L)
+
+    suspend fun sendVoiceNote(chatId: Long, filePath: String, replyToMessageId: Long = 0L)
 
     suspend fun getChatHistory(chatId: Long, limit: Int): String // Для ИИ
 
@@ -37,16 +60,6 @@ interface ChatRepository {
     fun observeMessageSearchResults(): Flow<List<Chat>>
     fun searchMessages(query: String)
 
-    suspend fun sendMedia(
-        chatId: Long,
-        bytes: ByteArray,
-        extension: String,
-        caption: String,
-        useCrypto: Boolean,
-        asDocument: Boolean,
-        replyToMessageId: Long = 0L,
-    )
-
     suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean)
 
     suspend fun clearLocalCache(clearNormal: Boolean, clearAntiRevoke: Boolean)
@@ -60,16 +73,10 @@ interface ChatRepository {
 
     fun observeRecentStickers(): Flow<List<entity.TelegramSticker>>
     fun loadRecentStickers()
-    suspend fun sendSticker(chatId: Long, stickerFileId: Int, replyToMessageId: Long = 0L)
 
-    suspend fun sendVoiceNote(chatId: Long, filePath: String, replyToMessageId: Long = 0L)
-    suspend fun sendMediaAlbum(
-        chatId: Long,
-        media: List<Pair<ByteArray, String>>, // Список: байты + расширение
-        caption: String,
-        useCrypto: Boolean = false,
-        replyToMessageId: Long = 0L,
-    )
+    suspend fun getChatFullProfile(chatId: Long): ChatFullProfile?
+
+    suspend fun getSharedMedia(chatId: Long, filterType: String, fromMessageId: Long = 0L): List<Message>
 
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)

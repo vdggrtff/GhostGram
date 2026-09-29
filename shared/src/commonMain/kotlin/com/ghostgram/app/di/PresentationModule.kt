@@ -5,6 +5,7 @@ import SessionManager
 import com.ghostgram.app.presentation.auth.AuthViewModel
 import com.ghostgram.app.presentation.chats.ChatListViewModel
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsViewModel
+import com.ghostgram.app.presentation.chats.chat_profile.ChatProfileViewModel
 import com.ghostgram.app.presentation.contacts.ContactsViewModel
 import com.ghostgram.app.presentation.settings.SettingsViewModel
 import com.ghostgram.core.database.GhostDatabase
@@ -37,4 +38,6 @@ val presentationModule = module {
     viewModel { SettingsViewModel(sessionManager = get()) }
 
     viewModel { ContactsViewModel(sessionManager = get()) }
+
+    viewModel { ChatProfileViewModel(savedStateHandle =  get(), sessionManager = get()) }
 }

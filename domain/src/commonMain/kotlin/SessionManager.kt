@@ -28,7 +28,6 @@ class SessionManager(
     private val _currentSession = MutableStateFlow<AccountSession?>(null)
     val currentSession: StateFlow<AccountSession?> = _currentSession.asStateFlow()
 
-    //private val accountsFile = "ghostgram_accounts.json".toPath()
     private val accountsFile = "${appStorage.basePath}/ghostgram_accounts.json".toPath()
 
     fun loadSavedAccounts() {
@@ -74,7 +73,7 @@ class SessionManager(
     }
 
     fun addNewAccount() {
-        val newAccountId = "acc_${Clock.System.now().toEpochMilliseconds()}"
+        val newAccountId = "acc_${System.now().toEpochMilliseconds()}"
         val newSession = sessionFactory(newAccountId)
 
         _accounts.value = _accounts.value + newSession

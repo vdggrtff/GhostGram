@@ -9,6 +9,8 @@ import androidx.navigation.navArgument
 import com.ghostgram.app.presentation.auth.AuthRoute
 import com.ghostgram.app.presentation.chats.ChatListRoute
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsRoute
+import com.ghostgram.app.presentation.chats.chat_profile.ChatProfileRoute
+import com.ghostgram.app.presentation.chats.chat_profile.ChatProfileScreen
 import com.ghostgram.app.presentation.contacts.ContactsRoute
 import com.ghostgram.app.presentation.settings.SettingsRoute
 
@@ -47,7 +49,10 @@ fun AppNavGraph(navController: NavHostController) {
             arguments = listOf(navArgument("chatId") { type = NavType.LongType })
         ) { backStackEntry ->
             ChatDetailsRoute(
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onNavigateToProfile = { chatId ->
+                    navController.navigate("chat_profile/$chatId")
+                }
             )
         }
 
@@ -69,6 +74,12 @@ fun AppNavGraph(navController: NavHostController) {
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 })
+        }
+
+        composable("chat_profile/{chatId}") {
+            ChatProfileRoute(
+                onBackClick = { navController.popBackStack() }
+            )
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.ghostgram.app.presentation.components.topbar
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,7 +50,8 @@ fun GhostTopBar(
     isGhostMode: Boolean,
     isCryptoMode: Boolean,
     onBackClick: () -> Unit,
-    onIntent: (ChatDetailsIntent) -> Unit
+    onIntent: (ChatDetailsIntent) -> Unit,
+    onProfileClick: () -> Unit
 ){
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
@@ -59,7 +61,7 @@ fun GhostTopBar(
             }
         },
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.clickable { onProfileClick() }, verticalAlignment = Alignment.CenterVertically) {
                 Box(contentAlignment = Alignment.BottomEnd) {
                     // 1. Аватарка чата / группы
                     key(avatarPath) {
