@@ -12,6 +12,7 @@ import com.ghostgram.data.repository.handlers.SearchUpdateHandler
 import com.ghostgram.data.repository.handlers.StickerUpdateHandler
 import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
 import entity.Chat
+import entity.ChatFullProfile
 import entity.Message
 import entity.MessageMediaType
 import entity.MyProfile
@@ -20,29 +21,41 @@ import entity.TelegramSticker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.serializer
 import okio.FileSystem
 import okio.Path
 import okio.SYSTEM
 import repository.ChatRepository
+import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Clock.System
+import kotlin.time.Duration.Companion.milliseconds
 
 class ChatRepositoryImpl(
     private val tdlibClient: TelegramFlowClient,
@@ -624,6 +637,133 @@ class ChatRepositoryImpl(
         tdlibClient.send(requestJson.toString())
     }
 
+    override suspend fun getChatFullProfile(chatId: Long): ChatFullProfile? {
+        val chat = _chatsMap.value[chatId]
+
+        // 💥 1. ЕСЛИ ЭТО ЛИЧНЫЙ ЧАТ 1-НА-1 (chatId > 0)
+        if (chatId > 0) {
+            val userObj = sendAndAwait("getUser", mapOf("user_id" to chatId))
+            val fullInfoObj = sendAndAwait("getUserFullInfo", mapOf("user_id" to chatId))
+
+            val bio = fullInfoObj?.get("bio")?.jsonObject?.get("text")?.jsonPrimitive?.content
+                ?: fullInfoObj?.get("bio")?.jsonPrimitive?.content ?: ""
+            val phone = userObj?.get("phone_number")?.jsonPrimitive?.content ?: ""
+            val username = userObj?.get("usernames")?.jsonObject?.get("editable_username")?.jsonPrimitive?.content
+                ?: userObj?.get("username")?.jsonPrimitive?.content ?: ""
+
+            val firstName = userObj?.get("first_name")?.jsonPrimitive?.content ?: ""
+            val lastName = userObj?.get("last_name")?.jsonPrimitive?.content ?: ""
+            val title = "$firstName $lastName".trim().ifBlank { chat?.title ?: "Пользователь" }
+
+            return ChatFullProfile(
+                id = chatId,
+                title = title,
+                avatarPath = chat?.avatarPath,
+                bio = bio,
+                username = username,
+                phoneNumber = phone,
+                isGroup = false,
+                isChannel = false,
+                memberCount = 0
+            )
+        }
+        // 💥 2. ЕСЛИ ЭТО ГРУППА ИЛИ СУПЕРГРУППА (chatId < 0)
+        else {
+            val chatObj = sendAndAwait("getChat", mapOf("chat_id" to chatId))
+            val title = chatObj?.get("title")?.jsonPrimitive?.content ?: chat?.title ?: "Группа"
+
+            // Пробуем достать супергруппу
+            val typeObj = chatObj?.get("type")?.jsonObject
+            val supergroupId = typeObj?.get("supergroup_id")?.jsonPrimitive?.longOrNull
+
+            var memberCount = 0
+            var description = "Групповой чат"
+
+            if (supergroupId != null) {
+                val supergroupFull = sendAndAwait("getSupergroupFullInfo", mapOf("supergroup_id" to supergroupId))
+                memberCount = supergroupFull?.get("member_count")?.jsonPrimitive?.intOrNull ?: 0
+                description = supergroupFull?.get("description")?.jsonPrimitive?.content ?: "Описание отсутствует"
+            }
+
+            return ChatFullProfile(
+                id = chatId,
+                title = title,
+                avatarPath = chat?.avatarPath,
+                bio = description,
+                username = "",
+                phoneNumber = "",
+                isGroup = true,
+                isChannel = false,
+                memberCount = memberCount
+            )
+        }
+    }
+
+    override suspend fun getSharedMedia(chatId: Long, filterType: String, fromMessageId: Long): List<Message> {
+        val filterObj = buildJsonObject { put("@type", filterType) }
+
+        // 💥 Отправляем запрос в поисковый движок истории Telegram
+        val response = sendAndAwait(
+            requestType = "searchChatMessages",
+            parameters = mapOf(
+                "chat_id" to chatId,
+                "query" to "",
+                "filter" to filterObj,
+                "from_message_id" to fromMessageId,
+                "offset" to 0,
+                "limit" to 50
+            )
+        ) ?: return emptyList()
+
+        val messagesArray = response["messages"]?.jsonArray ?: return emptyList()
+
+        return messagesArray.mapNotNull { msgElem ->
+            val msgObj = msgElem.jsonObject
+            val msgId = msgObj["id"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
+            val contentObj = msgObj["content"]?.jsonObject
+            val contentType = contentObj?.get("@type")?.jsonPrimitive?.content
+            val date = msgObj["date"]?.jsonPrimitive?.intOrNull ?: 0
+
+            when (contentType) {
+                "messagePhoto" -> {
+                    val sizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray
+                    val bigPhoto = sizes?.lastOrNull()?.jsonObject?.get("photo")?.jsonObject
+                    val path = bigPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                    val fileId = bigPhoto?.get("id")?.jsonPrimitive?.intOrNull
+
+                    // Если файл еще не скачан — ставим в очередь загрузки
+                    if (path.isNullOrBlank() && fileId != null) {
+                        tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1}""")
+                    }
+
+                    Message(id = msgId, chatId = chatId, senderName = "", text = "", photoPath = path, mediaType = MessageMediaType.PHOTO, date = date)
+                }
+                "messageVideo" -> {
+                    val videoObj = contentObj["video"]?.jsonObject
+                    val thumbObj = videoObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
+                    val path = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                    val duration = videoObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
+                    val videoPath = videoObj?.get("video")?.jsonObject?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                    Message(id = msgId, chatId = chatId, senderName = "", text = "", photoPath = path, fileName = videoPath, fileExtraInfo = "$duration сек", mediaType = MessageMediaType.VIDEO, date = date)
+                }
+                "messageDocument" -> {
+                    val docObj = contentObj["document"]?.jsonObject
+                    val fileName = docObj?.get("file_name")?.jsonPrimitive?.content ?: "Документ"
+                    val filePath = docObj?.get("document")?.jsonObject?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                    Message(id = msgId, chatId = chatId, senderName = "", text = "", fileName = fileName, photoPath = filePath, mediaType = MessageMediaType.DOCUMENT, date = date)
+                }
+                "messageVoiceNote" -> {
+                    val voiceObj = contentObj["voice_note"]?.jsonObject
+                    val duration = voiceObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
+                    val filePath = voiceObj?.get("voice")?.jsonObject?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                    Message(id = msgId, chatId = chatId, senderName = "", text = "", fileName = filePath, fileExtraInfo = "$duration сек", mediaType = MessageMediaType.VOICE, date = date)
+                }
+                else -> null
+            }
+        }
+    }
+
     override fun openChat(chatId: Long) {
         // Говорим TDLib: "Юзер смотрит на этот чат! Дай инфу и начни скачивать всё необходимое!"
         tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
@@ -632,5 +772,45 @@ class ChatRepositoryImpl(
 
     override fun closeChat(chatId: Long) {
         tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
+    }
+
+    private suspend fun sendAndAwait(
+        requestType: String,
+        parameters: Map<String, Any> = emptyMap(),
+        timeoutMs: Long = 4000
+    ): JsonObject? {
+        val extraId = "req_${Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}"
+
+        // Собираем JSON запроса с меткой @extra
+        val requestJson = buildJsonObject {
+            put("@type", requestType)
+            put("@extra", extraId)
+            parameters.forEach { (key, value) ->
+                when (value) {
+                    is String -> put(key, value)
+                    is Number -> put(key, value)
+                    is Boolean -> put(key, value)
+                    is JsonElement -> put(key, value)
+                }
+            }
+        }.toString()
+
+        return withTimeoutOrNull(timeoutMs.milliseconds) {
+            // Заранее подписываемся на ожидание ответа с этим @extra
+            val deferred = async {
+                tdlibClient.updates
+                    .filter { it.contains(extraId) }
+                    .mapNotNull { raw ->
+                        runCatching { jsonParser.parseToJsonElement(raw).jsonObject }.getOrNull()
+                    }
+                    .first { it["@extra"]?.jsonPrimitive?.content == extraId }
+            }
+
+            // Шлем команду в ядро
+            tdlibClient.send(requestJson)
+
+            // Ждем и возвращаем результат
+            deferred.await()
+        }
     }
 }

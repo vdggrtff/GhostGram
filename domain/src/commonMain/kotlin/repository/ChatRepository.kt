@@ -1,6 +1,7 @@
 package repository
 
 import entity.Chat
+import entity.ChatFullProfile
 import entity.Message
 import entity.MyProfile
 import entity.PublicChat
@@ -70,6 +71,10 @@ interface ChatRepository {
         useCrypto: Boolean = false,
         replyToMessageId: Long = 0L,
     )
+
+    suspend fun getChatFullProfile(chatId: Long): ChatFullProfile?
+
+    suspend fun getSharedMedia(chatId: Long, filterType: String, fromMessageId: Long = 0L): List<Message>
 
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)

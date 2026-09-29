@@ -260,7 +260,6 @@ class MessageUpdateHandler(
         senderId: Long = 0L
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
-        val senderName = if (isOutgoing) "Вы" else "Собеседник"
 
         var realSenderName = "Собеседник"
         var realSenderAvatar: String? = null

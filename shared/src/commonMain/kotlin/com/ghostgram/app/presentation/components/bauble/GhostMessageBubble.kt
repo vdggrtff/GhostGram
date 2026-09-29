@@ -35,10 +35,10 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.ghostgram.app.presentation.components.bauble.content.DocumentMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.ImageMessageContent
-import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.presentation.components.bauble.content.StickerMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.VideoMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.VoiceMessageContent
+import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostSecureGreen
 import com.ghostgram.app.utils.TimeFormatter

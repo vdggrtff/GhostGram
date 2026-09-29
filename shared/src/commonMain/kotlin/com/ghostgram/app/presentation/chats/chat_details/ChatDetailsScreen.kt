@@ -65,13 +65,15 @@ sealed class MessageListItem {
 fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
     onBackClick: () -> Unit,
+    onNavigateToProfile: (Long) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
 
     ChatDetailsScreen(
         state = state,
         onIntent = viewModel::onIntent,
-        onBackClick = onBackClick
+        onBackClick = onBackClick,
+        onProfileClick = { onNavigateToProfile(viewModel.chatId) },
     )
 }
 
@@ -83,6 +85,7 @@ fun ChatDetailsScreen(
     state: ChatDetailsState,
     onIntent: (ChatDetailsIntent) -> Unit,
     onBackClick: () -> Unit,
+    onProfileClick: () -> Unit,
     listState: LazyListState = rememberLazyListState(),
 ) {
 
@@ -211,6 +214,7 @@ fun ChatDetailsScreen(
                 isGroup = state.isGroup,
                 onIntent = onIntent,
                 onBackClick = onBackClick,
+                onProfileClick = onProfileClick
             )
         },
         bottomBar = {

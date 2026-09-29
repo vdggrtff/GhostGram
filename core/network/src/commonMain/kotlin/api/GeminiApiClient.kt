@@ -3,7 +3,6 @@ package api
 import com.ghostgram.core.network.BuildConfig
 import entity.LocalSettingsManager
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -14,17 +13,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import model.GeminiContent
-import model.GeminiGenerationConfig
-import model.GeminiInlineData
-import model.GeminiPart
-import model.GeminiRequest
-import response.GeminiResponse
-import kotlin.io.encoding.Base64
 
 class GeminiApiClient(
     private val httpClient: HttpClient,
-    //private val apiKey: String,
     private val settingsManager: LocalSettingsManager
 ) {
 
@@ -32,24 +23,6 @@ class GeminiApiClient(
     private val supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
 
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models"
-
-   /* suspend fun generateText(
-        prompt: String,
-        modelName: String = "gemini-3.1-flash-lite-preview",
-    ): String {
-        val requestBody = GeminiRequest(
-            contents = listOf(GeminiContent(parts = listOf(GeminiPart(text = prompt)))),
-            generationConfig = GeminiGenerationConfig(temperature = 0.1f)
-        )
-
-            val response: GeminiResponse =
-            httpClient.post("$baseUrl/$modelName:generateContent?key=$apiKey") {
-                contentType(ContentType.Application.Json)
-                setBody(requestBody)
-            }.body()
-
-        return response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "ERROR"
-    }*/
 
     suspend fun generateText(prompt: String): String {
         // ДОСТАЕМ ЛИЧНЫЙ КЛЮЧ ЮЗЕРА
