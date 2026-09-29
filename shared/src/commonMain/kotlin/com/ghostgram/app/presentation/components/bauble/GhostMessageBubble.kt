@@ -16,20 +16,15 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -38,19 +33,18 @@ import com.ghostgram.app.presentation.components.bauble.content.ImageMessageCont
 import com.ghostgram.app.presentation.components.bauble.content.StickerMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.VideoMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.VoiceMessageContent
+import com.ghostgram.app.presentation.components.bauble.layout.ChatMessageLayout
+import com.ghostgram.app.presentation.components.bauble.layout.MessageTimeAndStatus
 import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostSecureGreen
-import com.ghostgram.app.utils.TimeFormatter
+import com.ghostgram.app.ui.theme.TelegramColors
 import entity.Message
 import entity.MessageMediaType
 
 @Composable
 fun GhostMessageBubble(
     message: Message,
-    chatAvatarPath: String?,
-    myAvatarPath: String?, // Вернули твою аватарку!
-    chatTitle: String,
     isGroup: Boolean = false,
     isFirstInGroup: Boolean = true, // Новые параметры
     isLastInGroup: Boolean = true,
@@ -64,22 +58,10 @@ fun GhostMessageBubble(
     val isSticker = message.mediaType == MessageMediaType.STICKER
     val hasText = message.text.isNotBlank()
 
+    // Системное сообщение (например, E2EE handshake)
     if (message.fileExtraInfo == "SYSTEM") {
-        Box(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = message.text,
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            )
-        }
-        return // Выходим из функции, чтобы не рисовать синий пузырь!
+        SystemMessageBadge(message.text)
+        return
     }
 
     // Внешний ряд, который держит Аватарки и Пузырь
@@ -92,66 +74,15 @@ fun GhostMessageBubble(
     ) {
         if (isGroup && !isOutgoing) {
             if (isLastInGroup) {
-                val avatarToShow = message.senderAvatarPath
-                val authorName = message.senderName.ifBlank { "Участник" }
-                val authorColor = com.ghostgram.app.ui.theme.TelegramColors.getColorForUser(message.senderId)
-
-                androidx.compose.runtime.key(avatarToShow, authorName) {
-                    if (!avatarToShow.isNullOrBlank() && !avatarToShow.startsWith("INITIALS:")) {
-                        val model = if (avatarToShow.startsWith("/")) "file://$avatarToShow" else avatarToShow
-                        AsyncImage(
-                            model = model,
-                            contentDescription = "Аватарка автора",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(34.dp).clip(CircleShape)
-                        )
-                    } else {
-                        // Кружок цвета автора с его первой буквой имени
-                        Box(
-                            modifier = Modifier.size(34.dp).clip(CircleShape).background(authorColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = authorName.take(1).uppercase(),
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                SenderAvatar(message)
             } else {
-                // Отступ 34dp, чтобы пачка сообщений одного человека стояла ровно
                 Spacer(modifier = Modifier.width(34.dp))
             }
             Spacer(modifier = Modifier.width(8.dp))
         }
 
-        val cornerRadius = 10.dp
-        val sharpCorner = 2.dp // Острый хвостик у основания
-
-        val bubbleShape = if (isOutgoing) {
-            RoundedCornerShape(
-                topStart = cornerRadius,
-                topEnd = if (isFirstInGroup) cornerRadius else sharpCorner,
-                bottomStart = cornerRadius,
-                bottomEnd = if (isLastInGroup) sharpCorner else cornerRadius // Острый угол к автору
-            )
-        } else {
-            RoundedCornerShape(
-                topStart = if (isFirstInGroup) cornerRadius else sharpCorner,
-                topEnd = cornerRadius,
-                bottomStart = if (isLastInGroup) sharpCorner else cornerRadius,
-                bottomEnd = cornerRadius
-            )
-        }
-
-        val outgoingBackground = if (message.fileExtraInfo == "ENCRYPTED") {
-            Color(0xFF1A4A38) // Изумруд для шифровки
-        } else {
-            Color(0xFF5274E8) // Фирменный королевский синий Telegram
-        }
-        val incomingBackground = Color(0xFF18222D)
+        val bubbleShape = rememberBubbleShape(isOutgoing, isFirstInGroup, isLastInGroup)
+        val backgroundColor = rememberBubbleColor(message, isOutgoing)
 
         Box(
             modifier = Modifier
@@ -162,17 +93,9 @@ fun GhostMessageBubble(
                     onLongClick = onLongClick
                 )
                 .then(
-                    if (isSticker) {
-                        Modifier.background(Color.Transparent) // Стикеры без фона!
-                    }else if (isVideo && !hasText) {
-                        Modifier.background(Color.Transparent)
-                    }
-                    else if (isOutgoing) {
-                        Modifier.background(
-                            outgoingBackground
-                        )
-                    } else {
-                        Modifier.background(incomingBackground)
+                    when {
+                        isSticker || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
+                        else -> Modifier.background(backgroundColor)
                     }
                 )
                 .padding(horizontal = 12.dp, vertical = 7.dp)
@@ -182,8 +105,7 @@ fun GhostMessageBubble(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (isGroup && !isOutgoing && isFirstInGroup) {
-                    val authorColor = com.ghostgram.app.ui.theme.TelegramColors.getColorForUser(message.senderId)
-
+                    val authorColor = TelegramColors.getColorForUser(message.senderId)
                     Text(
                         text = message.senderName.ifBlank { "Участник" },
                         color = authorColor,
@@ -248,27 +170,18 @@ fun GhostMessageBubble(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                if (message.text.isNotBlank()) {
+                if (hasText) {
                     val isEncrypted = message.fileExtraInfo == "ENCRYPTED"
-
                     ChatMessageLayout(
                         text = {
                             Text(
                                 text = if (isEncrypted) "🔒 ${message.text}" else message.text,
                                 color = if (isEncrypted) GhostSecureGreen else Color.White,
-                                // Читаемый размер шрифта Telegram:
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Normal,
                                 lineHeight = 21.sp
                             )
                         },
-                        time = {
-                            MessageTimeAndStatus(
-                                message = message,
-                                textColor = Color.White,
-                                iconColor = Color.White
-                            )
-                        }
+                        time = { MessageTimeAndStatus(message, Color.White, Color.White) }
                     )
                 }
             }
@@ -285,141 +198,77 @@ fun GhostMessageBubble(
                 )
             }
         }
-        /*if (isOutgoing) {
-            Spacer(modifier = Modifier.width(8.dp))
-            if (isLastInGroup) {
-                if (myAvatarPath != null && !myAvatarPath.startsWith("INITIALS:")) {
-                    AsyncImage(
-                        model = myAvatarPath,
-                        contentDescription = "Моя аватарка",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(36.dp).clip(CircleShape)
-                    )
-                } else {
-                    val myName = myAvatarPath?.removePrefix("INITIALS:") ?: "Я"
-                    Box(
-                        modifier = Modifier.size(36.dp).clip(CircleShape).background(GhostPrimary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = myName.take(1).uppercase(),
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            } else {
-                Spacer(modifier = Modifier.width(34.dp))
-            }
-        }*/
     }
 }
 
 @Composable
-fun MessageTimeAndStatus(
-    message: Message,
-    textColor: Color,
-    iconColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val timeString = TimeFormatter.formatTime(message.date)
+private fun SenderAvatar(message: Message) {
+    val avatarToShow = message.senderAvatarPath
+    val authorName = message.senderName.ifBlank { "Участник" }
+    val authorColor = TelegramColors.getColorForUser(message.senderId)
 
-    if (timeString.isNotBlank() || message.isOutgoing) {
-        // Делаем цвет времени мягким и приглушенным (как в Telegram!)
-        val mutedColor = textColor.copy(alpha = 0.6f)
-
-        Row(
-            modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // ВАРИАНТ А: Полное слово "изменено" (как в Telegram Desktop на твоем скрине)
-            if (message.isEdited) {
-                Text(
-                    text = "изменено",
-                    color = mutedColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal, // Тонкий!
-                    modifier = Modifier.padding(end = 4.dp)
-                )
-            }
-
-            // Время
-            Text(
-                text = timeString,
-                color = mutedColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Normal
+    key(avatarToShow, authorName) {
+        if (!avatarToShow.isNullOrBlank() && !avatarToShow.startsWith("INITIALS:")) {
+            val model = if (avatarToShow.startsWith("/")) "file://$avatarToShow" else avatarToShow
+            AsyncImage(
+                model = model,
+                contentDescription = "Аватарка автора",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(34.dp).clip(CircleShape)
             )
-
-            // Галочки / Часики
-            if (message.isOutgoing) {
-                Spacer(modifier = Modifier.width(3.dp))
-                if (message.isSending) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.Schedule,
-                        contentDescription = null,
-                        tint = mutedColor,
-                        modifier = Modifier.size(11.dp)
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (message.isRead) androidx.compose.material.icons.Icons.Default.DoneAll else androidx.compose.material.icons.Icons.Default.Done,
-                        contentDescription = null,
-                        tint = if (message.isRead) Color(0xFF4FC3F7) else iconColor.copy(alpha = 0.65f),
-                        modifier = Modifier.size(12.dp) // 12dp сидит идеально по высоте с 11.sp шрифтом!
-                    )
-                }
+        } else {
+            Box(
+                modifier = Modifier.size(34.dp).clip(CircleShape).background(authorColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = authorName.take(1).uppercase(), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun ChatMessageLayout(
-    modifier: Modifier = Modifier,
-    text: @Composable () -> Unit,
-    time: @Composable () -> Unit,
-) {
-    Layout(
-        modifier = modifier,
-        content = {
-            text()
-            time()
-        }
-    ) { measurables, constraints ->
-        val textPlaceable = measurables[0].measure(constraints.copy(minWidth = 0))
-        val timePlaceable = measurables[1].measure(Constraints())
+private fun SystemMessageBadge(text: String) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = 0.8f),
+            fontSize = 12.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.3f))
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
+}
 
-        val spacing = 7.dp.roundToPx()
+private fun rememberBubbleShape(isOutgoing: Boolean, isFirstInGroup: Boolean, isLastInGroup: Boolean): RoundedCornerShape {
+    val corner = 10.dp
+    val sharp = 2.dp
+    return if (isOutgoing) {
+        RoundedCornerShape(
+            topStart = corner,
+            topEnd = if (isFirstInGroup) corner else sharp,
+            bottomStart = corner,
+            bottomEnd = if (isLastInGroup) sharp else corner
+        )
+    } else {
+        RoundedCornerShape(
+            topStart = if (isFirstInGroup) corner else sharp,
+            topEnd = corner,
+            bottomStart = if (isLastInGroup) sharp else corner,
+            bottomEnd = corner
+        )
+    }
+}
 
-        // Проверяем: это одна строка? (Высота 1 строки <= 24dp)
-        val isSingleLine = textPlaceable.height <= 28.dp.roundToPx()
-        val fitsOnSingleLine = isSingleLine && (textPlaceable.width + spacing + timePlaceable.width <= constraints.maxWidth)
-
-        if (fitsOnSingleLine) {
-            // ОДНА СТРОКА: Высота пузыря СТРОГО равна высоте текста! Никаких раздуваний!
-            val totalWidth = textPlaceable.width + spacing + timePlaceable.width
-            val totalHeight = textPlaceable.height
-
-            // Время сажаем на 2dp ниже центра, чтобы оно стояло на одной линии с буквами
-            val timeY = (totalHeight - timePlaceable.height - 2.dp.roundToPx()).coerceAtLeast(0)
-
-            layout(totalWidth, totalHeight) {
-                // Текст строго в начале
-                textPlaceable.placeRelative(0, 0)
-                // Время справа внизу
-                timePlaceable.placeRelative(textPlaceable.width + spacing, timeY)
-            }
-        } else {
-            // МНОГОСТРОЧНЫЙ ТЕКСТ: Время под текстом справа
-            val totalWidth = maxOf(textPlaceable.width, timePlaceable.width)
-            val totalHeight = textPlaceable.height + timePlaceable.height + 2.dp.roundToPx()
-
-            layout(totalWidth, totalHeight) {
-                textPlaceable.placeRelative(0, 0)
-                timePlaceable.placeRelative(totalWidth - timePlaceable.width, textPlaceable.height + 2.dp.roundToPx())
-            }
-        }
+private fun rememberBubbleColor(message: Message, isOutgoing: Boolean): Color {
+    return when {
+        message.fileExtraInfo == "ENCRYPTED" -> Color(0xFF1A4A38)
+        isOutgoing -> Color(0xFF5274E8)
+        else -> Color(0xFF18222D)
     }
 }

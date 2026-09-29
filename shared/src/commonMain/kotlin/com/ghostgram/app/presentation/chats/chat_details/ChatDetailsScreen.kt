@@ -47,7 +47,6 @@ import io.github.vinceglb.filekit.core.PickerType
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
-// Тот самый Route
 @Composable
 fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
@@ -64,8 +63,6 @@ fun ChatDetailsRoute(
     )
 }
 
-
-// Тупой (Dumb) Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailsScreen(
@@ -207,9 +204,6 @@ fun ChatDetailsScreen(
                         ) {
                             GhostMessageBubble(
                                 message = item.message,
-                                chatAvatarPath = state.avatarPath,
-                                myAvatarPath = state.myAvatarPath,
-                                chatTitle = state.chatTitle,
                                 isGroup = state.isGroup,
                                 isFirstInGroup = isFirstInGroup, // 👈
                                 isLastInGroup = isLastInGroup,   // 👈
@@ -230,9 +224,6 @@ fun ChatDetailsScreen(
                         ) {
                             GhostAlbumBubble(
                                 albumMessages = item.messages,
-                                chatAvatarPath = state.avatarPath,
-                                myAvatarPath = state.myAvatarPath,
-                                chatTitle = state.chatTitle,
                                 onMediaClick = { fullScreenImage = it },
                                 isGroup = state.isGroup,
                                 isLastInGroup = isLastInGroup,
