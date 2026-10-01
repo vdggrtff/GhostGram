@@ -1,6 +1,8 @@
 package com.ghostgram.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -48,10 +50,26 @@ fun AppNavGraph(navController: NavHostController) {
             route = "chat_details/{chatId}",
             arguments = listOf(navArgument("chatId") { type = NavType.LongType })
         ) { backStackEntry ->
+            val scrollToMessageId by backStackEntry.savedStateHandle
+                .getStateFlow<Long?>("scrollToMessageId", null)
+                .collectAsState()
+
             ChatDetailsRoute(
                 onBackClick = { navController.popBackStack() },
-                onNavigateToProfile = { chatId ->
-                    navController.navigate("chat_profile/$chatId")
+                onNavigateToProfile = { chatId -> navController.navigate("chat_profile/$chatId") },
+                // 💥 2. Передаем ID в Route:
+                scrollToMessageId = scrollToMessageId,
+                // 💥 3. Функция очистки после скролла:
+                onMessageScrolled = { backStackEntry.savedStateHandle.remove<Long>("scrollToMessageId") }
+            )
+        }
+
+        composable("chat_profile/{chatId}") {
+            ChatProfileRoute(
+                onBackClick = { navController.popBackStack() },
+                onNavigateToMessage = { messageId ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set("scrollToMessageId", messageId)
+                    navController.popBackStack()
                 }
             )
         }
@@ -74,12 +92,6 @@ fun AppNavGraph(navController: NavHostController) {
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 })
-        }
-
-        composable("chat_profile/{chatId}") {
-            ChatProfileRoute(
-                onBackClick = { navController.popBackStack() }
-            )
         }
     }
 }

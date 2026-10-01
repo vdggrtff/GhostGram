@@ -103,22 +103,30 @@ class TdlibMessageParser(
                 )
             }
             "messageDocument" -> {
-                val docObj = contentObj["document"]?.jsonObject
-                val fileName = docObj?.get("file_name")?.jsonPrimitive?.content ?: "Документ"
-                val docFile = docObj?.get("document")?.jsonObject
+                val docContainer = contentObj["document"]?.jsonObject
+                val docFile = docContainer?.get("document")?.jsonObject
+
+                val rawName = docContainer?.get("file_name")?.jsonPrimitive?.content ?: "Файл"
                 val filePath = docFile?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
                 val fileId = docFile?.get("id")?.jsonPrimitive?.intOrNull
+                val sizeBytes = docFile?.get("size")?.jsonPrimitive?.longOrNull ?: 0L
 
                 if (filePath.isNullOrBlank() && fileId != null) {
                     tracker.messageFiles[fileId] = msgId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1}""")
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 16}""")
                 }
+
+                // 💥 ВАЖНО: Если файл скачан - храним его ПУТЬ в fileName. Если нет - храним ИМЯ.
+                val finalPathOrName = if (!filePath.isNullOrBlank()) filePath else rawName
 
                 Message(
                     id = msgId, chatId = chatId, senderName = if (isOutgoing) "Вы" else "Собеседник",
-                    text = "", fileName = fileName, photoPath = filePath, isOutgoing = isOutgoing,
-                    mediaType = MessageMediaType.DOCUMENT, date = date, isSending = isSending,
-                    replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
+                    text = "",
+                    fileName = finalPathOrName, // 💥 ПУТЬ ИЛИ ИМЯ
+                    fileExtraInfo = formatFileSize(sizeBytes), // Размер
+                    isOutgoing = isOutgoing, mediaType = MessageMediaType.DOCUMENT,
+                    date = date, isSending = isSending, replyToMessageId = replyToId,
+                    isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
                 )
             }
             "messageVoiceNote" -> {
@@ -135,9 +143,12 @@ class TdlibMessageParser(
 
                 Message(
                     id = msgId, chatId = chatId, senderName = if (isOutgoing) "Вы" else "Собеседник",
-                    text = "", fileName = filePath, fileExtraInfo = "$duration сек", isOutgoing = isOutgoing,
-                    mediaType = MessageMediaType.VOICE, date = date, isSending = isSending,
-                    replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
+                    text = "",
+                    fileName = filePath, // 💥 ПУТЬ ГОЛОСОВОЙ
+                    fileExtraInfo = formatDuration(duration),
+                    isOutgoing = isOutgoing, mediaType = MessageMediaType.VOICE,
+                    date = date, isSending = isSending, replyToMessageId = replyToId,
+                    isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
                 )
             }
             "messageSticker" -> {
@@ -162,4 +173,23 @@ class TdlibMessageParser(
             else -> null
         }
     }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0L) return ""
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1.0 -> "${(gb * 10).toInt() / 10.0} GB"
+        mb >= 1.0 -> "${(mb * 10).toInt() / 10.0} MB"
+        kb >= 1.0 -> "${kb.toInt()} KB"
+        else -> "$bytes B"
+    }
+}
+
+private fun formatDuration(seconds: Int): String {
+    val min = seconds / 60
+    val sec = seconds % 60
+    return "$min:${if (sec < 10) "0$sec" else "$sec"}"
 }

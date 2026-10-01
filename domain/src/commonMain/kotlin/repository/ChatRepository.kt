@@ -80,4 +80,6 @@ interface ChatRepository {
 
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)
+
+    suspend fun toggleChatMute(chatId: Long, isMuted: Boolean)
 }

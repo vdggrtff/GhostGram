@@ -1,5 +1,7 @@
-package com.ghostgram.app.presentation.chats.chat_details
+package com.ghostgram.app.presentation.chats.chat_details.utils
 
+import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem.Album
+import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem.Single
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 
@@ -21,32 +23,32 @@ fun groupMessagesIntoAlbums(messages: List<Message>): List<MessageListItem> {
             if (msg.mediaAlbumId == currentAlbumId) {
                 currentAlbum.add(msg)
             } else {
-                if (currentAlbum.isNotEmpty()) result.add(MessageListItem.Album(currentAlbum))
+                if (currentAlbum.isNotEmpty()) result.add(Album(currentAlbum))
                 currentAlbumId = msg.mediaAlbumId
                 currentAlbum = mutableListOf(msg)
             }
         } else {
             if (currentAlbum.isNotEmpty()) {
-                result.add(MessageListItem.Album(currentAlbum))
+                result.add(Album(currentAlbum))
                 currentAlbum = mutableListOf()
                 currentAlbumId = 0L
             }
-            result.add(MessageListItem.Single(msg))
+            result.add(Single(msg))
         }
     }
-    if (currentAlbum.isNotEmpty()) result.add(MessageListItem.Album(currentAlbum))
+    if (currentAlbum.isNotEmpty()) result.add(Album(currentAlbum))
     return result.asReversed()
 }
 
 fun getDateFromItem(item: MessageListItem): Int = when (item) {
-    is MessageListItem.Single -> item.message.date
-    is MessageListItem.Album -> item.messages.first().date
+    is Single -> item.message.date
+    is Album -> item.messages.first().date
 }
 
 fun getSenderKey(listItem: MessageListItem): Any {
     val msg = when (listItem) {
-        is MessageListItem.Single -> listItem.message
-        is MessageListItem.Album -> listItem.messages.first()
+        is Single -> listItem.message
+        is Album -> listItem.messages.first()
     }
     return when {
         msg.isOutgoing -> "MY_OUTGOING_MESSAGE"
