@@ -57,4 +57,16 @@ interface MessageDao {
 
     @Query("UPDATE messages SET senderName = :name, senderAvatarPath = :avatarPath WHERE senderId = :senderId")
     suspend fun updateSenderInfo(senderId: Long, name: String, avatarPath: String?)
+
+    @Query("""
+        SELECT * FROM messages 
+        WHERE chatId = :chatId 
+          AND (
+              LOWER(text) LIKE '%' || LOWER(:query) || '%' 
+              OR LOWER(text) LIKE '%' || LOWER(:stem) || '%'
+          )
+        ORDER BY date DESC, id DESC 
+        LIMIT 50
+    """)
+    suspend fun searchLocalMessages(chatId: Long, query: String, stem: String): List<MessageEntity>
 }

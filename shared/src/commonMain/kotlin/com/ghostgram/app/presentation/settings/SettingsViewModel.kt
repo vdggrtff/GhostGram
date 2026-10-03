@@ -4,6 +4,7 @@ import AccountSession
 import SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import entity.LocalSettingsManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,11 +26,13 @@ data class SettingsState(
     val showStorageDialog: Boolean = false,
     val showCryptoDialog: Boolean = false,
     val clearNormalCache: Boolean = true, // По умолчанию чистим обычный
-    val clearAntiRevokeCache: Boolean = false
+    val clearAntiRevokeCache: Boolean = false,
+    val geminiApiKey: String = ""
 )
 
 class SettingsViewModel(
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val settingsManager: LocalSettingsManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -58,6 +61,8 @@ class SettingsViewModel(
                 }
             }
         }
+        val savedKey = settingsManager.getGeminiKey()
+        _state.update { it.copy(geminiApiKey = savedKey) }
     }
 
     private fun observeSessionData(session: AccountSession) {
@@ -117,9 +122,20 @@ class SettingsViewModel(
 
     fun setAiDialogOpen(isOpen: Boolean) = _state.update { it.copy(showAiDialog = isOpen) }
     fun updateAiKeyInput(key: String) = _state.update { it.copy(aiApiKeyInput = key) }
-    fun saveAiKey() {
-        // TODO: Сохранить ключ в DataStore (Пока просто закрываем диалог)
-        _state.update { it.copy(showAiDialog = false, aiApiKeyInput = "") }
+
+    fun saveCustomApiKey(key: String) {
+        val cleanKey = key.trim()
+
+        // 💥 ВОТ ОНО: ВЫЗЫВАЕМ ТОТ САМЫЙ МЕТОД СОХРАНЕНИЯ В ФАЙЛ!
+        settingsManager.saveGeminiKey(cleanKey)
+
+        _state.update {
+            it.copy(
+                geminiApiKey = cleanKey,
+                showAiDialog = false // Закрываем диалог
+            )
+        }
+        println("🔑 [SETTINGS] Ключ Gemini успешно записан в файл: ${if (cleanKey.isNotBlank()) cleanKey.take(6) + "..." else "Очищен"}")
     }
 
     fun setStorageDialogOpen(isOpen: Boolean) = _state.update { it.copy(showStorageDialog = isOpen) }

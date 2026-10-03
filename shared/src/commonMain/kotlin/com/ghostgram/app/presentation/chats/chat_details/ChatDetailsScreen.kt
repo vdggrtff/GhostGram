@@ -16,12 +16,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,12 +32,20 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
+import com.ghostgram.app.presentation.chats.chat_details.utils.ChatDetailsDialogs
+import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem
+import com.ghostgram.app.presentation.chats.chat_details.utils.getSenderKey
+import com.ghostgram.app.presentation.chats.chat_details.utils.groupMessagesIntoAlbums
+import com.ghostgram.app.presentation.chats.chat_details.utils.rememberChatScrollBehavior
+import com.ghostgram.app.presentation.chats.chat_details.utils.shouldShowDateHeader
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
+import com.ghostgram.app.presentation.components.topbar.InChatSearchBar
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
@@ -44,6 +54,8 @@ import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -52,6 +64,8 @@ fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
     onBackClick: () -> Unit,
     onNavigateToProfile: (Long) -> Unit,
+    scrollToMessageId: Long?,            // 💥 Получили из графа
+    onMessageScrolled: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -60,6 +74,8 @@ fun ChatDetailsRoute(
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
         onProfileClick = { onNavigateToProfile(viewModel.chatId) },
+        scrollToMessageId = scrollToMessageId, // 💥 Отдали в Dumb Screen
+        onMessageScrolled = onMessageScrolled
     )
 }
 
@@ -70,6 +86,8 @@ fun ChatDetailsScreen(
     onIntent: (ChatDetailsIntent) -> Unit,
     onBackClick: () -> Unit,
     onProfileClick: () -> Unit,
+    scrollToMessageId: Long? = null,        // 💥 Чистый параметр!
+    onMessageScrolled: () -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
 
@@ -85,7 +103,8 @@ fun ChatDetailsScreen(
     val scrollBehavior = rememberChatScrollBehavior(
         messages = state.messages,
         unreadCount = state.unreadCount,
-        onLoadMore = { onIntent(ChatDetailsIntent.LoadMoreMessages(it)) }
+        onLoadMore = { onIntent(LoadMoreMessages(it)) },
+        listState = listState
     )
 
     val fileLauncher = rememberFilePickerLauncher(
@@ -98,6 +117,58 @@ fun ChatDetailsScreen(
                     MediaItem(file.readBytes(), file.name.substringAfterLast('.', "jpg"))
                 }
                 onIntent(ChatDetailsIntent.OnMediaSelected(mediaList))
+            }
+        }
+    }
+
+    var retryCount by remember { mutableStateOf(0) }
+
+    LaunchedEffect(scrollToMessageId, groupedMessages.size) {
+        if (scrollToMessageId != null && scrollToMessageId != 0L) {
+
+            // Ищем сообщение в памяти
+            val targetIndex = groupedMessages.indexOfFirst { item ->
+                when (item) {
+                    is MessageListItem.Single -> item.message.id == scrollToMessageId
+                    is MessageListItem.Album -> item.messages.any { it.id == scrollToMessageId }
+                }
+            }
+
+            if (targetIndex != -1) {
+                // 💥 НАШЛИ! Летим прямо к нему!
+                println("📍 [SCROLL] Сообщение найдено на позиции $targetIndex! Скроллим...")
+                scrollBehavior.listState.animateScrollToItem(targetIndex)
+                onMessageScrolled() // Сбрасываем ID
+                retryCount = 0
+            } else if (retryCount < 2) {
+                // Если не нашли с первого раза — просим подгрузить историю вокруг него
+                println("📍 [SCROLL] Загружаем историю вокруг ID=$scrollToMessageId (Попытка ${retryCount + 1})")
+                retryCount++
+                onIntent(ChatDetailsIntent.LoadMoreMessages(scrollToMessageId))
+            } else {
+                // Если после подгрузки так и не нашли — сбрасываем, чтобы не зависать
+                println("⚠️ [SCROLL] Сообщение не удалось загрузить в память.")
+                onMessageScrolled()
+                retryCount = 0
+            }
+        }
+    }
+
+    LaunchedEffect(state.currentSearchIndex, state.inChatSearchResults) {
+        val targetMessage = state.inChatSearchResults.getOrNull(state.currentSearchIndex)
+        if (targetMessage != null) {
+            // Ищем сообщение в текущем отображаемом списке
+            val index = groupedMessages.indexOfFirst { item ->
+                when (item) {
+                    is MessageListItem.Single -> item.message.id == targetMessage.id
+                    is MessageListItem.Album -> item.messages.any { it.id == targetMessage.id }
+                }
+            }
+            if (index != -1) {
+                scrollBehavior.listState.animateScrollToItem(index)
+            } else {
+                // Если сообщение старое — наш проверенный LoadMore подкачает его!
+                onIntent(ChatDetailsIntent.LoadMoreMessages(targetMessage.id))
             }
         }
     }
@@ -116,16 +187,31 @@ fun ChatDetailsScreen(
             .imePadding(),
         containerColor = GhostBackground,
         topBar = {
-            GhostTopBar(
-                avatarPath = state.avatarPath,
-                chatTitle = state.chatTitle,
-                isGhostMode = state.isGhostMode,
-                isCryptoMode = state.isCryptoMode,
-                isGroup = state.isGroup,
-                onIntent = onIntent,
-                onBackClick = onBackClick,
-                onProfileClick = onProfileClick
-            )
+            if (state.isSearchOpen) {
+                InChatSearchBar(
+                    query = state.inChatSearchQuery,
+                    totalCount = state.inChatSearchResults.size,
+                    currentIndex = state.currentSearchIndex,
+                    isSearching = state.isSearchingInChat,
+                    isAiSearching = state.isAiSearching,
+                    onQueryChanged = { onIntent(ChatDetailsIntent.OnInChatSearchQueryChanged(it)) },
+                    onPrevious = { onIntent(ChatDetailsIntent.OnSearchPrevious) },
+                    onNext = { onIntent(ChatDetailsIntent.OnSearchNext) },
+                    onRunAiSearch = { onIntent(ChatDetailsIntent.OnRunAiSearch) },
+                    onClose = { onIntent(ChatDetailsIntent.OnToggleInChatSearch(false)) }
+                )
+            } else {
+                GhostTopBar(
+                    avatarPath = state.avatarPath,
+                    chatTitle = state.chatTitle,
+                    isGhostMode = state.isGhostMode,
+                    isCryptoMode = state.isCryptoMode,
+                    isGroup = state.isGroup,
+                    onIntent = onIntent,
+                    onBackClick = onBackClick,
+                    onProfileClick = onProfileClick,
+                )
+            }
         },
         bottomBar = {
             GhostInput(

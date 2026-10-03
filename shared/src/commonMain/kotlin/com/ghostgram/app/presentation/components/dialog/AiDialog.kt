@@ -29,7 +29,7 @@ fun AiDialog(
     aiApiKeyInput: String,
     setAiDialogOpen: (Boolean) -> Unit,
     updateAiKeyInput: (String) -> Unit,
-    saveAiKey: () -> Unit,
+    saveAiKey: (String) -> Unit,
 ){
 
     val scrollState = rememberScrollState()
@@ -76,7 +76,7 @@ fun AiDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { saveAiKey() }) {
+            TextButton(onClick = { saveAiKey(aiApiKeyInput) }) {
                 Text("Сохранить", color = GhostPrimary, fontWeight = FontWeight.Bold)
             }
         },

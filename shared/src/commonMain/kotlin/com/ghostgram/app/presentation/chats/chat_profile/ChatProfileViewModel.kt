@@ -16,7 +16,8 @@ data class ChatProfileState(
     val isLoading: Boolean = true,
     val selectedTab: Int = 0, // 0 = Медиа, 1 = Файлы, 2 = Голосовые
     val sharedMedia: List<Message> = emptyList(),
-    val isLoadingMedia: Boolean = false
+    val isLoadingMedia: Boolean = false,
+    val isMuted: Boolean = false
 )
 
 class ChatProfileViewModel(
@@ -45,6 +46,18 @@ class ChatProfileViewModel(
 
     fun onTabSelected(index: Int) {
         _state.update { it.copy(selectedTab = index) }
+        loadMediaForTab(index)
+    }
+
+    fun onToggleMute() {
+        val currentMute = _state.value.isMuted
+        val newMute = !currentMute
+        _state.update { it.copy(isMuted = newMute) }
+
+        viewModelScope.launch {
+            val repo = sessionManager.currentSession.value?.chatRepository
+            repo?.toggleChatMute(chatId, currentMute)
+        }
     }
 
     private fun loadMediaForTab(tabIndex: Int) {

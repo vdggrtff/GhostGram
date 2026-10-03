@@ -7,17 +7,19 @@ import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.core.tdlib.sendAndAwait
 import com.ghostgram.data.mapper.toDomain
 import com.ghostgram.data.repository.handlers.ChatUpdateHandler
-import com.ghostgram.data.repository.handlers.DownloadTracker
+import com.ghostgram.data.repository.utils.DownloadTracker
 import com.ghostgram.data.repository.handlers.MessageUpdateHandler
 import com.ghostgram.data.repository.handlers.ProfileAndFileHandler
 import com.ghostgram.data.repository.handlers.SearchUpdateHandler
 import com.ghostgram.data.repository.handlers.StickerUpdateHandler
-import com.ghostgram.data.repository.handlers.TdlibMediaSender
-import com.ghostgram.data.repository.handlers.TdlibMessageParser
+import com.ghostgram.data.repository.utils.TdlibMediaSender
+import com.ghostgram.data.repository.utils.TdlibMessageParser
 import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
+import com.ghostgram.data.repository.utils.SearchStemmer
 import entity.Chat
 import entity.ChatFullProfile
 import entity.Message
+import entity.MessageMediaType
 import entity.MyProfile
 import entity.PublicChat
 import entity.TelegramSticker
@@ -25,6 +27,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +47,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import repository.AiRepository
 import repository.ChatRepository
 
 class ChatRepositoryImpl(
@@ -130,14 +135,16 @@ class ChatRepositoryImpl(
     override fun observeChat(chatId: Long): Flow<Chat?> = _chatsMap.map { it[chatId] }
 
     override suspend fun loadMoreMessages(chatId: Long, fromMessageId: Long) {
+
+        val offset = if (fromMessageId != 0L) -20 else 0
+
         // Просим еще 50 старых сообщений, начиная от fromMessageId
-        tdlibClient.send(
-            """
+        tdlibClient.send("""
             {
                 "@type": "getChatHistory",
                 "chat_id": $chatId,
                 "from_message_id": $fromMessageId,
-                "offset": 0,
+                "offset": $offset,
                 "limit": 50,
                 "only_local": false
             }
@@ -292,6 +299,52 @@ class ChatRepositoryImpl(
         tdlibClient.send("""{"@type": "searchMessages", "query": "$query", "offset_date": 0, "offset_chat_id": 0, "offset_message_id": 0, "limit": 20, "@extra": "search_msg_$query"}""")
     }
 
+    override suspend fun searchMessagesInChat(chatId: Long, query: String, fromMessageId: Long): List<Message> {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return emptyList()
+
+        // 💥 Получаем корень слова для поиска падежей
+        val stem = SearchStemmer.trimEnding(cleanQuery)
+
+        return coroutineScope {
+            // 🌐 ПОТОК 1: Облако Telegram (TDLib) — ищет глубокую историю
+            val cloudJob = async {
+                val filterObj = buildJsonObject { put("@type", "searchMessagesFilterEmpty") }
+                val response = tdlibClient.sendAndAwait(
+                    requestType = "searchChatMessages",
+                    parameters = mapOf(
+                        "chat_id" to chatId,
+                        "query" to cleanQuery,
+                        "filter" to filterObj,
+                        "from_message_id" to fromMessageId,
+                        "offset" to 0,
+                        "limit" to 50
+                    ),
+                    timeoutMs = 3000
+                ) ?: return@async emptyList()
+
+                val messagesArray = response["messages"]?.jsonArray ?: return@async emptyList()
+                messagesArray.mapNotNull { elem ->
+                    messageParser.parse(elem.jsonObject, fallbackChatId = chatId)
+                }
+            }
+
+            // 💾 ПОТОК 2: Локальная база Room SQLite — ищет подстроки и любые склонения
+            val localJob = async {
+                val localEntities = messageDao.searchLocalMessages(chatId, cleanQuery, stem)
+                localEntities.map { it.toDomain() }
+            }
+
+            val cloudResults = runCatching { cloudJob.await() }.getOrDefault(emptyList())
+            val localResults = runCatching { localJob.await() }.getOrDefault(emptyList())
+
+            // 💥 ОБЪЕДИНЕНИЕ: убираем дубликаты по ID и сортируем (свежие первыми)
+            (localResults + cloudResults)
+                .distinctBy { it.id }
+                .sortedWith(compareByDescending<Message> { it.date }.thenByDescending { it.id })
+        }
+    }
+
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
         val request = """
             {
@@ -378,24 +431,65 @@ class ChatRepositoryImpl(
     }
 
 
-    override suspend fun getSharedMedia(
-        chatId: Long,
-        filterType: String,
-        fromMessageId: Long,
-    ): List<Message> {
+    override suspend fun getSharedMedia(chatId: Long, filterType: String, fromMessageId: Long): List<Message> {
+        // 💥 1. ЛОГ НА ВХОДЕ: проверяем, пошел ли запрос вообще
+        println("📡 [SHARED MEDIA] 1. Старт запроса: filter=$filterType | chatId=$chatId")
+
         val filterObj = buildJsonObject { put("@type", filterType) }
+
+        // 💥 Увеличиваем таймаут до 10 секунд для медленной сети/VPN!
         val response = tdlibClient.sendAndAwait(
             requestType = "searchChatMessages",
             parameters = mapOf(
-                "chat_id" to chatId, "query" to "", "filter" to filterObj,
-                "from_message_id" to fromMessageId, "offset" to 0, "limit" to 50
-            )
-        ) ?: return emptyList()
+                "chat_id" to chatId,
+                "query" to "",
+                "filter" to filterObj,
+                "from_message_id" to fromMessageId,
+                "offset" to 0,
+                "limit" to 50
+            ),
+            timeoutMs = 10000 // 10 секунд!
+        )
 
-        val messagesArray = response["messages"]?.jsonArray ?: return emptyList()
-        return messagesArray.mapNotNull { elem ->
-            messageParser.parse(elem.jsonObject, fallbackChatId = chatId)
+        // 💥 2. ЛОГ ОТВЕТА: смотрим, что вернул сервер
+        println("📡 [SHARED MEDIA] 2. Ответ от TDLib: $response")
+
+        if (response == null) {
+            println("❌ [SHARED MEDIA] ТАЙМАУТ: TDLib не ответил за 10 секунд!")
+            return emptyList()
         }
+
+        val messagesArray = response["messages"]?.jsonArray
+        if (messagesArray == null) {
+            println("❌ [SHARED MEDIA] В ответе нет массива сообщений! Ошибка: ${response["message"]?.jsonPrimitive?.content}")
+            return emptyList()
+        }
+
+        println("🔍 [SHARED MEDIA] 3. TDLib нашел ${messagesArray.size} сырых сообщений")
+
+        val expectedTypes = when (filterType) {
+            // 💥 Добавили VIDEO_NOTE, иначе кружочки пропадут!
+            "searchMessagesFilterPhotoAndVideo" -> listOf(MessageMediaType.PHOTO, MessageMediaType.VIDEO, MessageMediaType.VIDEO_NOTE)
+            "searchMessagesFilterDocument" -> listOf(MessageMediaType.DOCUMENT)
+            "searchMessagesFilterVoiceNote" -> listOf(MessageMediaType.VOICE)
+            else -> emptyList()
+        }
+
+        val result = messagesArray.mapNotNull { elem ->
+            val msgObj = elem.jsonObject
+            val message = messageParser.parse(msgObj, fallbackChatId = chatId) ?: return@mapNotNull null
+
+            // Проверяем тип контента
+            if (expectedTypes.isNotEmpty() && message.mediaType !in expectedTypes) {
+                println("⚠️ [SHARED MEDIA] Пропущено: ID=${message.id} имеет тип ${message.mediaType} (не подходит для $filterType)")
+                return@mapNotNull null
+            }
+
+            message
+        }
+
+        println("✅ [SHARED MEDIA] 4. Успешно добавлено в UI: ${result.size} сообщений")
+        return result
     }
 
     override fun openChat(chatId: Long) {
@@ -406,5 +500,22 @@ class ChatRepositoryImpl(
 
     override fun closeChat(chatId: Long) {
         tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
+    }
+
+    override suspend fun toggleChatMute(chatId: Long, isMuted: Boolean) {
+        // Если чат заглушен — ставим 0 (включить звук), если нет — ставим максимальное число (заглушить навсегда)
+        val muteFor = if (isMuted) 0 else 2147483647
+        val request = """
+            {
+                "@type": "setChatNotificationSettings",
+                "chat_id": $chatId,
+                "notification_settings": {
+                    "@type": "chatNotificationSettings",
+                    "use_default_mute_for": false,
+                    "mute_for": $muteFor
+                }
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
     }
 }

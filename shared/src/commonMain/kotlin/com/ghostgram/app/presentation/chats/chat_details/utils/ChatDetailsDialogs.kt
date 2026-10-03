@@ -1,8 +1,10 @@
-package com.ghostgram.app.presentation.chats.chat_details
+package com.ghostgram.app.presentation.chats.chat_details.utils
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ClipboardManager
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsState
 import com.ghostgram.app.presentation.components.bottom_sheet.StickerBottomSheet
 import com.ghostgram.app.presentation.components.dialog.*
 import entity.Message

@@ -29,13 +29,14 @@ val presentationModule = module {
             savedStateHandle = get(),
             generateSmartRepliesUseCase = get(),
             generateCatchUpSummaryUseCase = get(),
+            searchMessagesSemanticUseCase = get(),
             sessionManager = get()
         )
     }
 
     viewModel { AuthViewModel(sessionManager = get()) }
 
-    viewModel { SettingsViewModel(sessionManager = get()) }
+    viewModel { SettingsViewModel(sessionManager = get(), settingsManager = get()) }
 
     viewModel { ContactsViewModel(sessionManager = get()) }
 

@@ -1,4 +1,4 @@
-package com.ghostgram.app.presentation.chats.chat_details
+package com.ghostgram.app.presentation.chats.chat_details.utils
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState

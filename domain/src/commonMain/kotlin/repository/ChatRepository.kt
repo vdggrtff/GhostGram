@@ -60,6 +60,8 @@ interface ChatRepository {
     fun observeMessageSearchResults(): Flow<List<Chat>>
     fun searchMessages(query: String)
 
+    suspend fun searchMessagesInChat(chatId: Long, query: String, fromMessageId: Long = 0L): List<Message>
+
     suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean)
 
     suspend fun clearLocalCache(clearNormal: Boolean, clearAntiRevoke: Boolean)
@@ -80,4 +82,6 @@ interface ChatRepository {
 
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)
+
+    suspend fun toggleChatMute(chatId: Long, isMuted: Boolean)
 }
