@@ -47,7 +47,7 @@ fun GhostAlbumBubble(
     isGroup: Boolean = false, // Флаг группы
     replyMessage: Message? = null,
     onLongClick: () -> Unit,
-    onMediaClick: (String) -> Unit
+    onMediaClick: (Long) -> Unit,
 ) {
     val baseMessage = albumMessages.last()
     val isOutgoing = baseMessage.isOutgoing
@@ -143,7 +143,7 @@ fun GhostAlbumBubble(
 private fun AlbumMediaItem(
     message: Message,
     modifier: Modifier = Modifier,
-    onMediaClick: (String) -> Unit
+    onMediaClick: (Long) -> Unit
 ) {
     val isVideo = message.mediaType == MessageMediaType.VIDEO || message.mediaType == MessageMediaType.VIDEO_NOTE
     val model = if (message.photoPath?.startsWith("/") == true) "file://${message.photoPath}" else message.photoPath
@@ -157,8 +157,8 @@ private fun AlbumMediaItem(
             .clickable {
                 if (isVideo && !message.isSending && !videoPath.isNullOrBlank()) {
                     openVideoInSystemPlayer(videoPath)
-                } else if (!isVideo && model != null) {
-                    onMediaClick(model)
+                } else {
+                    onMediaClick(message.id)
                 }
             },
         contentAlignment = Alignment.Center

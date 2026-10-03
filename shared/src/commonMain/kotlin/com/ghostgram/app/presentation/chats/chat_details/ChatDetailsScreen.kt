@@ -46,6 +46,7 @@ import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
 import com.ghostgram.app.presentation.components.topbar.InChatSearchBar
+import com.ghostgram.app.presentation.components.utils.GhostMediaViewer
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
@@ -92,7 +93,8 @@ fun ChatDetailsScreen(
 ) {
 
     val coroutineScope = rememberCoroutineScope()
-    var fullScreenImage by remember { mutableStateOf<String?>(null) }
+    //var fullScreenImage by remember { mutableStateOf<String?>(null) }
+    var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
 
     @Suppress("DEPRECATION")
@@ -293,7 +295,7 @@ fun ChatDetailsScreen(
                                 isGroup = state.isGroup,
                                 isFirstInGroup = isFirstInGroup, // 👈
                                 isLastInGroup = isLastInGroup,   // 👈
-                                onMediaClick = { fullScreenImage = it },
+                                onMediaClick = { activeViewerMessageId = item.message.id },
                                 onLongClick = { selectedMessageForMenu = item.message },
                                 replyMessage = repliedMsg,
                             )
@@ -310,7 +312,7 @@ fun ChatDetailsScreen(
                         ) {
                             GhostAlbumBubble(
                                 albumMessages = item.messages,
-                                onMediaClick = { fullScreenImage = it },
+                                onMediaClick = { activeViewerMessageId = it },
                                 isGroup = state.isGroup,
                                 isLastInGroup = isLastInGroup,
                                 isFirstInGroup = isFirstInGroup,
@@ -344,12 +346,27 @@ fun ChatDetailsScreen(
             }
         }
     }
+    if (activeViewerMessageId != null) {
+        // Фильтруем все сообщения чата, у которых есть фото или видео
+        val chatMediaList = remember(state.messages) {
+            state.messages.filter {
+                (it.mediaType == entity.MessageMediaType.PHOTO && it.photoPath != null) ||
+                        (it.mediaType == entity.MessageMediaType.VIDEO && (it.fileName != null || it.photoPath != null))
+            }
+        }
+
+       GhostMediaViewer(
+            mediaMessages = chatMediaList,
+            initialMessageId = activeViewerMessageId!!,
+            onDismiss = { activeViewerMessageId = null }
+        )
+    }
     ChatDetailsDialogs(
         state = state,
-        fullScreenImage = fullScreenImage,
+        //fullScreenImage = fullScreenImage,
         selectedMessageForMenu = selectedMessageForMenu,
         clipboardManager = clipboardManager,
-        onDismissFullScreenImage = { fullScreenImage = null },
+        //onDismissFullScreenImage = { fullScreenImage = null },
         onDismissMessageMenu = { selectedMessageForMenu = null },
         onIntent = onIntent
     )

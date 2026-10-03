@@ -12,19 +12,19 @@ import entity.Message
 @Composable
 fun ChatDetailsDialogs(
     state: ChatDetailsState,
-    fullScreenImage: String?,
+    //fullScreenImage: String?,
     selectedMessageForMenu: Message?,
     clipboardManager: ClipboardManager,
-    onDismissFullScreenImage: () -> Unit,
+    //onDismissFullScreenImage: () -> Unit,
     onDismissMessageMenu: () -> Unit,
     onIntent: (ChatDetailsIntent) -> Unit
 ) {
     if (state.catchUpSummary != null) {
         GhostAlertDialog(catchUpSummary = state.catchUpSummary, onIntent = onIntent)
     }
-    if (fullScreenImage != null) {
+    /*if (fullScreenImage != null) {
         FullScreenImageDialog(imageUrl = fullScreenImage, onDismiss = onDismissFullScreenImage)
-    }
+    }*/
     if (state.pendingMedia.isNotEmpty()) {
         PendingMediaDialog(
             pendingMedia = state.pendingMedia,
