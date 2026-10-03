@@ -7,14 +7,15 @@ import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.core.tdlib.sendAndAwait
 import com.ghostgram.data.mapper.toDomain
 import com.ghostgram.data.repository.handlers.ChatUpdateHandler
-import com.ghostgram.data.repository.handlers.DownloadTracker
+import com.ghostgram.data.repository.utils.DownloadTracker
 import com.ghostgram.data.repository.handlers.MessageUpdateHandler
 import com.ghostgram.data.repository.handlers.ProfileAndFileHandler
 import com.ghostgram.data.repository.handlers.SearchUpdateHandler
 import com.ghostgram.data.repository.handlers.StickerUpdateHandler
-import com.ghostgram.data.repository.handlers.TdlibMediaSender
-import com.ghostgram.data.repository.handlers.TdlibMessageParser
+import com.ghostgram.data.repository.utils.TdlibMediaSender
+import com.ghostgram.data.repository.utils.TdlibMessageParser
 import com.ghostgram.data.repository.handlers.TdlibUpdateHandler
+import com.ghostgram.data.repository.utils.SearchStemmer
 import entity.Chat
 import entity.ChatFullProfile
 import entity.Message
@@ -26,6 +27,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +47,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import repository.AiRepository
 import repository.ChatRepository
 
 class ChatRepositoryImpl(
@@ -293,6 +297,52 @@ class ChatRepositoryImpl(
             return
         }
         tdlibClient.send("""{"@type": "searchMessages", "query": "$query", "offset_date": 0, "offset_chat_id": 0, "offset_message_id": 0, "limit": 20, "@extra": "search_msg_$query"}""")
+    }
+
+    override suspend fun searchMessagesInChat(chatId: Long, query: String, fromMessageId: Long): List<Message> {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return emptyList()
+
+        // 💥 Получаем корень слова для поиска падежей
+        val stem = SearchStemmer.trimEnding(cleanQuery)
+
+        return coroutineScope {
+            // 🌐 ПОТОК 1: Облако Telegram (TDLib) — ищет глубокую историю
+            val cloudJob = async {
+                val filterObj = buildJsonObject { put("@type", "searchMessagesFilterEmpty") }
+                val response = tdlibClient.sendAndAwait(
+                    requestType = "searchChatMessages",
+                    parameters = mapOf(
+                        "chat_id" to chatId,
+                        "query" to cleanQuery,
+                        "filter" to filterObj,
+                        "from_message_id" to fromMessageId,
+                        "offset" to 0,
+                        "limit" to 50
+                    ),
+                    timeoutMs = 3000
+                ) ?: return@async emptyList()
+
+                val messagesArray = response["messages"]?.jsonArray ?: return@async emptyList()
+                messagesArray.mapNotNull { elem ->
+                    messageParser.parse(elem.jsonObject, fallbackChatId = chatId)
+                }
+            }
+
+            // 💾 ПОТОК 2: Локальная база Room SQLite — ищет подстроки и любые склонения
+            val localJob = async {
+                val localEntities = messageDao.searchLocalMessages(chatId, cleanQuery, stem)
+                localEntities.map { it.toDomain() }
+            }
+
+            val cloudResults = runCatching { cloudJob.await() }.getOrDefault(emptyList())
+            val localResults = runCatching { localJob.await() }.getOrDefault(emptyList())
+
+            // 💥 ОБЪЕДИНЕНИЕ: убираем дубликаты по ID и сортируем (свежие первыми)
+            (localResults + cloudResults)
+                .distinctBy { it.id }
+                .sortedWith(compareByDescending<Message> { it.date }.thenByDescending { it.id })
+        }
     }
 
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {

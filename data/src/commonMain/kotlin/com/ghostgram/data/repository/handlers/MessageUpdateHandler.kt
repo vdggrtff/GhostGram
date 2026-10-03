@@ -5,6 +5,7 @@ import com.ghostgram.core.crypto.toHex
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.database.entity.MessageEntity
 import com.ghostgram.core.tdlib.TelegramFlowClient
+import com.ghostgram.data.repository.utils.DownloadTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject

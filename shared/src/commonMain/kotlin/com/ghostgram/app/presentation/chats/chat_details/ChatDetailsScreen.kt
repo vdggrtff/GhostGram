@@ -45,6 +45,7 @@ import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
+import com.ghostgram.app.presentation.components.topbar.InChatSearchBar
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
@@ -153,6 +154,25 @@ fun ChatDetailsScreen(
         }
     }
 
+    LaunchedEffect(state.currentSearchIndex, state.inChatSearchResults) {
+        val targetMessage = state.inChatSearchResults.getOrNull(state.currentSearchIndex)
+        if (targetMessage != null) {
+            // Ищем сообщение в текущем отображаемом списке
+            val index = groupedMessages.indexOfFirst { item ->
+                when (item) {
+                    is MessageListItem.Single -> item.message.id == targetMessage.id
+                    is MessageListItem.Album -> item.messages.any { it.id == targetMessage.id }
+                }
+            }
+            if (index != -1) {
+                scrollBehavior.listState.animateScrollToItem(index)
+            } else {
+                // Если сообщение старое — наш проверенный LoadMore подкачает его!
+                onIntent(ChatDetailsIntent.LoadMoreMessages(targetMessage.id))
+            }
+        }
+    }
+
     // Вспомогательная функция, чтобы достать дату из элемента
     fun getDateFromItem(item: MessageListItem): Int {
         return when (item) {
@@ -167,16 +187,31 @@ fun ChatDetailsScreen(
             .imePadding(),
         containerColor = GhostBackground,
         topBar = {
-            GhostTopBar(
-                avatarPath = state.avatarPath,
-                chatTitle = state.chatTitle,
-                isGhostMode = state.isGhostMode,
-                isCryptoMode = state.isCryptoMode,
-                isGroup = state.isGroup,
-                onIntent = onIntent,
-                onBackClick = onBackClick,
-                onProfileClick = onProfileClick
-            )
+            if (state.isSearchOpen) {
+                InChatSearchBar(
+                    query = state.inChatSearchQuery,
+                    totalCount = state.inChatSearchResults.size,
+                    currentIndex = state.currentSearchIndex,
+                    isSearching = state.isSearchingInChat,
+                    isAiSearching = state.isAiSearching,
+                    onQueryChanged = { onIntent(ChatDetailsIntent.OnInChatSearchQueryChanged(it)) },
+                    onPrevious = { onIntent(ChatDetailsIntent.OnSearchPrevious) },
+                    onNext = { onIntent(ChatDetailsIntent.OnSearchNext) },
+                    onRunAiSearch = { onIntent(ChatDetailsIntent.OnRunAiSearch) },
+                    onClose = { onIntent(ChatDetailsIntent.OnToggleInChatSearch(false)) }
+                )
+            } else {
+                GhostTopBar(
+                    avatarPath = state.avatarPath,
+                    chatTitle = state.chatTitle,
+                    isGhostMode = state.isGhostMode,
+                    isCryptoMode = state.isCryptoMode,
+                    isGroup = state.isGroup,
+                    onIntent = onIntent,
+                    onBackClick = onBackClick,
+                    onProfileClick = onProfileClick,
+                )
+            }
         },
         bottomBar = {
             GhostInput(

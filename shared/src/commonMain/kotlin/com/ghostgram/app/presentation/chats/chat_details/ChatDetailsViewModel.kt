@@ -15,17 +15,23 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDel
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissCatchUpDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEditMessageClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInChatSearchQueryChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnRunAiSearch
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchNext
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchPrevious
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendSticker
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnStartRecording
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnStopRecording
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleAiSearch
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleInChatSearch
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
 import entity.Message
@@ -39,12 +45,14 @@ import kotlinx.coroutines.launch
 import repository.ChatRepository
 import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
+import usecase.SearchMessagesSemanticUseCase
 
 class ChatDetailsViewModel(
     savedStateHandle: SavedStateHandle, // Koin сам отдаст его сюда!
     private val sessionManager: SessionManager,
     private val generateSmartRepliesUseCase: GenerateSmartRepliesUseCase,
     private val generateCatchUpSummaryUseCase: GenerateCatchUpSummaryUseCase,
+    private val searchMessagesSemanticUseCase: SearchMessagesSemanticUseCase,
 ) : ViewModel() {
     //340
     val chatId: Long = savedStateHandle.get<Any>("chatId")?.toString()?.toLongOrNull() ?: 0L
@@ -53,6 +61,8 @@ class ChatDetailsViewModel(
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
 
     private var sessionJob: Job? = null
+
+    private var inChatSearchJob: Job? = null
     private var isLoadingMore = false
     private var lastSummarizedMessageId: Long? = null
     private var cachedSummaryText: String? = null
@@ -120,6 +130,31 @@ class ChatDetailsViewModel(
             }
 
             is LoadMoreMessages -> loadMore(repo, intent.fromMessageId)
+
+            is OnToggleInChatSearch -> {
+                _state.update {
+                    it.copy(
+                        isSearchOpen = intent.isOpen,
+                        inChatSearchQuery = if (!intent.isOpen) "" else it.inChatSearchQuery,
+                        inChatSearchResults = if (!intent.isOpen) emptyList() else it.inChatSearchResults,
+                        currentSearchIndex = 0
+                    )
+                }
+            }
+
+            is OnInChatSearchQueryChanged -> {
+                _state.update { it.copy(inChatSearchQuery = intent.query) }
+                performInChatSearch(intent.query)
+            }
+
+            is OnSearchPrevious -> navigateSearch(next = false)
+            is OnSearchNext -> navigateSearch(next = true)
+            is OnToggleAiSearch -> {
+                val newMode = !_state.value.isAiSearchEnabled
+                _state.update { it.copy(isAiSearchEnabled = newMode) }
+                performInChatSearch(_state.value.inChatSearchQuery) // Перезапускаем поиск с новым режимом
+            }
+            is OnRunAiSearch -> runAiSearch(repo)
         }
     }
 
@@ -321,6 +356,89 @@ class ChatDetailsViewModel(
                 }
                 .onFailure { _state.update { it.copy(isRepliesLoading = false) } }
         }
+    }
+
+    /*private fun performInChatSearch(query: String) {
+        inChatSearchJob?.cancel()
+        if (query.isBlank()) {
+            _state.update { it.copy(inChatSearchResults = emptyList(), isSearchingInChat = false) }
+            return
+        }
+
+        inChatSearchJob = viewModelScope.launch {
+            delay(300) // Debounce, чтобы не спамить в ядро на каждую букву
+            _state.update { it.copy(isSearchingInChat = true) }
+
+            val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+            val results = repo.searchMessagesInChat(chatId, query)
+
+            _state.update {
+                it.copy(
+                    inChatSearchResults = results,
+                    isSearchingInChat = false,
+                    currentSearchIndex = 0
+                )
+            }
+        }
+    }*/
+    private fun performInChatSearch(query: String) {
+        inChatSearchJob?.cancel()
+        if (query.isBlank()) {
+            _state.update { it.copy(inChatSearchResults = emptyList(), isSearchingInChat = false) }
+            return
+        }
+
+        inChatSearchJob = viewModelScope.launch {
+            delay(300)
+            _state.update { it.copy(isSearchingInChat = true) }
+            val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+
+            // 💥 БЕСПЛАТНЫЙ БЫСТРЫЙ ПОИСК (SQLITE + TDLIB)
+            val results = repo.searchMessagesInChat(chatId, query)
+
+            _state.update {
+                it.copy(
+                    inChatSearchResults = results,
+                    isSearchingInChat = false,
+                    currentSearchIndex = 0
+                )
+            }
+        }
+    }
+
+    private fun runAiSearch(repo: ChatRepository) {
+        val query = _state.value.inChatSearchQuery.trim()
+        if (query.isBlank() || _state.value.isAiSearching) return
+
+        viewModelScope.launch {
+            // 💥 Запускаем крутилку ИИ
+            _state.update { it.copy(isAiSearching = true) }
+
+            // Ровно 1 точечный запрос к Gemini!
+            val results = searchMessagesSemanticUseCase(chatId, query, repo)
+
+            _state.update {
+                it.copy(
+                    inChatSearchResults = results,
+                    isAiSearching = false,
+                    currentSearchIndex = 0
+                )
+            }
+        }
+    }
+
+    private fun navigateSearch(next: Boolean) {
+        val results = _state.value.inChatSearchResults
+        if (results.isEmpty()) return
+
+        val currentIndex = _state.value.currentSearchIndex
+        val newIndex = if (next) {
+            (currentIndex - 1).coerceAtLeast(0) // Идем к более новым (вниз)
+        } else {
+            (currentIndex + 1).coerceAtMost(results.size - 1) // Идем к более старым (вверх)
+        }
+
+        _state.update { it.copy(currentSearchIndex = newIndex) }
     }
 
     override fun onCleared() {

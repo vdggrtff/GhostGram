@@ -26,7 +26,14 @@ data class ChatDetailsState(
     val editingMessage: Message? = null,
     val recentStickers: List<entity.TelegramSticker> = emptyList(), // Список стикеров
     val isStickersOpen: Boolean = false,
-    val isGroup: Boolean = false
+    val isGroup: Boolean = false,
+    val isSearchOpen: Boolean = false,              // Открыта ли строка поиска в TopBar
+    val inChatSearchQuery: String = "",             // Текст поиска
+    val inChatSearchResults: List<Message> = emptyList(), // Список найденных сообщений
+    val currentSearchIndex: Int = 0,                // На каком сообщении мы сейчас (0, 1, 2...)
+    val isSearchingInChat: Boolean = false,
+    val isAiSearchEnabled: Boolean = false,
+    val isAiSearching: Boolean = false
 )
 
 // Действия на экране чата
@@ -60,4 +67,11 @@ sealed interface ChatDetailsIntent {
     data class OnSendSticker(val remoteFileId: Int) : ChatDetailsIntent
     data class OnStartRecording(val filePath: String) : ChatDetailsIntent
     data class OnStopRecording(val send: Boolean, val filePath: String) : ChatDetailsIntent
+
+    data class OnToggleInChatSearch(val isOpen: Boolean) : ChatDetailsIntent // Открыть/закрыть
+    data class OnInChatSearchQueryChanged(val query: String) : ChatDetailsIntent // Печатаем
+    data object OnSearchNext : ChatDetailsIntent // Кнопка 🔽 (Свежее)
+    data object OnSearchPrevious : ChatDetailsIntent
+    data object OnToggleAiSearch : ChatDetailsIntent
+    data object OnRunAiSearch : ChatDetailsIntent
 }

@@ -1,4 +1,4 @@
-package com.ghostgram.data.repository.handlers
+package com.ghostgram.data.repository.utils
 
 // Объект, который помнит, какой fileId какому сообщению/чату принадлежит
 class DownloadTracker {

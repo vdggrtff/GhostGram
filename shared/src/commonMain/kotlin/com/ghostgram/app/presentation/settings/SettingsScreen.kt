@@ -60,7 +60,7 @@ fun SettingsRoute(
         setAiDialogOpen = { viewModel.setAiDialogOpen(it) },
         setStorageDialogOpen = { viewModel.setStorageDialogOpen(it) },
         updateAiKeyInput = { viewModel.updateAiKeyInput(it) },
-        saveAiKey = { viewModel.saveAiKey() },
+        saveAiKey = { viewModel.saveCustomApiKey(it) },
         onClearNormalCache = {viewModel.toggleNormalCacheClear()},
         onClearAntiRevokeCache = {viewModel.toggleAntiRevokeCacheClear()},
         executeCacheClear = {viewModel.executeCacheClear()}
@@ -81,7 +81,7 @@ fun SettingsScreen(
     onClearNormalCache: () -> Unit,
     onClearAntiRevokeCache: () -> Unit,
     executeCacheClear: () -> Unit,
-    saveAiKey: () -> Unit,
+    saveAiKey: (String) -> Unit,
     onLogOut: () -> Unit,
 ) {
     Scaffold(

@@ -1,4 +1,4 @@
-package com.ghostgram.data.repository.handlers
+package com.ghostgram.data.repository.utils
 
 import com.ghostgram.core.crypto.CryptoLayer
 import com.ghostgram.core.tdlib.TelegramFlowClient

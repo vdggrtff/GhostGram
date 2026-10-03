@@ -6,6 +6,7 @@ import org.koin.dsl.module
 import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateChatSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
+import usecase.SearchMessagesSemanticUseCase
 
 val domainModule = module {
     single {
@@ -18,4 +19,5 @@ val domainModule = module {
     factory { GenerateChatSummaryUseCase(sessionManager = get(), aiRepository = get()) }
     factory { GenerateSmartRepliesUseCase(sessionManager = get(), aiRepository = get()) }
     factory { GenerateCatchUpSummaryUseCase(sessionManager = get(), aiRepository = get()) }
+    factory { SearchMessagesSemanticUseCase(get()) }
 }
