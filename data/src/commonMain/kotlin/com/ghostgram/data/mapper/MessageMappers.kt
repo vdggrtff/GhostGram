@@ -22,5 +22,6 @@ fun MessageEntity.toDomain(): Message = Message(
     replyToMessageId = replyToMessageId,
     isEdited = isEdited,
     senderId = senderId,
-    senderAvatarPath = senderAvatarPath
+    senderAvatarPath = senderAvatarPath,
+    waveform = waveform
 )

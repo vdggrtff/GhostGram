@@ -65,7 +65,45 @@ class TdlibMessageParser(
                     replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
                 )
             }
-            "messageVideo", "messageVideoNote" -> {
+            "messageVideo", "messageVideoNote", "messageAnimation" -> {
+                val videoContainer = contentObj[when (contentType) {
+                    "messageVideo" -> "video"
+                    "messageVideoNote" -> "video_note"
+                    else -> "animation" // 💥 ДЛЯ ГИФОК
+                }]?.jsonObject
+
+                val thumbObj = videoContainer?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
+                val path = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val thumbFileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
+                val duration = videoContainer?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
+
+                // Для видео файл лежит в "video", для гифок — в "animation"
+                val mediaFile = videoContainer?.get(if (contentType == "messageAnimation") "animation" else "video")?.jsonObject
+                val videoPath = mediaFile?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val videoFileId = mediaFile?.get("id")?.jsonPrimitive?.intOrNull
+
+                // 💥 КАЧАЕМ ПРЕВЬЮ НА МАКСИМАЛЬНОЙ СКОРОСТИ (priority = 32)!
+                if (path.isNullOrBlank() && thumbFileId != null) {
+                    tracker.messagePhotos[thumbFileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $thumbFileId, "priority": 32}""")
+                }
+                if (videoPath.isNullOrBlank() && videoFileId != null) {
+                    tracker.messageFiles[videoFileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $videoFileId, "priority": 16}""")
+                }
+
+                Message(
+                    id = msgId, chatId = chatId, senderName = if (isOutgoing) "Вы" else "Собеседник",
+                    text = "", photoPath = path, fileName = videoPath,
+                    fileExtraInfo = if (duration > 0) "$duration сек" else "GIF",
+                    isOutgoing = isOutgoing,
+                    // Все гифки и видео отправляем как VIDEO
+                    mediaType = MessageMediaType.VIDEO,
+                    date = date, isSending = isSending,
+                    replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
+                )
+            }
+           /* "messageVideo", "messageVideoNote" -> {
                 val videoObj = contentObj[if (contentType == "messageVideo") "video" else "video_note"]?.jsonObject
                 val thumbObj = videoObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
                 val path = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
@@ -101,7 +139,7 @@ class TdlibMessageParser(
                     senderId = senderId,
                     mediaAlbumId = mediaAlbumId
                 )
-            }
+            }*/
             "messageDocument" -> {
                 val docContainer = contentObj["document"]?.jsonObject
                 val docFile = docContainer?.get("document")?.jsonObject
@@ -133,6 +171,7 @@ class TdlibMessageParser(
                 val voiceObj = contentObj["voice_note"]?.jsonObject
                 val duration = voiceObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
                 val voiceFile = voiceObj?.get("voice")?.jsonObject
+                val waveform = voiceObj?.get("waveform")?.jsonPrimitive?.content
                 val filePath = voiceFile?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
                 val fileId = voiceFile?.get("id")?.jsonPrimitive?.intOrNull
 
@@ -148,10 +187,11 @@ class TdlibMessageParser(
                     fileExtraInfo = formatDuration(duration),
                     isOutgoing = isOutgoing, mediaType = MessageMediaType.VOICE,
                     date = date, isSending = isSending, replyToMessageId = replyToId,
-                    isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
+                    isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId,
+                    waveform = waveform
                 )
             }
-            "messageSticker" -> {
+            /*"messageSticker" -> {
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
                 val fileObj = stickerObj?.get("sticker")?.jsonObject
@@ -166,6 +206,42 @@ class TdlibMessageParser(
                 Message(
                     id = msgId, chatId = chatId, senderName = if (isOutgoing) "Вы" else "Собеседник",
                     text = "", photoPath = stickerPath, fileExtraInfo = emoji, isOutgoing = isOutgoing,
+                    mediaType = MessageMediaType.STICKER, date = date, isSending = isSending,
+                    replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
+                )
+            }*/
+            "messageSticker" -> {
+                val stickerObj = contentObj["sticker"]?.jsonObject
+                val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
+
+                // 💥 1. Превьюшка (статичная .webp)
+                val thumbObj = stickerObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
+                val thumbFileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
+                val thumbPath = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // 💥 2. Основной файл стикера (.tgs, .webm или .webp)
+                val fileObj = stickerObj?.get("sticker")?.jsonObject
+                val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
+                val stickerPath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // Качаем превьюшку
+                if (thumbPath.isNullOrBlank() && thumbFileId != null) {
+                    tracker.messagePhotos[thumbFileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $thumbFileId, "priority": 32}""")
+                }
+
+                // Качаем основной файл
+                if (stickerPath.isNullOrBlank() && fileId != null) {
+                    tracker.messageFiles[fileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 16}""")
+                }
+
+                Message(
+                    id = msgId, chatId = chatId, senderName = if (isOutgoing) "Вы" else "Собеседник",
+                    text = "",
+                    photoPath = thumbPath ?: stickerPath, // Превьюшка (webp)
+                    fileName = stickerPath,              // 💥 САМ ФАЙЛ (.webm / .tgs)
+                    fileExtraInfo = emoji, isOutgoing = isOutgoing,
                     mediaType = MessageMediaType.STICKER, date = date, isSending = isSending,
                     replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
                 )

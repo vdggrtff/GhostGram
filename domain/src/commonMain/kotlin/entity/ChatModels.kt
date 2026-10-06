@@ -22,7 +22,8 @@ data class Message(
     val replyToMessageId: Long = 0L,
     val isEdited: Boolean = false,
     val senderId: Long = 0L,
-    val senderAvatarPath: String? = null
+    val senderAvatarPath: String? = null,
+    val waveform: String? = null
 )
 
 data class Chat(

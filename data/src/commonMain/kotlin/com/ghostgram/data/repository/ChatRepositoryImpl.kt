@@ -157,7 +157,7 @@ class ChatRepositoryImpl(
         tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
 
         // 2. Агрессивная автодокачка для медленных сетей и эмуляторов
-        repoScope.launch {
+        /*repoScope.launch {
             repeat(4) {
                 tdlibClient.send(
                     """
@@ -173,6 +173,11 @@ class ChatRepositoryImpl(
                 )
                 kotlinx.coroutines.delay(1200)
             }
+        }*/
+        repoScope.launch {
+            tdlibClient.send(
+                """{"@type": "getChatHistory", "chat_id": $chatId, "from_message_id": 0, "offset": 0, "limit": 50, "only_local": false}"""
+            )
         }
 
         // 3. ЕДИНЫЙ ПОТОК ИЗ ROOM С АВТОМАТИЧЕСКОЙ ПРОВЕРКОЙ GHOST MODE

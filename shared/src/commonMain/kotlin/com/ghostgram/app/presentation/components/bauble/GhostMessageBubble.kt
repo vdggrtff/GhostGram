@@ -149,7 +149,7 @@ fun GhostMessageBubble(
                     MessageMediaType.STICKER -> {
                         if (message.photoPath != null) {
                             StickerMessageContent(
-                                message = message
+                                message = message,
                             )
                         }
                     }

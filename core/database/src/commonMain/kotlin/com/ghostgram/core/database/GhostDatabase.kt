@@ -7,7 +7,7 @@ import com.ghostgram.core.database.entity.MessageEntity
 
 @Database(
     entities = [MessageEntity::class],
-    version = 9
+    version = 10
 )
 abstract class GhostDatabase : RoomDatabase() {
     // KSP сгенерирует реализацию этого метода

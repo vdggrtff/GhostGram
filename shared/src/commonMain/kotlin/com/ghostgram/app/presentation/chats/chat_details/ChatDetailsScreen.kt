@@ -109,6 +109,8 @@ fun ChatDetailsScreen(
         listState = listState
     )
 
+    val isChatScrolling = scrollBehavior.listState.isScrollInProgress
+
     val fileLauncher = rememberFilePickerLauncher(
         type = PickerType.ImageAndVideo,
         mode = PickerMode.Multiple()

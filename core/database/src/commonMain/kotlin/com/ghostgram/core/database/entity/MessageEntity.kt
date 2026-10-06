@@ -23,7 +23,8 @@ data class MessageEntity(
     val replyToMessageId: Long = 0L,
     val isEdited: Boolean = false,
     val senderId: Long = 0L,
-    val senderAvatarPath: String? = null
+    val senderAvatarPath: String? = null,
+    val waveform: String? = null
 )
 
 const val TABLE_NAME = "messages"
