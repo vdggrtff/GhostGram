@@ -66,7 +66,7 @@ fun ChatDetailsRoute(
     onBackClick: () -> Unit,
     onNavigateToProfile: (Long) -> Unit,
     scrollToMessageId: Long?,            // 💥 Получили из графа
-    onMessageScrolled: () -> Unit
+    onMessageScrolled: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -93,7 +93,6 @@ fun ChatDetailsScreen(
 ) {
 
     val coroutineScope = rememberCoroutineScope()
-    //var fullScreenImage by remember { mutableStateOf<String?>(null) }
     var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
 
@@ -108,8 +107,6 @@ fun ChatDetailsScreen(
         onLoadMore = { onIntent(LoadMoreMessages(it)) },
         listState = listState
     )
-
-    val isChatScrolling = scrollBehavior.listState.isScrollInProgress
 
     val fileLauncher = rememberFilePickerLauncher(
         type = PickerType.ImageAndVideo,
@@ -237,114 +234,147 @@ fun ChatDetailsScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            state = listState,
-            reverseLayout = true,
-            modifier = Modifier.fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding()), /*.padding(innerPadding)*/
-            contentPadding = PaddingValues(
-                horizontal = 16.dp,
-                vertical = innerPadding.calculateBottomPadding() + 28.dp  /*8.dp*/
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
-            // Итерируемся по альбомам и одиночным сообщениям
-            items(groupedMessages.size, key = { index ->
-                when (val item = groupedMessages[index]) {
-                    is MessageListItem.Single -> item.message.id
-                    is MessageListItem.Album -> item.messages.first().id
-                }
-            }) { index ->
+            LazyColumn(
+                state = listState,
+                reverseLayout = true,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    // 💥 3. Сверху даем отступ под плашку закрепа (если она есть) или обычные 8dp:
+                    top = if (state.pinnedMessage != null && !state.isSearchOpen) 58.dp else 8.dp,
+                    // А снизу — запас под строку ввода сообщений:
+                    bottom = innerPadding.calculateBottomPadding() + 28.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Итерируемся по альбомам и одиночным сообщениям
+                items(groupedMessages.size, key = { index ->
+                    when (val item = groupedMessages[index]) {
+                        is MessageListItem.Single -> item.message.id
+                        is MessageListItem.Album -> item.messages.first().id
+                    }
+                }) { index ->
 
-                val item = groupedMessages[index]
-                val itemDate = getDateFromItem(item)
+                    val item = groupedMessages[index]
+                    val itemDate = getDateFromItem(item)
 
-                val currentSenderKey = getSenderKey(item)
+                    val currentSenderKey = getSenderKey(item)
 
-                // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
-                val topNeighborKey = groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
+                    // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
+                    val topNeighborKey =
+                        groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
 
-                // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
-                val bottomNeighborKey =
-                    groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
+                    // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
+                    val bottomNeighborKey =
+                        groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
 
-                // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
-                // Первое сообщение человека в пачке (над ним рисуем цветное имя):
-                val isFirstInGroup = currentSenderKey != topNeighborKey
+                    // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
+                    // Первое сообщение человека в пачке (над ним рисуем цветное имя):
+                    val isFirstInGroup = currentSenderKey != topNeighborKey
 
-                // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
-                val isLastInGroup = currentSenderKey != bottomNeighborKey
+                    // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
+                    val isLastInGroup = currentSenderKey != bottomNeighborKey
 
-                // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
-                val showDateHeader = if (index == groupedMessages.size - 1) {
-                    true
-                } else {
-                    val olderItem = groupedMessages[index + 1]
-                    !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
-                }
+                    // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
+                    val showDateHeader = if (index == groupedMessages.size - 1) {
+                        true
+                    } else {
+                        val olderItem = groupedMessages[index + 1]
+                        !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
+                    }
 
-                // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
-                when (item) {
-                    is MessageListItem.Single -> {
-                        val repliedMsg = if (item.message.replyToMessageId != 0L) {
-                            state.messages.find { it.id == item.message.replyToMessageId }
-                        } else null
-                        SwipeToReplyWrapper(
-                            onSwipe = { onIntent(OnSwipeToReply(item.message)) }
-                        ) {
-                            GhostMessageBubble(
-                                message = item.message,
-                                isGroup = state.isGroup,
-                                isFirstInGroup = isFirstInGroup, // 👈
-                                isLastInGroup = isLastInGroup,   // 👈
-                                onMediaClick = { activeViewerMessageId = item.message.id },
-                                onLongClick = { selectedMessageForMenu = item.message },
-                                replyMessage = repliedMsg,
-                            )
+                    // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
+                    when (item) {
+                        is MessageListItem.Single -> {
+                            val repliedMsg = if (item.message.replyToMessageId != 0L) {
+                                state.messages.find { it.id == item.message.replyToMessageId }
+                            } else null
+                            SwipeToReplyWrapper(
+                                onSwipe = { onIntent(OnSwipeToReply(item.message)) }
+                            ) {
+                                GhostMessageBubble(
+                                    message = item.message,
+                                    searchQuery = state.inChatSearchQuery,
+                                    isGroup = state.isGroup,
+                                    isFirstInGroup = isFirstInGroup, // 👈
+                                    isLastInGroup = isLastInGroup,   // 👈
+                                    onMediaClick = { activeViewerMessageId = item.message.id },
+                                    onLongClick = { selectedMessageForMenu = item.message },
+                                    replyMessage = repliedMsg,
+                                )
+                            }
+                        }
+
+                        is MessageListItem.Album -> {
+                            val baseMsg = item.messages.first()
+                            val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
+                                state.messages.find { it.id == baseMsg.replyToMessageId }
+                            } else null
+                            SwipeToReplyWrapper(
+                                onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
+                            ) {
+                                GhostAlbumBubble(
+                                    albumMessages = item.messages,
+                                    onMediaClick = { activeViewerMessageId = it },
+                                    isGroup = state.isGroup,
+                                    isLastInGroup = isLastInGroup,
+                                    isFirstInGroup = isFirstInGroup,
+                                    replyMessage = repliedMsg,
+                                    onLongClick = { selectedMessageForMenu = baseMsg }
+                                )
+                            }
                         }
                     }
 
-                    is MessageListItem.Album -> {
-                        val baseMsg = item.messages.first()
-                        val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
-                            state.messages.find { it.id == baseMsg.replyToMessageId }
-                        } else null
-                        SwipeToReplyWrapper(
-                            onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
-                        ) {
-                            GhostAlbumBubble(
-                                albumMessages = item.messages,
-                                onMediaClick = { activeViewerMessageId = it },
-                                isGroup = state.isGroup,
-                                isLastInGroup = isLastInGroup,
-                                isFirstInGroup = isFirstInGroup,
-                                replyMessage = repliedMsg,
-                                onLongClick = { selectedMessageForMenu = baseMsg }
-                            )
+                    // ПЛАШКА ДАТЫ
+                    if (shouldShowDateHeader(index, groupedMessages)) {
+                        val dateText = TimeFormatter.formatDateHeader(getDateFromItem(item))
+                        if (dateText.isNotBlank()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = dateText,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                        .background(GhostCard.copy(alpha = 0.6f))
+                                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
+            }
+            val pinnedMsg = state.pinnedMessage
 
-                // ПЛАШКА ДАТЫ
-                if (shouldShowDateHeader(index, groupedMessages)) {
-                    val dateText = TimeFormatter.formatDateHeader(getDateFromItem(item))
-                    if (dateText.isNotBlank()) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = dateText,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                    .background(GhostCard.copy(alpha = 0.6f))
-                                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
+            if (pinnedMsg != null && !state.isSearchOpen) {
+                com.ghostgram.app.presentation.components.topbar.PinnedMessageBar(
+                    pinnedMessage = pinnedMsg,
+                    onClick = {
+                        val targetIndex = groupedMessages.indexOfFirst { item ->
+                            when (item) {
+                                is MessageListItem.Single -> item.message.id == pinnedMsg.id
+                                is MessageListItem.Album -> item.messages.any { it.id == pinnedMsg.id }
+                            }
                         }
-                    }
-                }
+                        if (targetIndex != -1) {
+                            coroutineScope.launch { listState.animateScrollToItem(targetIndex) }
+                        } else {
+                            // Если сообщение старое — наш проверенный LoadMore с offset: -20 подкачает его!
+                            onIntent(ChatDetailsIntent.LoadMoreMessages(pinnedMsg.id))
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
             }
         }
     }
@@ -357,7 +387,7 @@ fun ChatDetailsScreen(
             }
         }
 
-       GhostMediaViewer(
+        GhostMediaViewer(
             mediaMessages = chatMediaList,
             initialMessageId = activeViewerMessageId!!,
             onDismiss = { activeViewerMessageId = null }
@@ -365,10 +395,8 @@ fun ChatDetailsScreen(
     }
     ChatDetailsDialogs(
         state = state,
-        //fullScreenImage = fullScreenImage,
         selectedMessageForMenu = selectedMessageForMenu,
         clipboardManager = clipboardManager,
-        //onDismissFullScreenImage = { fullScreenImage = null },
         onDismissMessageMenu = { selectedMessageForMenu = null },
         onIntent = onIntent
     )

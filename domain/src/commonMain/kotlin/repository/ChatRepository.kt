@@ -73,6 +73,8 @@ interface ChatRepository {
         useCrypto: Boolean = false,
     )
 
+    suspend fun getPinnedMessage(chatId: Long): Message?
+
     fun observeRecentStickers(): Flow<List<entity.TelegramSticker>>
     fun loadRecentStickers()
 

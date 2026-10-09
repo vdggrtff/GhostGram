@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.ghostgram.app.presentation.chats.chat_details.utils.HighlightUtils
 import com.ghostgram.app.presentation.components.bauble.content.DocumentMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.ImageMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.StickerMessageContent
@@ -45,6 +47,7 @@ import entity.MessageMediaType
 @Composable
 fun GhostMessageBubble(
     message: Message,
+    searchQuery: String = "",
     isGroup: Boolean = false,
     isFirstInGroup: Boolean = true, // Новые параметры
     isLastInGroup: Boolean = true,
@@ -172,6 +175,27 @@ fun GhostMessageBubble(
                 }
                 if (hasText) {
                     val isEncrypted = message.fileExtraInfo == "ENCRYPTED"
+                    val displayText = if (isEncrypted) "🔒 ${message.text}" else message.text
+
+                    // 💥 Превращаем обычный текст в подсвеченный!
+                    val annotatedText = remember(displayText, searchQuery) {
+                        HighlightUtils.buildHighlightedText(displayText, searchQuery)
+                    }
+
+                    ChatMessageLayout(
+                        text = {
+                            Text(
+                                text = annotatedText, // 💥 Выводим подсвеченный AnnotatedString!
+                                color = if (isEncrypted) GhostSecureGreen else Color.White,
+                                fontSize = 16.sp,
+                                lineHeight = 21.sp
+                            )
+                        },
+                        time = { MessageTimeAndStatus(message, Color.White, Color.White) }
+                    )
+                }
+                /*if (hasText) {
+                    val isEncrypted = message.fileExtraInfo == "ENCRYPTED"
                     ChatMessageLayout(
                         text = {
                             Text(
@@ -183,7 +207,7 @@ fun GhostMessageBubble(
                         },
                         time = { MessageTimeAndStatus(message, Color.White, Color.White) }
                     )
-                }
+                }*/
             }
             if (isSticker || (message.photoPath != null && message.text.isBlank())) {
                 MessageTimeAndStatus(

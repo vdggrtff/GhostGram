@@ -174,10 +174,15 @@ class ChatDetailsViewModel(
                             chatTitle = chat.title,
                             avatarPath = chat.avatarPath,
                             unreadCount = chat.unreadCount,
-                            isGroup = chat.isGroup
+                            isGroup = chat.isGroup,
+                            pinnedMessageId = chat.pinnedMessageId
                         )
                     }
                 }
+            }
+            launch {
+                val pinned = repo.getPinnedMessage(chatId)
+                _state.update { it.copy(pinnedMessage = pinned) }
             }
             launch {
                 repo.observeMessages(chatId).collect { messages ->
@@ -357,30 +362,6 @@ class ChatDetailsViewModel(
                 .onFailure { _state.update { it.copy(isRepliesLoading = false) } }
         }
     }
-
-    /*private fun performInChatSearch(query: String) {
-        inChatSearchJob?.cancel()
-        if (query.isBlank()) {
-            _state.update { it.copy(inChatSearchResults = emptyList(), isSearchingInChat = false) }
-            return
-        }
-
-        inChatSearchJob = viewModelScope.launch {
-            delay(300) // Debounce, чтобы не спамить в ядро на каждую букву
-            _state.update { it.copy(isSearchingInChat = true) }
-
-            val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
-            val results = repo.searchMessagesInChat(chatId, query)
-
-            _state.update {
-                it.copy(
-                    inChatSearchResults = results,
-                    isSearchingInChat = false,
-                    currentSearchIndex = 0
-                )
-            }
-        }
-    }*/
     private fun performInChatSearch(query: String) {
         inChatSearchJob?.cancel()
         if (query.isBlank()) {

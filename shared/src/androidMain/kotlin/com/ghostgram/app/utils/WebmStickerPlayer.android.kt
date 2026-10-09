@@ -14,27 +14,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import java.io.File
+import java.io.FileInputStream
 
 @Composable
 actual fun WebmStickerPlayer(
     filePath: String,
-    isPaused: Boolean,
+    isPaused: Boolean, // 💥 Сигнатура 1-в-1 совпадает с expect!
     modifier: Modifier
 ) {
-    val cleanPath = if (filePath.startsWith("file://")) filePath.removePrefix("file://") else filePath
-    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-
-    LaunchedEffect(isPaused) {
-        try {
-            if (isPaused) {
-                if (mediaPlayer?.isPlaying == true) mediaPlayer?.pause()
-            } else {
-                mediaPlayer?.start()
-            }
-        } catch (e: Exception) {}
+    val cleanPath = remember(filePath) {
+        if (filePath.startsWith("file://")) filePath.removePrefix("file://") else filePath
     }
 
-    // Освобождаем память и декодер при уходе с экрана
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isSurfaceReady by remember { mutableStateOf(false) }
+
+    // Освобождаем память при уходе с экрана
     DisposableEffect(cleanPath) {
         onDispose {
             try {
@@ -45,26 +40,45 @@ actual fun WebmStickerPlayer(
         }
     }
 
+    // Реакция на паузу (если скроллим)
+    LaunchedEffect(isPaused, mediaPlayer, isSurfaceReady) {
+        try {
+            if (isPaused) {
+                if (mediaPlayer?.isPlaying == true) mediaPlayer?.pause()
+            } else {
+                if (mediaPlayer != null && isSurfaceReady && mediaPlayer?.isPlaying == false) {
+                    mediaPlayer?.start()
+                }
+            }
+        } catch (e: Exception) {}
+    }
+
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             TextureView(ctx).apply {
-                // 💥 ГЛАВНЫЙ СЕКРЕТ СТИКЕРОВ: делаем фон 100% прозрачным!
+                // 💥 Прозрачный фон для видео-стикера
                 isOpaque = false
 
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-                        val surfaceObj = Surface(surface)
+                        isSurfaceReady = true
                         try {
                             val file = File(cleanPath)
                             if (!file.exists()) return
 
                             val player = MediaPlayer().apply {
-                                setDataSource(cleanPath)
-                                setSurface(surfaceObj)
-                                isLooping = true // 💥 Бесконечный цикл!
-                                setVolume(0f, 0f) // Без звука!
-                                setOnPreparedListener { start() }
+                                // Надежное чтение через файловый дескриптор
+                                FileInputStream(file).use { fis ->
+                                    setDataSource(fis.fd)
+                                }
+                                setSurface(Surface(surface))
+                                isLooping = true  // 💥 БЕСКОНЕЧНЫЙ ЦИКЛ!
+                                setVolume(0f, 0f) // Без звука
+
+                                setOnPreparedListener {
+                                    if (!isPaused) start()
+                                }
                                 prepareAsync()
                             }
                             mediaPlayer = player
@@ -76,6 +90,7 @@ actual fun WebmStickerPlayer(
                     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
 
                     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                        isSurfaceReady = false
                         try {
                             mediaPlayer?.stop()
                             mediaPlayer?.release()

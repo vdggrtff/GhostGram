@@ -379,6 +379,30 @@ class ChatRepositoryImpl(
         )
     }
 
+    override suspend fun getPinnedMessage(chatId: Long): Message? {
+        val filterObj = buildJsonObject { put("@type", "searchMessagesFilterPinned") }
+
+        // 💥 Просим у TDLib последнее закрепленное сообщение чата!
+        val response = tdlibClient.sendAndAwait(
+            requestType = "searchChatMessages",
+            parameters = mapOf(
+                "chat_id" to chatId,
+                "query" to "",
+                "filter" to filterObj,
+                "from_message_id" to 0L,
+                "offset" to 0,
+                "limit" to 1
+            ),
+            timeoutMs = 4000
+        ) ?: return null
+
+        val messagesArray = response["messages"]?.jsonArray ?: return null
+        val firstMsg = messagesArray.firstOrNull()?.jsonObject ?: return null
+
+        // Парсим через наш общий парсер!
+        return messageParser.parse(firstMsg, fallbackChatId = chatId)
+    }
+
     override fun observeRecentStickers(): Flow<List<TelegramSticker>> =
         _recentStickers.asStateFlow()
 

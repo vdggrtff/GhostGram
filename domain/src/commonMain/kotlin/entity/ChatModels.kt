@@ -23,7 +23,7 @@ data class Message(
     val isEdited: Boolean = false,
     val senderId: Long = 0L,
     val senderAvatarPath: String? = null,
-    val waveform: String? = null
+    val waveform: String? = null,
 )
 
 data class Chat(
@@ -34,5 +34,6 @@ data class Chat(
     val avatarPath: String? = null, // Локальный путь к аватарке
     val isJoined: Boolean = false,
     val order: Long = 0L,
-    val isGroup: Boolean = false
+    val isGroup: Boolean = false,
+    val pinnedMessageId: Long = 0L
 )

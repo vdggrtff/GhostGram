@@ -103,43 +103,6 @@ class TdlibMessageParser(
                     replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
                 )
             }
-           /* "messageVideo", "messageVideoNote" -> {
-                val videoObj = contentObj[if (contentType == "messageVideo") "video" else "video_note"]?.jsonObject
-                val thumbObj = videoObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
-                val path = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-                val thumbFileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
-                val duration = videoObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
-                val videoFile = videoObj?.get("video")?.jsonObject
-                val videoPath = videoFile?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-                val videoFileId = videoFile?.get("id")?.jsonPrimitive?.intOrNull
-
-                if (path.isNullOrBlank() && thumbFileId != null) {
-                    tracker.messagePhotos[thumbFileId] = msgId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $thumbFileId, "priority": 1}""")
-                }
-                if (videoPath.isNullOrBlank() && videoFileId != null) {
-                    tracker.messageFiles[videoFileId] = msgId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $videoFileId, "priority": 1}""")
-                }
-
-                Message(
-                    id = msgId,
-                    chatId = chatId,
-                    senderName = if (isOutgoing) "Вы" else "Собеседник",
-                    text = "",
-                    photoPath = path,
-                    fileName = videoPath,
-                    fileExtraInfo = "$duration сек",
-                    isOutgoing = isOutgoing,
-                    mediaType = MessageMediaType.VIDEO,
-                    date = date,
-                    isSending = isSending,
-                    replyToMessageId = replyToId,
-                    isEdited = editDate > 0,
-                    senderId = senderId,
-                    mediaAlbumId = mediaAlbumId
-                )
-            }*/
             "messageDocument" -> {
                 val docContainer = contentObj["document"]?.jsonObject
                 val docFile = docContainer?.get("document")?.jsonObject
@@ -191,25 +154,6 @@ class TdlibMessageParser(
                     waveform = waveform
                 )
             }
-            /*"messageSticker" -> {
-                val stickerObj = contentObj["sticker"]?.jsonObject
-                val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
-                val fileObj = stickerObj?.get("sticker")?.jsonObject
-                val stickerPath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-                val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
-
-                if (stickerPath.isNullOrBlank() && fileId != null) {
-                    tracker.messagePhotos[fileId] = msgId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1}""")
-                }
-
-                Message(
-                    id = msgId, chatId = chatId, senderName = if (isOutgoing) "Вы" else "Собеседник",
-                    text = "", photoPath = stickerPath, fileExtraInfo = emoji, isOutgoing = isOutgoing,
-                    mediaType = MessageMediaType.STICKER, date = date, isSending = isSending,
-                    replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
-                )
-            }*/
             "messageSticker" -> {
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
