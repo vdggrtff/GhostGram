@@ -19,7 +19,6 @@ class TelegramFlowClient(
     private val nativeClient: TelegramNativeClient,
     private val config: TdlibConfig
 ) {
-    // SharedFlow для трансляции обновлений от Telegram на весь проект
     private val _updates = MutableSharedFlow<String>(
         replay = 50,
         extraBufferCapacity = 100
@@ -30,40 +29,46 @@ class TelegramFlowClient(
     private var pollingJob: Job? = null
 
     init {
-        // Автоматический старт при создании клиента!
         startReceiving()
     }
 
-    /**
-     * Устанавливает уровень логирования C++ ядра.
-     * 0 - тишина, 1 - только фатальные ошибки, 2 - предупреждения, 5 - адский спам
-     */
     fun setLogVerbosityLevel(level: Int = 1) {
         send("""{"@type": "setLogVerbosityLevel", "new_verbosity_level": $level}""")
     }
 
-    /**
-     * Запускает бесконечный цикл прослушивания C++ ядра в фоновом потоке.
-     */
     fun startReceiving() {
         if (pollingJob?.isActive == true) return
 
         pollingJob = clientScope.launch {
-
             setLogVerbosityLevel(1)
 
+            // Отправляем первичные параметры
             sendInitParameters()
 
             while (isActive) {
-                // TDLib рекомендует таймаут около 1.0 - 10.0 секунд
                 val jsonResponse = nativeClient.receive(1.0)
 
                 if (!jsonResponse.isNullOrBlank()) {
+                    // 💥 ЛОГИРУЕМ ЧЕРЕЗ СИСТЕМНЫЙ ЛОГГЕР (ВИДНО ДАЖЕ В РЕЛИЗЕ!)
+                    try {
+                        if (jsonResponse.contains("updateAuthorizationState")) {
+                            //Log.e("GHOST_TDLIB", "🔥🔥🔥 AUTH STATE: $jsonResponse")
+                        } else if (jsonResponse.contains("error")) {
+                            //Log.e("GHOST_TDLIB", "❌ TDLib ERROR: $jsonResponse")
+                        }
+                    } catch (e: Throwable) {
+                        // Для Desktop, где нет android.util.Log
+                        println(jsonResponse)
+                    }
 
-                    if (jsonResponse.contains("updateAuthorizationState")) {
-                        println("🔥🔥🔥 AUTH STATE: $jsonResponse")
-                    } else if (jsonResponse.contains("error")) {
-                        println("❌ TDLib ERROR: $jsonResponse")
+                    // 💥 1. ЕСЛИ ТЕЛЕГРАМ ПРОСИТ ПАРАМЕТРЫ — ОТПРАВЛЯЕМ!
+                    if (jsonResponse.contains("authorizationStateWaitTdlibParameters")) {
+                        sendInitParameters()
+                    }
+
+                    // 💥 2. ТОТ САМЫЙ ПРОПУЩЕННЫЙ ШАГ: РАЗБЛОКИРУЕМ БАЗУ ДАННЫХ!
+                    if (jsonResponse.contains("authorizationStateWaitEncryptionKey")) {
+                        send("""{"@type": "checkDatabaseEncryptionKey"}""")
                     }
 
                     _updates.emit(jsonResponse)
@@ -72,15 +77,9 @@ class TelegramFlowClient(
         }
     }
 
-    /**
-     * Отправляет системные параметры в TDLib.
-     * Вызывается один раз при старте ядра.
-     */
     private fun sendInitParameters() {
-        val apiId = 2040 // (Тут твои ключи)
+        val apiId = 2040
         val apiHash = "b18441a1ff607e10a989891a5462e627"
-
-        // БЕРЕМ ПУТЬ ИЗ КОНФИГА
         val dbPath = config.databasePath
 
         val request = """
@@ -100,16 +99,10 @@ class TelegramFlowClient(
         send(request)
     }
 
-    /**
-     * Отправляет JSON-запрос в ядро.
-     */
     fun send(jsonQuery: String) {
         nativeClient.send(jsonQuery)
     }
 
-    /**
-     * Останавливает прослушивание и убивает клиент.
-     */
     fun stop() {
         pollingJob?.cancel()
         nativeClient.destroy()
