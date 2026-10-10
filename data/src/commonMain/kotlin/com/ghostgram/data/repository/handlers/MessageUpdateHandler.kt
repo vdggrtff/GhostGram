@@ -6,6 +6,7 @@ import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.database.entity.MessageEntity
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.data.repository.utils.DownloadTracker
+import entity.MessageMediaType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -440,8 +441,45 @@ class MessageUpdateHandler(
                     senderAvatarPath = realSenderAvatar
                 )
             }
+            "messageVideo", "messageVideoNote", "messageAnimation" -> {
+                val videoContainer = contentObj[when (contentType) {
+                    "messageVideo" -> "video"
+                    "messageVideoNote" -> "video_note"
+                    else -> "animation"
+                }]?.jsonObject
 
-            "messageVideo", "messageVideoNote" -> {
+                val duration = videoContainer?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
+                val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                val thumbObj = videoContainer?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
+                val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
+                val photoPath = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // 💥 Ставим priority = 32 для превью
+                if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.messagePhotos[fileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                val mediaFile = videoContainer?.get(if (contentType == "messageAnimation") "animation" else "video")?.jsonObject
+                val videoFileId = mediaFile?.get("id")?.jsonPrimitive?.intOrNull
+                val videoPath = mediaFile?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                if (videoPath.isNullOrBlank() && videoFileId != null && videoFileId != 0) {
+                    tracker.messageFiles[videoFileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $videoFileId, "priority": 16, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                MessageEntity(
+                    id = msgId, chatId = chatId, senderName = realSenderName, text = caption,
+                    isOutgoing = isOutgoing, mediaType = "VIDEO", // Гифки храним как видео
+                    fileExtraInfo = if (duration > 0) formatDuration(duration) else "GIF",
+                    photoPath = photoPath, date = date,
+                    mediaAlbumId = mediaAlbumId, fileName = videoPath, isSending = isSending,
+                    replyToMessageId = replyToMessageId, isEdited = isEdited, senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
+                )
+            }
+            /*"messageVideo", "messageVideoNote" -> {
                 val videoObj =
                     contentObj[if (contentType == "messageVideo") "video" else "video_note"]?.jsonObject
                 val duration = videoObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
@@ -486,9 +524,40 @@ class MessageUpdateHandler(
                     senderId = senderId,
                     senderAvatarPath = realSenderAvatar
                 )
-            }
-
+            }*/
             "messageSticker" -> {
+                val stickerObj = contentObj["sticker"]?.jsonObject
+                val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
+
+                val thumbObj = stickerObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
+                val thumbFileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
+                val thumbPath = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                val fileObj = stickerObj?.get("sticker")?.jsonObject
+                val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
+                val stickerPath = fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                if (thumbPath.isNullOrBlank() && thumbFileId != null && thumbFileId != 0) {
+                    tracker.messagePhotos[thumbFileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $thumbFileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                if (stickerPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.messageFiles[fileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 16, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                MessageEntity(
+                    id = msgId, chatId = chatId, senderName = realSenderName, text = "",
+                    isOutgoing = isOutgoing, mediaType = "STICKER", fileExtraInfo = emoji,
+                    photoPath = thumbPath ?: stickerPath,
+                    fileName = stickerPath, // 💥 Сохраняем в базу сам файл!
+                    date = date, isSending = isSending,
+                    replyToMessageId = replyToMessageId, isEdited = isEdited, senderId = senderId,
+                    senderAvatarPath = realSenderAvatar
+                )
+            }
+            /*"messageSticker" -> {
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
 
@@ -513,7 +582,7 @@ class MessageUpdateHandler(
                     senderId = senderId,
                     senderAvatarPath = realSenderAvatar
                 )
-            }
+            }*/
 
             else -> {
                 MessageEntity(

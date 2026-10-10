@@ -157,7 +157,7 @@ class ChatRepositoryImpl(
         tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
 
         // 2. Агрессивная автодокачка для медленных сетей и эмуляторов
-        repoScope.launch {
+        /*repoScope.launch {
             repeat(4) {
                 tdlibClient.send(
                     """
@@ -173,6 +173,11 @@ class ChatRepositoryImpl(
                 )
                 kotlinx.coroutines.delay(1200)
             }
+        }*/
+        repoScope.launch {
+            tdlibClient.send(
+                """{"@type": "getChatHistory", "chat_id": $chatId, "from_message_id": 0, "offset": 0, "limit": 50, "only_local": false}"""
+            )
         }
 
         // 3. ЕДИНЫЙ ПОТОК ИЗ ROOM С АВТОМАТИЧЕСКОЙ ПРОВЕРКОЙ GHOST MODE
@@ -372,6 +377,30 @@ class ChatRepositoryImpl(
         tdlibClient.send(
             """{"@type": "editMessageText", "chat_id": $chatId, "message_id": $messageId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "$finalText"}}}"""
         )
+    }
+
+    override suspend fun getPinnedMessage(chatId: Long): Message? {
+        val filterObj = buildJsonObject { put("@type", "searchMessagesFilterPinned") }
+
+        // 💥 Просим у TDLib последнее закрепленное сообщение чата!
+        val response = tdlibClient.sendAndAwait(
+            requestType = "searchChatMessages",
+            parameters = mapOf(
+                "chat_id" to chatId,
+                "query" to "",
+                "filter" to filterObj,
+                "from_message_id" to 0L,
+                "offset" to 0,
+                "limit" to 1
+            ),
+            timeoutMs = 4000
+        ) ?: return null
+
+        val messagesArray = response["messages"]?.jsonArray ?: return null
+        val firstMsg = messagesArray.firstOrNull()?.jsonObject ?: return null
+
+        // Парсим через наш общий парсер!
+        return messageParser.parse(firstMsg, fallbackChatId = chatId)
     }
 
     override fun observeRecentStickers(): Flow<List<TelegramSticker>> =

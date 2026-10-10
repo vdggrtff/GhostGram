@@ -474,7 +474,7 @@ fun ChatProfileScreen(
                                                     if (isPlaying) {
                                                         player.stop(); isPlaying = false
                                                     } else {
-                                                        isPlaying = true; player.play(audioPath!!) { isPlaying = false }
+                                                        isPlaying = true; player.play(audioPath!!, onProgress = { _, _ -> }) { isPlaying = false }
                                                     }
                                                 }
                                             },

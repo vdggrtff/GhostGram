@@ -33,7 +33,9 @@ data class ChatDetailsState(
     val currentSearchIndex: Int = 0,                // На каком сообщении мы сейчас (0, 1, 2...)
     val isSearchingInChat: Boolean = false,
     val isAiSearchEnabled: Boolean = false,
-    val isAiSearching: Boolean = false
+    val isAiSearching: Boolean = false,
+    val pinnedMessageId: Long = 0L,
+    val pinnedMessage: Message? = null
 )
 
 // Действия на экране чата

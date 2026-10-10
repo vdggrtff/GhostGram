@@ -48,6 +48,7 @@ class ChatUpdateHandler(
                 val typeObj = chatObj["type"]?.jsonObject
                 val chatTypeStr = typeObj?.get("@type")?.jsonPrimitive?.content ?: ""
                 val isGroup = chatTypeStr in listOf("chatTypeBasicGroup", "chatTypeSupergroup", "chatTypeChannel")
+                val pinnedMsgId = chatObj["pinned_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
 
                 // Если фото нет на диске, но есть ID — качаем!
                 if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
@@ -74,7 +75,8 @@ class ChatUpdateHandler(
                             lastMessage = lastMessage,
                             avatarPath = path,
                             isJoined = isJoined,
-                            isGroup = isGroup
+                            isGroup = isGroup,
+                            pinnedMessageId = pinnedMsgId
                         ))
                     } else {
                         current + (id to Chat(
@@ -84,7 +86,8 @@ class ChatUpdateHandler(
                             lastMessage = lastMessage,
                             avatarPath = path,
                             isJoined = isJoined,
-                            isGroup = isGroup
+                            isGroup = isGroup,
+                            pinnedMessageId = pinnedMsgId
                         ))
                     }
                 }
@@ -169,6 +172,16 @@ class ChatUpdateHandler(
                 lastReadOutboxMap[chatId] = lastReadId
                 repoScope.launch {
                     messageDao.markOutboxAsRead(chatId, lastReadId)
+                }
+                return true
+            }
+            "updateChatPinnedMessage" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val pinnedId = jsonObject["pinned_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
+
+                chatsMap.update { current ->
+                    val chat = current[chatId]
+                    if (chat != null) current + (chatId to chat.copy(pinnedMessageId = pinnedId)) else current
                 }
                 return true
             }

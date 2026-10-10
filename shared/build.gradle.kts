@@ -98,6 +98,7 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
             implementation("net.java.dev.jna:jna:5.19.1@aar")
+            implementation("com.airbnb.android:lottie:6.7.1")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
