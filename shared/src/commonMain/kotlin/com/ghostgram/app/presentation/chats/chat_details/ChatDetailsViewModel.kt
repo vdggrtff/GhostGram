@@ -32,6 +32,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleInChatSearch
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
 import entity.Message
@@ -155,6 +156,11 @@ class ChatDetailsViewModel(
                 performInChatSearch(_state.value.inChatSearchQuery) // Перезапускаем поиск с новым режимом
             }
             is OnRunAiSearch -> runAiSearch(repo)
+            is OnToggleReaction -> {
+                viewModelScope.launch {
+                    repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen)
+                }
+            }
         }
     }
 

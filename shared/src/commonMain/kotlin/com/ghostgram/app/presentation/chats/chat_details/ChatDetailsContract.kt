@@ -76,4 +76,5 @@ sealed interface ChatDetailsIntent {
     data object OnSearchPrevious : ChatDetailsIntent
     data object OnToggleAiSearch : ChatDetailsIntent
     data object OnRunAiSearch : ChatDetailsIntent
+    data class OnToggleReaction(val messageId: Long, val emoji: String, val isChosen: Boolean) : ChatDetailsIntent
 }

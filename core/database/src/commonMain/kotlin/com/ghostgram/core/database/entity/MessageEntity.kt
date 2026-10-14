@@ -24,7 +24,8 @@ data class MessageEntity(
     val isEdited: Boolean = false,
     val senderId: Long = 0L,
     val senderAvatarPath: String? = null,
-    val waveform: String? = null
+    val waveform: String? = null,
+    val reactionsJson: String = "",
 )
 
 const val TABLE_NAME = "messages"

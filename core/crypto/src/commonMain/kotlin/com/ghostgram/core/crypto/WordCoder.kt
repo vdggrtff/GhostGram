@@ -6,8 +6,6 @@ package com.ghostgram.core.crypto
  */
 object WordCoder {
 
-    // Словарь из 256 слов (заменяет 256 значений байта от 0 до 255)
-    // Взял самые популярные безобидные русские слова
     private val DICTIONARY = listOf(
         "астра", "атом", "арфа", "актер", "адрес", "алмаз", "арбуз", "акула", "арена", "апрель",
         "багаж", "балет", "банка", "баран", "башня", "белка", "берег", "билет", "бизон", "бумага",
@@ -48,8 +46,8 @@ object WordCoder {
      */
     fun encode(bytes: ByteArray): String {
         val words = bytes.map { byte ->
-            val unsignedInt = byte.toInt() and 0xFF // Превращаем Byte (-128..127) в Int (0..255)
-            DICTIONARY[unsignedInt] // Если словарь правильного размера, тут никогда не будет краша
+            val unsignedInt = byte.toInt() and 0xFF
+            DICTIONARY[unsignedInt]
         }
         return "👻 " + words.joinToString(" ")
     }
@@ -59,7 +57,6 @@ object WordCoder {
      * игнорируя рекламный футер и переносы строк!
      */
     fun decode(text: String): ByteArray? {
-        // Ищем строчку, которая начинается с эмодзи 👻
         val payloadLine = text.lines().firstOrNull { it.trim().startsWith("👻 ") } ?: return null
 
         val words = payloadLine.trim().removePrefix("👻 ").split(" ").filter { it.isNotBlank() }

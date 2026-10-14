@@ -116,6 +116,8 @@ class ChatRepositoryImpl(
                         if (handler.handle(type, jsonObject)) break
                     }
                 } catch (e: Exception) {
+                    println("❌ [REPO CRASH] Ошибка в обработке обновления: ${e.message}")
+                    e.printStackTrace()
                 }
             }
             .launchIn(repoScope)
@@ -249,9 +251,47 @@ class ChatRepositoryImpl(
             }
     }
 
+    override suspend fun toggleChatMute(chatId: Long, isMuted: Boolean) {
+        // Если чат заглушен — ставим 0 (включить звук), если нет — ставим максимальное число (заглушить навсегда)
+        val muteFor = if (isMuted) 0 else 2147483647
+        val request = """
+            {
+                "@type": "setChatNotificationSettings",
+                "chat_id": $chatId,
+                "notification_settings": {
+                    "@type": "chatNotificationSettings",
+                    "use_default_mute_for": false,
+                    "mute_for": $muteFor
+                }
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
+    }
+
     override fun toggleGhostMode() {
         _isGhostModeEnabled.update { !it }
         println("👻 Ghost Mode теперь: ${_isGhostModeEnabled.value}")
+    }
+
+    override suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean) {
+        val requestType = if (isChosen) "removeMessageReaction" else "addMessageReaction"
+
+        val requestJson = buildJsonObject {
+            put("@type", requestType)
+            put("chat_id", chatId)
+            put("message_id", messageId)
+            put("reaction_type", buildJsonObject {
+                put("@type", "reactionTypeEmoji")
+                put("emoji", emoji)
+            })
+            if (!isChosen) {
+                put("is_big", false)
+                put("update_recent_reactions", true)
+            }
+        }.toString()
+
+        println("❤️ [РЕАКЦИЯ] $requestType: $emoji для msg=$messageId")
+        tdlibClient.send(requestJson)
     }
 
     override fun observeGhostMode(): Flow<Boolean> = _isGhostModeEnabled.asStateFlow()
@@ -529,22 +569,5 @@ class ChatRepositoryImpl(
 
     override fun closeChat(chatId: Long) {
         tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
-    }
-
-    override suspend fun toggleChatMute(chatId: Long, isMuted: Boolean) {
-        // Если чат заглушен — ставим 0 (включить звук), если нет — ставим максимальное число (заглушить навсегда)
-        val muteFor = if (isMuted) 0 else 2147483647
-        val request = """
-            {
-                "@type": "setChatNotificationSettings",
-                "chat_id": $chatId,
-                "notification_settings": {
-                    "@type": "chatNotificationSettings",
-                    "use_default_mute_for": false,
-                    "mute_for": $muteFor
-                }
-            }
-        """.trimIndent()
-        tdlibClient.send(request)
     }
 }

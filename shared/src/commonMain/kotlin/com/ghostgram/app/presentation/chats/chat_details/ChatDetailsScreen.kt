@@ -307,6 +307,9 @@ fun ChatDetailsScreen(
                                     onMediaClick = { activeViewerMessageId = item.message.id },
                                     onLongClick = { selectedMessageForMenu = item.message },
                                     replyMessage = repliedMsg,
+                                    onReactionClick = { msgId, emoji, isChosen ->
+                                        onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen))
+                                    }
                                 )
                             }
                         }
@@ -326,7 +329,10 @@ fun ChatDetailsScreen(
                                     isLastInGroup = isLastInGroup,
                                     isFirstInGroup = isFirstInGroup,
                                     replyMessage = repliedMsg,
-                                    onLongClick = { selectedMessageForMenu = baseMsg }
+                                    onLongClick = { selectedMessageForMenu = baseMsg },
+                                    onReactionClick = { msgId, emoji, isChosen ->
+                                        onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen))
+                                    }
                                 )
                             }
                         }

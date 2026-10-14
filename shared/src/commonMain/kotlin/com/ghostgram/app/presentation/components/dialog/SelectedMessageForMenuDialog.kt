@@ -1,6 +1,7 @@
 package com.ghostgram.app.presentation.components.dialog
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,7 +53,36 @@ fun SelectedMessageForMenuDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
 
-                // Копировать (Только если есть текст)
+                // 💥 1. БЛОК БЫСТРЫХ РЕАКЦИЙ СВЕРХУ (Как в Telegram!)
+                val popularEmojis = listOf("👍", "❤️", "🔥", "😂", "👏", "🤯", "🎉")
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    popularEmojis.forEach { emoji ->
+                        val isChosen = msg.reactions.find { it.emoji == emoji }?.isChosen == true
+                        Text(
+                            text = emoji,
+                            fontSize = 26.sp,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable {
+                                    // 💥 Отправляем Интент на переключение реакции!
+                                    onIntent(ChatDetailsIntent.OnToggleReaction(msg.id, emoji, isChosen))
+                                    onDismiss()
+                                }
+                                .padding(4.dp)
+                        )
+                    }
+                }
+
+                // Тонкая полоска-разделитель под реакциями
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(bottom = 8.dp))
+
+                // 2. Копировать (Только если есть текст)
                 if (msg.text.isNotBlank()) {
                     Row(
                         modifier = Modifier
@@ -59,7 +91,6 @@ fun SelectedMessageForMenuDialog(
                             .clickable {
                                 coroutineScope.launch {
                                     clipboardManager.setText(AnnotatedString(msg.text))
-                                    //clipboardManager.getClipEntry()
                                 }
                                 onDismiss()
                             }
