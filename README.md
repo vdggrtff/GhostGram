@@ -150,7 +150,7 @@ Prerequisites
 code Bash
 
 # 1. Clone repository
-git clone https://github.com/ваш_логин/GhostGram.git
+git clone https://github.com/vdggrtff/GhostGram.git
 cd GhostGram
 
 # 2. Configure credentials
