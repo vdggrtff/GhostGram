@@ -36,6 +36,7 @@ import com.ghostgram.app.presentation.components.bauble.content.ImageMessageCont
 import com.ghostgram.app.presentation.components.bauble.content.StickerMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.VideoMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.VoiceMessageContent
+import com.ghostgram.app.presentation.components.bauble.content.video_note.VideoNoteContent
 import com.ghostgram.app.presentation.components.bauble.layout.ChatMessageLayout
 import com.ghostgram.app.presentation.components.bauble.layout.MessageTimeAndStatus
 import com.ghostgram.app.presentation.components.bauble.layout.SenderAvatarBadge
@@ -63,9 +64,9 @@ fun GhostMessageBubble(
     onReactionClick: (Long, String, Boolean) -> Unit,
 ) {
     val isOutgoing = message.isOutgoing
-    val isVideo =
-        message.mediaType == MessageMediaType.VIDEO || message.mediaType == MessageMediaType.VIDEO_NOTE
+    val isVideo = message.mediaType == MessageMediaType.VIDEO /*|| message.mediaType == MessageMediaType.VIDEO_NOTE*/
     val isSticker = message.mediaType == MessageMediaType.STICKER
+    val isVideoNote = message.mediaType == MessageMediaType.VIDEO_NOTE
     val hasText = message.text.isNotBlank()
 
     // Системное сообщение (например, E2EE handshake)
@@ -113,13 +114,20 @@ fun GhostMessageBubble(
                         onClick = {},
                         onLongClick = onLongClick
                     )
+                    .then(if (isVideoNote) Modifier else Modifier.clip(bubbleShape))
                     .then(
                         when {
-                            isSticker || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
+                            /*isSticker || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
+                            else -> Modifier.background(backgroundColor)*/
+                            isSticker || isVideoNote || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
                             else -> Modifier.background(backgroundColor)
                         }
                     )
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                    //.padding(horizontal = 12.dp, vertical = 7.dp)
+                    .padding(
+                        horizontal = if (isVideoNote) 0.dp else 12.dp,
+                        vertical = if (isVideoNote) 0.dp else 7.dp
+                    )
             ) {
                 Column(
                     modifier = Modifier.wrapContentWidth(), // Пузырь плотно облегает контент
@@ -152,12 +160,19 @@ fun GhostMessageBubble(
                             }
                         }
 
-                        MessageMediaType.VIDEO, MessageMediaType.VIDEO_NOTE -> {
+                        MessageMediaType.VIDEO/*, MessageMediaType.VIDEO_NOTE */-> {
                             VideoMessageContent(
                                 message = message,
                                 bubbleShape = bubbleShape,
                                 hasText = hasText,
                                 isOutgoing = isOutgoing
+                            )
+                        }
+
+                        MessageMediaType.VIDEO_NOTE -> {
+                            VideoNoteContent(
+                                message = message,
+                                onLongClick = onLongClick
                             )
                         }
 

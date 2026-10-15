@@ -473,6 +473,7 @@ class MessageUpdateHandler(
                 val thumbObj = videoContainer?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
                 val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
                 val photoPath = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val targetMediaTypeStr = if (contentType == "messageVideoNote") "VIDEO_NOTE" else "VIDEO"
 
                 // 💥 Ставим priority = 32 для превью
                 if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
@@ -491,7 +492,7 @@ class MessageUpdateHandler(
 
                 MessageEntity(
                     id = msgId, chatId = chatId, senderName = realSenderName, text = caption,
-                    isOutgoing = isOutgoing, mediaType = "VIDEO", // Гифки храним как видео
+                    isOutgoing = isOutgoing, mediaType = targetMediaTypeStr, // Гифки храним как видео
                     fileExtraInfo = if (duration > 0) formatDuration(duration) else "GIF",
                     photoPath = photoPath, date = date,
                     mediaAlbumId = mediaAlbumId, fileName = videoPath, isSending = isSending,
