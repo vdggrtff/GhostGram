@@ -369,7 +369,7 @@ class MessageUpdateHandler(
                 )
             }
 
-            "messagePhoto" -> {
+            /*"messagePhoto" -> {
                 val caption =
                     contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray
@@ -400,6 +400,27 @@ class MessageUpdateHandler(
                     senderId = senderId,
                     senderAvatarPath = realSenderAvatar,
                     reactionsJson = reactionsJson
+                )
+            }*/
+            "messagePhoto" -> {
+                val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray
+                val largestPhoto = photoSizes?.lastOrNull()?.jsonObject?.get("photo")?.jsonObject
+                val fileId = largestPhoto?.get("id")?.jsonPrimitive?.intOrNull
+                val photoPath = largestPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // 💥 СТАВИМ МАКСИМАЛЬНЫЙ ПРИОРИТЕТ 32 ДЛЯ СКАЧИВАНИЯ ФОТО!
+                if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.messagePhotos[fileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                MessageEntity(
+                    id = msgId, chatId = chatId, senderName = realSenderName, text = caption,
+                    isOutgoing = isOutgoing, photoPath = photoPath, mediaType = "PHOTO",
+                    date = date, mediaAlbumId = mediaAlbumId, isSending = isSending,
+                    replyToMessageId = replyToMessageId, isEdited = isEdited, senderId = senderId,
+                    senderAvatarPath = realSenderAvatar, reactionsJson = reactionsJson
                 )
             }
 

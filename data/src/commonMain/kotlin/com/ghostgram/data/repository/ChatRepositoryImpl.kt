@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -559,6 +560,90 @@ class ChatRepositoryImpl(
 
         println("✅ [SHARED MEDIA] 4. Успешно добавлено в UI: ${result.size} сообщений")
         return result
+    }
+
+    override suspend fun checkInviteLink(inviteLink: String): entity.InviteLinkResult {
+        val trimmed = inviteLink.trim()
+        val fullInviteLink = when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            trimmed.startsWith("t.me/") -> "https://$trimmed"
+            trimmed.startsWith("+") -> "https://t.me/$trimmed"
+            else -> trimmed
+        }
+
+        println("🚪 [INVITE] Проверяем ссылку: $fullInviteLink")
+
+        val response = tdlibClient.sendAndAwait(
+            requestType = "checkChatInviteLink",
+            parameters = mapOf("invite_link" to fullInviteLink),
+            timeoutMs = 5000
+        ) ?: return entity.InviteLinkResult.Error("Сервер не ответил вовремя")
+
+        if (response["@type"]?.jsonPrimitive?.content == "chatInviteLinkInfo") {
+            val chatId = response["chat_id"]?.jsonPrimitive?.longOrNull ?: 0L
+            val createsJoinRequest = response["creates_join_request"]?.jsonPrimitive?.booleanOrNull ?: false
+
+            // 💥 ГЛАВНОЕ ИСПРАВЛЕНИЕ:
+            // Если chatId != 0L и нет премодерации заявками (createsJoinRequest == false) —
+            // Telegram разрешает читать этот чат БЕЗ подписки! СРАЗУ ОТКРЫВАЕМ!
+            if (chatId != 0L && !createsJoinRequest) {
+                println("🌐 [INVITE] Чат доступен для чтения! Сразу открываем: ID=$chatId")
+                return entity.InviteLinkResult.AlreadyJoined(chatId)
+            }
+
+            // 💥 Показываем диалог ТОЛЬКО если вход строго закрыт (chatId == 0L или createsJoinRequest == true)
+            val title = response["title"]?.jsonPrimitive?.content ?: "Приватный чат"
+            val description = response["description"]?.jsonPrimitive?.content ?: ""
+            val memberCount = response["member_count"]?.jsonPrimitive?.intOrNull ?: 0
+            val isPublic = response["is_public"]?.jsonPrimitive?.booleanOrNull ?: false
+            val typeObj = response["type"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
+            val isChannel = typeObj == "chatTypeSupergroup" && isPublic
+
+            return entity.InviteLinkResult.NeedsJoin(
+                entity.ChatInvitePreview(
+                    inviteLink = fullInviteLink,
+                    title = title,
+                    description = description,
+                    memberCount = memberCount,
+                    isChannel = isChannel,
+                    createsJoinRequest = createsJoinRequest
+                )
+            )
+        }
+
+        return entity.InviteLinkResult.Error("Ссылка-приглашение недействительна")
+    }
+
+    override suspend fun joinChatByInvite(inviteLink: String): Long? {
+        println("📥 [INVITE] Пользователь нажал 'Вступить': $inviteLink")
+        val response = tdlibClient.sendAndAwait(
+            requestType = "joinChatByInviteLink",
+            parameters = mapOf("invite_link" to inviteLink),
+            timeoutMs = 8000
+        )
+
+        return response?.get("id")?.jsonPrimitive?.longOrNull
+    }
+
+    override suspend fun resolveUsernameToChatId(username: String): Long? {
+        val trimmed = username.trim()
+        val cleanUsername = trimmed
+            .removePrefix("@")
+            .substringAfterLast("t.me/")
+            .substringAfterLast("domain=")
+            .substringBefore("?")
+            .substringBefore("/")
+            .trim()
+
+        if (cleanUsername.isBlank()) return null
+
+        val response = tdlibClient.sendAndAwait(
+            requestType = "searchPublicChat",
+            parameters = mapOf("username" to cleanUsername),
+            timeoutMs = 4000
+        ) ?: return null
+
+        return response["id"]?.jsonPrimitive?.longOrNull
     }
 
     override fun openChat(chatId: Long) {

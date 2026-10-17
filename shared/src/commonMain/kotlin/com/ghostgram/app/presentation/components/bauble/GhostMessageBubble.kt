@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.ghostgram.app.presentation.chats.chat_details.utils.HighlightUtils
+import com.ghostgram.app.presentation.chats.chat_details.utils.LinkifyUtils
 import com.ghostgram.app.presentation.components.bauble.layout.ReactionsRow
 import com.ghostgram.app.presentation.components.bauble.content.DocumentMessageContent
 import com.ghostgram.app.presentation.components.bauble.content.ImageMessageContent
@@ -211,8 +212,14 @@ fun GhostMessageBubble(
                         val displayText = if (isEncrypted) "🔒 ${message.text}" else message.text
 
                         // 💥 Превращаем обычный текст в подсвеченный!
-                        val annotatedText = remember(displayText, searchQuery) {
+                       /* val annotatedText = remember(displayText, searchQuery) {
                             HighlightUtils.buildHighlightedText(displayText, searchQuery)
+                        }*/
+                        val annotatedText = remember(displayText, searchQuery) {
+                            LinkifyUtils.createLinkedText(
+                                text = displayText,
+                                searchQuery = searchQuery
+                            )
                         }
 
                         ChatMessageLayout(

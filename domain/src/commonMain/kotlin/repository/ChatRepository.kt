@@ -86,6 +86,11 @@ interface ChatRepository {
 
     suspend fun getSharedMedia(chatId: Long, filterType: String, fromMessageId: Long = 0L): List<Message>
 
+    suspend fun checkInviteLink(inviteLink: String): entity.InviteLinkResult
+    suspend fun joinChatByInvite(inviteLink: String): Long?
+
+    suspend fun resolveUsernameToChatId(username: String): Long?
+
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)
 }

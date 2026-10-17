@@ -1,5 +1,6 @@
 package com.ghostgram.app.presentation.chats.chat_details
 
+import entity.ChatInvitePreview
 import entity.Message
 
 data class MediaItem(val bytes: ByteArray, val extension: String)
@@ -35,7 +36,10 @@ data class ChatDetailsState(
     val isAiSearchEnabled: Boolean = false,
     val isAiSearching: Boolean = false,
     val pinnedMessageId: Long = 0L,
-    val pinnedMessage: Message? = null
+    val pinnedMessage: Message? = null,
+    val pendingNavigationChatId: Long? = null,
+    val invitePreview: ChatInvitePreview? = null,
+    val isJoiningChat: Boolean = false
 )
 
 // Действия на экране чата
@@ -77,4 +81,7 @@ sealed interface ChatDetailsIntent {
     data object OnToggleAiSearch : ChatDetailsIntent
     data object OnRunAiSearch : ChatDetailsIntent
     data class OnToggleReaction(val messageId: Long, val emoji: String, val isChosen: Boolean) : ChatDetailsIntent
+    data class OnConfirmJoinChat(val inviteLink: String) : ChatDetailsIntent
+    data object OnDismissInviteDialog : ChatDetailsIntent
+    data object OnResetPendingNavigation : ChatDetailsIntent
 }

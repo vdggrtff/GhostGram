@@ -184,19 +184,29 @@ private fun AlbumMediaItem(
         if (model != null) {
             AsyncImage(
                 model = model,
-                contentDescription = null,
+                contentDescription = "Фото альбома",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        } else if (isVideo) {
-            Text("🎬", fontSize = 24.sp)
+        } else {
+            // 💥 ГЛАВНЫЙ ФИКС: СПИННЕР ЗАГРУЗКИ ВМЕСТО МЕРТВОГО СЕРОГО КВАДРАТА!
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            }
         }
 
-        // Оверлей для видео
+        // Оверлей для видео (кнопка Play и хронометраж)
         if (isVideo) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
 
-            if (message.isSending) {
+            if (message.isSending || (videoPath.isNullOrBlank() && model == null)) {
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             } else {
                 Box(
@@ -206,17 +216,20 @@ private fun AlbumMediaItem(
                     Text("▶", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 2.dp))
                 }
 
-                Text(
-                    text = message.fileExtraInfo ?: "0:00",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(4.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                )
+                val durationText = message.fileExtraInfo
+                if (!durationText.isNullOrBlank() && durationText != "0:00") {
+                    Text(
+                        text = durationText,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
     }

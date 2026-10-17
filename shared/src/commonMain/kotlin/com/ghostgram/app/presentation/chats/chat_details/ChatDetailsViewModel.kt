@@ -10,15 +10,18 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCan
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCatchUpClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmJoinChat
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissCatchUpDialog
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissInviteDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEditMessageClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInChatSearchQueryChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetPendingNavigation
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnRunAiSearch
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchNext
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchPrevious
@@ -161,6 +164,30 @@ class ChatDetailsViewModel(
                     repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen)
                 }
             }
+            is OnDismissInviteDialog -> _state.update { it.copy(invitePreview = null) }
+            is OnConfirmJoinChat -> {
+                viewModelScope.launch {
+                    val preview = _state.value.invitePreview ?: return@launch
+                    _state.update { it.copy(isJoiningChat = true) }
+
+                    val repo = sessionManager.currentSession.value?.chatRepository
+                    val newChatId = repo?.joinChatByInvite(intent.inviteLink)
+
+                    _state.update { it.copy(isJoiningChat = false, invitePreview = null) }
+
+                    // 💥 ЕСЛИ ЭТО БЫЛА ЗАЯВКА НА ВСТУПЛЕНИЕ (createsJoinRequest = true):
+                    if (preview.createsJoinRequest) {
+                        println("📨 [INVITE] Заявка успешно отправлена администраторам!")
+                        // Чат не открываем, так как доступа к сообщениям еще нет!
+                    } else if (newChatId != null && newChatId != 0L) {
+                        // Обычный приватный инвайт -> вступаем и сразу летим в чат!
+                        _state.update { it.copy(pendingNavigationChatId = newChatId) }
+                    }
+                }
+            }
+            is OnResetPendingNavigation -> {
+                _state.update { it.copy(pendingNavigationChatId = null) }
+            }
         }
     }
 
@@ -209,6 +236,37 @@ class ChatDetailsViewModel(
                 repo.observeRecentStickers().collect { stickers ->
                     _state.update { it.copy(recentStickers = stickers) }
                 }
+            }
+        }
+    }
+
+    fun onDeepLinkClick(uri: String, onNavigateToChat: (Long) -> Unit) {
+        viewModelScope.launch {
+            val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+
+            // 💥 1. ЕСЛИ ЭТО ИНВАЙТ-ССЫЛКА:
+            val isInvite = uri.contains("joinchat/") || uri.contains("t.me/+") || uri.startsWith("+")
+            if (isInvite) {
+                when (val result = repo.checkInviteLink(uri)) {
+                    is entity.InviteLinkResult.AlreadyJoined -> {
+                        // Уже состоим — сразу открываем!
+                        onNavigateToChat(result.chatId)
+                    }
+                    is entity.InviteLinkResult.NeedsJoin -> {
+                        // 💥 НЕ ВСТУПАЕМ! ПОКАЗЫВАЕМ КРАСИВЫЙ ДИАЛОГ!
+                        _state.update { it.copy(invitePreview = result.preview) }
+                    }
+                    is entity.InviteLinkResult.Error -> {
+                        println("❌ [INVITE] Ошибка: ${result.message}")
+                    }
+                }
+                return@launch
+            }
+
+            // 💥 2. ЕСЛИ ЭТО ОБЫЧНЫЙ @USERNAME:
+            val resolvedChatId = repo.resolveUsernameToChatId(uri)
+            if (resolvedChatId != null) {
+                onNavigateToChat(resolvedChatId)
             }
         }
     }

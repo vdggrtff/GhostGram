@@ -57,9 +57,8 @@ fun AppNavGraph(navController: NavHostController) {
             ChatDetailsRoute(
                 onBackClick = { navController.popBackStack() },
                 onNavigateToProfile = { chatId -> navController.navigate("chat_profile/$chatId") },
-                // 💥 2. Передаем ID в Route:
+                onNavigateToChat = { targetChatId -> navController.navigate("chat_details/$targetChatId") },
                 scrollToMessageId = scrollToMessageId,
-                // 💥 3. Функция очистки после скролла:
                 onMessageScrolled = { backStackEntry.savedStateHandle.remove<Long>("scrollToMessageId") }
             )
         }
