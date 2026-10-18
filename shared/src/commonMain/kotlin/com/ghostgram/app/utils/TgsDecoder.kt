@@ -34,7 +34,7 @@ object TgsDecoder {
                 }
 
                 if (json.isNotBlank()) {
-                    if (jsonCache.size > 100) jsonCache.clear() // защита от переполнения RAM
+                    if (jsonCache.size > 250) jsonCache.clear() // защита от переполнения RAM
                     jsonCache[filePath] = json
                     json
                 } else null
