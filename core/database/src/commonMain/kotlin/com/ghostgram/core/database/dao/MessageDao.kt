@@ -69,4 +69,7 @@ interface MessageDao {
         LIMIT 50
     """)
     suspend fun searchLocalMessages(chatId: Long, query: String, stem: String): List<MessageEntity>
+
+    @Query("UPDATE messages SET reactionsJson = :reactionsJson WHERE id = :msgId")
+    suspend fun updateMessageReactions(msgId: Long, reactionsJson: String)
 }

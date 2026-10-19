@@ -49,7 +49,7 @@ class MessageUpdateHandler(
                 val senderId = senderObj?.get("user_id")?.jsonPrimitive?.longOrNull
                     ?: senderObj?.get("chat_id")?.jsonPrimitive?.longOrNull
                     ?: 0L
-
+                val reactionsJson = extractReactionsJson(messageObj)
                 val contentObj = messageObj["content"]?.jsonObject
 
                 // Парсим сообщение в сущность базы данных
@@ -65,7 +65,8 @@ class MessageUpdateHandler(
                         isSending = isSending,
                         replyToMessageId = replyToMessageId,
                         isEdited = isEdited,
-                        senderId = senderId
+                        senderId = senderId,
+                        reactionsJson = reactionsJson
                     )
 
                 if (entity != null) {
@@ -103,6 +104,7 @@ class MessageUpdateHandler(
                     val senderId = senderObj?.get("user_id")?.jsonPrimitive?.longOrNull
                         ?: senderObj?.get("chat_id")?.jsonPrimitive?.longOrNull
                         ?: 0L
+                    val reactionsJson = extractReactionsJson(msgObj)
 
                     parseSingleMessageToEntity(
                         msgId,
@@ -115,7 +117,8 @@ class MessageUpdateHandler(
                         isSending = isSending,
                         replyToMessageId = replyToMessageId,
                         isEdited = isEdited,
-                        senderId = senderId
+                        senderId = senderId,
+                        reactionsJson = reactionsJson
                     )
                 }
 
@@ -244,6 +247,18 @@ class MessageUpdateHandler(
                 }
                 return true
             }
+            "updateMessageInteractionInfo" -> {
+                val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val jsonStr = extractReactionsJson(jsonObject)
+
+                println("❤️ [REACTIONS DB] Обновляем реакции для msg=$msgId: '$jsonStr'")
+
+                // Записываем в базу
+                repoScope.launch {
+                    messageDao.updateMessageReactions(msgId, jsonStr)
+                }
+                return true
+            }
         }
         return false // Если тип другой — мы его не трогаем
     }
@@ -259,7 +274,8 @@ class MessageUpdateHandler(
         isSending: Boolean = false,
         replyToMessageId: Long = 0L,
         isEdited: Boolean = false,
-        senderId: Long = 0L
+        senderId: Long = 0L,
+        reactionsJson: String = ""
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
 
@@ -348,11 +364,12 @@ class MessageUpdateHandler(
                     replyToMessageId = replyToMessageId,
                     isEdited = isEdited,
                     senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
                 )
             }
 
-            "messagePhoto" -> {
+            /*"messagePhoto" -> {
                 val caption =
                     contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray
@@ -381,7 +398,29 @@ class MessageUpdateHandler(
                     replyToMessageId = replyToMessageId,
                     isEdited = isEdited,
                     senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
+                )
+            }*/
+            "messagePhoto" -> {
+                val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
+                val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray
+                val largestPhoto = photoSizes?.lastOrNull()?.jsonObject?.get("photo")?.jsonObject
+                val fileId = largestPhoto?.get("id")?.jsonPrimitive?.intOrNull
+                val photoPath = largestPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+
+                // 💥 СТАВИМ МАКСИМАЛЬНЫЙ ПРИОРИТЕТ 32 ДЛЯ СКАЧИВАНИЯ ФОТО!
+                if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
+                    tracker.messagePhotos[fileId] = msgId
+                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
+                }
+
+                MessageEntity(
+                    id = msgId, chatId = chatId, senderName = realSenderName, text = caption,
+                    isOutgoing = isOutgoing, photoPath = photoPath, mediaType = "PHOTO",
+                    date = date, mediaAlbumId = mediaAlbumId, isSending = isSending,
+                    replyToMessageId = replyToMessageId, isEdited = isEdited, senderId = senderId,
+                    senderAvatarPath = realSenderAvatar, reactionsJson = reactionsJson
                 )
             }
 
@@ -404,7 +443,8 @@ class MessageUpdateHandler(
                     replyToMessageId = replyToMessageId,
                     isEdited = isEdited,
                     senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
                 )
             }
 
@@ -438,7 +478,8 @@ class MessageUpdateHandler(
                     replyToMessageId = replyToMessageId,
                     isEdited = isEdited,
                     senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
                 )
             }
             "messageVideo", "messageVideoNote", "messageAnimation" -> {
@@ -453,6 +494,7 @@ class MessageUpdateHandler(
                 val thumbObj = videoContainer?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
                 val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
                 val photoPath = thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val targetMediaTypeStr = if (contentType == "messageVideoNote") "VIDEO_NOTE" else "VIDEO"
 
                 // 💥 Ставим priority = 32 для превью
                 if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
@@ -471,60 +513,15 @@ class MessageUpdateHandler(
 
                 MessageEntity(
                     id = msgId, chatId = chatId, senderName = realSenderName, text = caption,
-                    isOutgoing = isOutgoing, mediaType = "VIDEO", // Гифки храним как видео
+                    isOutgoing = isOutgoing, mediaType = targetMediaTypeStr, // Гифки храним как видео
                     fileExtraInfo = if (duration > 0) formatDuration(duration) else "GIF",
                     photoPath = photoPath, date = date,
                     mediaAlbumId = mediaAlbumId, fileName = videoPath, isSending = isSending,
                     replyToMessageId = replyToMessageId, isEdited = isEdited, senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
                 )
             }
-            /*"messageVideo", "messageVideoNote" -> {
-                val videoObj =
-                    contentObj[if (contentType == "messageVideo") "video" else "video_note"]?.jsonObject
-                val duration = videoObj?.get("duration")?.jsonPrimitive?.intOrNull ?: 0
-                val caption =
-                    contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
-
-                // ДОСТАЕМ КАРТИНКУ-ПРЕВЬЮШКУ ВИДЕО!
-                val thumbObj = videoObj?.get("thumbnail")?.jsonObject?.get("file")?.jsonObject
-                val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull
-                val photoPath =
-                    thumbObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-
-                if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.messagePhotos[fileId] = msgId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
-                }
-
-                val mainVideoObj = videoObj?.get("video")?.jsonObject
-                val videoFileId = mainVideoObj?.get("id")?.jsonPrimitive?.intOrNull
-                val videoPath = mainVideoObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-
-                if (videoPath.isNullOrBlank() && videoFileId != null && videoFileId != 0) {
-                    tracker.messageFiles[videoFileId] = msgId // КЛАДЕМ В FILES!
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $videoFileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
-                }
-
-                MessageEntity(
-                    id = msgId,
-                    chatId = chatId,
-                    senderName = realSenderName,
-                    text = caption,
-                    isOutgoing = isOutgoing,
-                    mediaType = if (contentType == "messageVideo") "VIDEO" else "VIDEO_NOTE",
-                    fileExtraInfo = formatDuration(duration),
-                    photoPath = photoPath, // Сохраняем путь к превьюшке!
-                    date = date,
-                    mediaAlbumId = mediaAlbumId,
-                    fileName = videoPath,
-                    isSending = isSending,
-                    replyToMessageId = replyToMessageId,
-                    isEdited = isEdited,
-                    senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
-                )
-            }*/
             "messageSticker" -> {
                 val stickerObj = contentObj["sticker"]?.jsonObject
                 val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
@@ -554,36 +551,10 @@ class MessageUpdateHandler(
                     fileName = stickerPath, // 💥 Сохраняем в базу сам файл!
                     date = date, isSending = isSending,
                     replyToMessageId = replyToMessageId, isEdited = isEdited, senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
                 )
             }
-            /*"messageSticker" -> {
-                val stickerObj = contentObj["sticker"]?.jsonObject
-                val emoji = stickerObj?.get("emoji")?.jsonPrimitive?.content ?: "✨"
-
-                // КАЧАЕМ ПОЛНОЦЕННЫЙ СТИКЕР (не thumbnail!)
-                val fileObj = stickerObj?.get("sticker")?.jsonObject
-                val fileId = fileObj?.get("id")?.jsonPrimitive?.intOrNull
-                val stickerPath =
-                    fileObj?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-
-                if (stickerPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.messagePhotos[fileId] = msgId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
-                }
-
-                MessageEntity(
-                    id = msgId, chatId = chatId, senderName = realSenderName, text = "",
-                    isOutgoing = isOutgoing, mediaType = "STICKER", fileExtraInfo = emoji,
-                    photoPath = stickerPath, date = date,
-                    isSending = isSending,
-                    replyToMessageId = replyToMessageId,
-                    isEdited = isEdited,
-                    senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
-                )
-            }*/
-
             else -> {
                 MessageEntity(
                     id = msgId,
@@ -598,7 +569,8 @@ class MessageUpdateHandler(
                     replyToMessageId = replyToMessageId,
                     isEdited = isEdited,
                     senderId = senderId,
-                    senderAvatarPath = realSenderAvatar
+                    senderAvatarPath = realSenderAvatar,
+                    reactionsJson = reactionsJson
                 )
             }
         }
@@ -612,3 +584,28 @@ private fun formatDuration(seconds: Int): String {
     return "$min:${if (sec < 10) "0$sec" else "$sec"}"
 }
 
+private fun extractReactionsJson(baseObj: JsonObject): String {
+    return try {
+        val interactionInfo = baseObj["interaction_info"]?.jsonObject ?: return ""
+
+        // 💥 ДОСТАЕМ ОБЪЕКТ messageReactions, А УЖЕ ИЗ НЕГО — МАССИВ reactions!
+        val messageReactionsObj = interactionInfo["reactions"]?.jsonObject ?: return ""
+        val reactionsArr = messageReactionsObj["reactions"]?.jsonArray ?: return ""
+
+        val items = reactionsArr.mapNotNull { elem ->
+            val rObj = elem.jsonObject
+            val typeObj = rObj["type"]?.jsonObject
+            val emoji = typeObj?.get("emoji")?.jsonPrimitive?.content ?: return@mapNotNull null
+            val count = rObj["total_count"]?.jsonPrimitive?.intOrNull ?: 1
+            val isChosen = rObj["is_chosen"]?.jsonPrimitive?.booleanOrNull ?: false
+            entity.MessageReactionItem(emoji, count, isChosen)
+        }
+
+        if (items.isNotEmpty()) {
+            kotlinx.serialization.json.Json.encodeToString(items)
+        } else ""
+    } catch (e: Exception) {
+        println("❌ [REACTIONS] Ошибка парсинга реакций: ${e.message}")
+        ""
+    }
+}

@@ -24,6 +24,7 @@ data class Message(
     val senderId: Long = 0L,
     val senderAvatarPath: String? = null,
     val waveform: String? = null,
+    val reactions: List<MessageReactionItem> = emptyList()
 )
 
 data class Chat(

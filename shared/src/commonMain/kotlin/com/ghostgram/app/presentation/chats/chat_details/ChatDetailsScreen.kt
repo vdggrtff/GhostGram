@@ -16,6 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,7 +66,8 @@ fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
     onBackClick: () -> Unit,
     onNavigateToProfile: (Long) -> Unit,
-    scrollToMessageId: Long?,            // 💥 Получили из графа
+    scrollToMessageId: Long?,
+    onNavigateToChat: (Long) -> Unit,
     onMessageScrolled: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
@@ -75,7 +77,11 @@ fun ChatDetailsRoute(
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
         onProfileClick = { onNavigateToProfile(viewModel.chatId) },
-        scrollToMessageId = scrollToMessageId, // 💥 Отдали в Dumb Screen
+        onDeepLinkClick = { link ->
+            viewModel.onDeepLinkClick(link, onNavigateToChat)
+        },
+        onNavigateToChat = onNavigateToChat,
+        scrollToMessageId = scrollToMessageId,
         onMessageScrolled = onMessageScrolled
     )
 }
@@ -87,7 +93,9 @@ fun ChatDetailsScreen(
     onIntent: (ChatDetailsIntent) -> Unit,
     onBackClick: () -> Unit,
     onProfileClick: () -> Unit,
-    scrollToMessageId: Long? = null,        // 💥 Чистый параметр!
+    onDeepLinkClick: (String) -> Unit,
+    onNavigateToChat: (Long) -> Unit,
+    scrollToMessageId: Long? = null,
     onMessageScrolled: () -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -95,6 +103,7 @@ fun ChatDetailsScreen(
     val coroutineScope = rememberCoroutineScope()
     var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+    val defaultUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
@@ -107,6 +116,28 @@ fun ChatDetailsScreen(
         onLoadMore = { onIntent(LoadMoreMessages(it)) },
         listState = listState
     )
+
+    val ghostUriHandler = remember {
+        object : androidx.compose.ui.platform.UriHandler {
+            override fun openUri(uri: String) {
+                if (uri.startsWith("tg://") || uri.contains("t.me/") || uri.startsWith("@")) {
+                    // Внутренняя ссылка Telegram -> открываем внутри приложения!
+                    onDeepLinkClick(uri)
+                } else {
+                    // Обычный сайт -> отдаем в Chrome/системный браузер
+                    defaultUriHandler.openUri(uri)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(state.pendingNavigationChatId) {
+        val targetId = state.pendingNavigationChatId
+        if (targetId != null && targetId != 0L) {
+            onNavigateToChat(targetId) // Перелетаем в новый чат!
+            onIntent(ChatDetailsIntent.OnResetPendingNavigation) // Сбрасываем ID
+        }
+    }
 
     val fileLauncher = rememberFilePickerLauncher(
         type = PickerType.ImageAndVideo,
@@ -181,202 +212,229 @@ fun ChatDetailsScreen(
             is MessageListItem.Album -> item.messages.first().date
         }
     }
-
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding(),
-        containerColor = GhostBackground,
-        topBar = {
-            if (state.isSearchOpen) {
-                InChatSearchBar(
-                    query = state.inChatSearchQuery,
-                    totalCount = state.inChatSearchResults.size,
-                    currentIndex = state.currentSearchIndex,
-                    isSearching = state.isSearchingInChat,
-                    isAiSearching = state.isAiSearching,
-                    onQueryChanged = { onIntent(ChatDetailsIntent.OnInChatSearchQueryChanged(it)) },
-                    onPrevious = { onIntent(ChatDetailsIntent.OnSearchPrevious) },
-                    onNext = { onIntent(ChatDetailsIntent.OnSearchNext) },
-                    onRunAiSearch = { onIntent(ChatDetailsIntent.OnRunAiSearch) },
-                    onClose = { onIntent(ChatDetailsIntent.OnToggleInChatSearch(false)) }
-                )
-            } else {
-                GhostTopBar(
-                    avatarPath = state.avatarPath,
-                    chatTitle = state.chatTitle,
-                    isGhostMode = state.isGhostMode,
-                    isCryptoMode = state.isCryptoMode,
-                    isGroup = state.isGroup,
-                    onIntent = onIntent,
-                    onBackClick = onBackClick,
-                    onProfileClick = onProfileClick,
-                )
-            }
-        },
-        bottomBar = {
-            GhostInput(
-                isCatchUpLoading = state.isCatchUpLoading,
-                unreadCount = state.unreadCount,
-                smartReplies = state.smartReplies,
-                isRepliesLoading = state.isRepliesLoading,
-                inputText = state.inputText,
-                onIntent = onIntent,
-                fileLauncher = fileLauncher,
-                replyingToMessage = state.replyingToMessage,
-                editingMessage = state.editingMessage
-            )
-        },
-        floatingActionButton = {
-            FabGetDown(
-                showScrollToBottom = scrollBehavior.showScrollToBottom,
-                onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } }
-            )
-        }
-    ) { innerPadding ->
-        Box(
+    CompositionLocalProvider(androidx.compose.ui.platform.LocalUriHandler provides ghostUriHandler) {
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
-            LazyColumn(
-                state = listState,
-                reverseLayout = true,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    // 💥 3. Сверху даем отступ под плашку закрепа (если она есть) или обычные 8dp:
-                    top = if (state.pinnedMessage != null && !state.isSearchOpen) 58.dp else 8.dp,
-                    // А снизу — запас под строку ввода сообщений:
-                    bottom = innerPadding.calculateBottomPadding() + 28.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                .imePadding(),
+            containerColor = GhostBackground,
+            topBar = {
+                if (state.isSearchOpen) {
+                    InChatSearchBar(
+                        query = state.inChatSearchQuery,
+                        totalCount = state.inChatSearchResults.size,
+                        currentIndex = state.currentSearchIndex,
+                        isSearching = state.isSearchingInChat,
+                        isAiSearching = state.isAiSearching,
+                        onQueryChanged = { onIntent(ChatDetailsIntent.OnInChatSearchQueryChanged(it)) },
+                        onPrevious = { onIntent(ChatDetailsIntent.OnSearchPrevious) },
+                        onNext = { onIntent(ChatDetailsIntent.OnSearchNext) },
+                        onRunAiSearch = { onIntent(ChatDetailsIntent.OnRunAiSearch) },
+                        onClose = { onIntent(ChatDetailsIntent.OnToggleInChatSearch(false)) }
+                    )
+                } else {
+                    GhostTopBar(
+                        avatarPath = state.avatarPath,
+                        chatTitle = state.chatTitle,
+                        isGhostMode = state.isGhostMode,
+                        isCryptoMode = state.isCryptoMode,
+                        isGroup = state.isGroup,
+                        onIntent = onIntent,
+                        onBackClick = onBackClick,
+                        onProfileClick = onProfileClick,
+                    )
+                }
+            },
+            bottomBar = {
+                GhostInput(
+                    isCatchUpLoading = state.isCatchUpLoading,
+                    unreadCount = state.unreadCount,
+                    smartReplies = state.smartReplies,
+                    isRepliesLoading = state.isRepliesLoading,
+                    inputText = state.inputText,
+                    onIntent = onIntent,
+                    fileLauncher = fileLauncher,
+                    replyingToMessage = state.replyingToMessage,
+                    editingMessage = state.editingMessage
+                )
+            },
+            floatingActionButton = {
+                FabGetDown(
+                    showScrollToBottom = scrollBehavior.showScrollToBottom,
+                    onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } }
+                )
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
             ) {
-                // Итерируемся по альбомам и одиночным сообщениям
-                items(groupedMessages.size, key = { index ->
-                    when (val item = groupedMessages[index]) {
-                        is MessageListItem.Single -> item.message.id
-                        is MessageListItem.Album -> item.messages.first().id
-                    }
-                }) { index ->
+                LazyColumn(
+                    state = listState,
+                    reverseLayout = true,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        // 💥 3. Сверху даем отступ под плашку закрепа (если она есть) или обычные 8dp:
+                        top = if (state.pinnedMessage != null && !state.isSearchOpen) 58.dp else 8.dp,
+                        // А снизу — запас под строку ввода сообщений:
+                        bottom = innerPadding.calculateBottomPadding() + 28.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Итерируемся по альбомам и одиночным сообщениям
+                    items(groupedMessages.size, key = { index ->
+                        when (val item = groupedMessages[index]) {
+                            is MessageListItem.Single -> item.message.id
+                            is MessageListItem.Album -> item.messages.first().id
+                        }
+                    }) { index ->
 
-                    val item = groupedMessages[index]
-                    val itemDate = getDateFromItem(item)
+                        val item = groupedMessages[index]
+                        val itemDate = getDateFromItem(item)
 
-                    val currentSenderKey = getSenderKey(item)
+                        val currentSenderKey = getSenderKey(item)
 
-                    // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
-                    val topNeighborKey =
-                        groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
+                        // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
+                        val topNeighborKey =
+                            groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
 
-                    // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
-                    val bottomNeighborKey =
-                        groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
+                        // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
+                        val bottomNeighborKey =
+                            groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
 
-                    // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
-                    // Первое сообщение человека в пачке (над ним рисуем цветное имя):
-                    val isFirstInGroup = currentSenderKey != topNeighborKey
+                        // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
+                        // Первое сообщение человека в пачке (над ним рисуем цветное имя):
+                        val isFirstInGroup = currentSenderKey != topNeighborKey
 
-                    // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
-                    val isLastInGroup = currentSenderKey != bottomNeighborKey
+                        // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
+                        val isLastInGroup = currentSenderKey != bottomNeighborKey
 
-                    // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
-                    val showDateHeader = if (index == groupedMessages.size - 1) {
-                        true
-                    } else {
-                        val olderItem = groupedMessages[index + 1]
-                        !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
-                    }
+                        // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
+                        val showDateHeader = if (index == groupedMessages.size - 1) {
+                            true
+                        } else {
+                            val olderItem = groupedMessages[index + 1]
+                            !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
+                        }
 
-                    // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
-                    when (item) {
-                        is MessageListItem.Single -> {
-                            val repliedMsg = if (item.message.replyToMessageId != 0L) {
-                                state.messages.find { it.id == item.message.replyToMessageId }
-                            } else null
-                            SwipeToReplyWrapper(
-                                onSwipe = { onIntent(OnSwipeToReply(item.message)) }
-                            ) {
-                                GhostMessageBubble(
-                                    message = item.message,
-                                    searchQuery = state.inChatSearchQuery,
-                                    isGroup = state.isGroup,
-                                    isFirstInGroup = isFirstInGroup, // 👈
-                                    isLastInGroup = isLastInGroup,   // 👈
-                                    onMediaClick = { activeViewerMessageId = item.message.id },
-                                    onLongClick = { selectedMessageForMenu = item.message },
-                                    replyMessage = repliedMsg,
-                                )
+                        // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
+                        when (item) {
+                            is MessageListItem.Single -> {
+                                val repliedMsg = if (item.message.replyToMessageId != 0L) {
+                                    state.messages.find { it.id == item.message.replyToMessageId }
+                                } else null
+                                SwipeToReplyWrapper(
+                                    onSwipe = { onIntent(OnSwipeToReply(item.message)) }
+                                ) {
+                                    GhostMessageBubble(
+                                        message = item.message,
+                                        searchQuery = state.inChatSearchQuery,
+                                        isGroup = state.isGroup,
+                                        isFirstInGroup = isFirstInGroup, // 👈
+                                        isLastInGroup = isLastInGroup,   // 👈
+                                        onMediaClick = { activeViewerMessageId = item.message.id },
+                                        onLongClick = { selectedMessageForMenu = item.message },
+                                        replyMessage = repliedMsg,
+                                        onReactionClick = { msgId, emoji, isChosen ->
+                                            onIntent(
+                                                ChatDetailsIntent.OnToggleReaction(
+                                                    msgId,
+                                                    emoji,
+                                                    isChosen
+                                                )
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
+                            is MessageListItem.Album -> {
+                                val baseMsg = item.messages.first()
+                                val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
+                                    state.messages.find { it.id == baseMsg.replyToMessageId }
+                                } else null
+                                SwipeToReplyWrapper(
+                                    onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
+                                ) {
+                                    GhostAlbumBubble(
+                                        albumMessages = item.messages,
+                                        onMediaClick = { activeViewerMessageId = it },
+                                        isGroup = state.isGroup,
+                                        isLastInGroup = isLastInGroup,
+                                        isFirstInGroup = isFirstInGroup,
+                                        replyMessage = repliedMsg,
+                                        onLongClick = { selectedMessageForMenu = baseMsg },
+                                        onReactionClick = { msgId, emoji, isChosen ->
+                                            onIntent(
+                                                ChatDetailsIntent.OnToggleReaction(
+                                                    msgId,
+                                                    emoji,
+                                                    isChosen
+                                                )
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
 
-                        is MessageListItem.Album -> {
-                            val baseMsg = item.messages.first()
-                            val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
-                                state.messages.find { it.id == baseMsg.replyToMessageId }
-                            } else null
-                            SwipeToReplyWrapper(
-                                onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
-                            ) {
-                                GhostAlbumBubble(
-                                    albumMessages = item.messages,
-                                    onMediaClick = { activeViewerMessageId = it },
-                                    isGroup = state.isGroup,
-                                    isLastInGroup = isLastInGroup,
-                                    isFirstInGroup = isFirstInGroup,
-                                    replyMessage = repliedMsg,
-                                    onLongClick = { selectedMessageForMenu = baseMsg }
-                                )
-                            }
-                        }
-                    }
-
-                    // ПЛАШКА ДАТЫ
-                    if (shouldShowDateHeader(index, groupedMessages)) {
-                        val dateText = TimeFormatter.formatDateHeader(getDateFromItem(item))
-                        if (dateText.isNotBlank()) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = dateText,
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                        .background(GhostCard.copy(alpha = 0.6f))
-                                        .padding(horizontal = 12.dp, vertical = 4.dp)
-                                )
+                        // ПЛАШКА ДАТЫ
+                        if (shouldShowDateHeader(index, groupedMessages)) {
+                            val dateText = TimeFormatter.formatDateHeader(getDateFromItem(item))
+                            if (dateText.isNotBlank()) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = dateText,
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                            .background(GhostCard.copy(alpha = 0.6f))
+                                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-            val pinnedMsg = state.pinnedMessage
+                val pinnedMsg = state.pinnedMessage
 
-            if (pinnedMsg != null && !state.isSearchOpen) {
-                com.ghostgram.app.presentation.components.topbar.PinnedMessageBar(
-                    pinnedMessage = pinnedMsg,
-                    onClick = {
-                        val targetIndex = groupedMessages.indexOfFirst { item ->
-                            when (item) {
-                                is MessageListItem.Single -> item.message.id == pinnedMsg.id
-                                is MessageListItem.Album -> item.messages.any { it.id == pinnedMsg.id }
+                if (pinnedMsg != null && !state.isSearchOpen) {
+                    com.ghostgram.app.presentation.components.topbar.PinnedMessageBar(
+                        pinnedMessage = pinnedMsg,
+                        onClick = {
+                            val targetIndex = groupedMessages.indexOfFirst { item ->
+                                when (item) {
+                                    is MessageListItem.Single -> item.message.id == pinnedMsg.id
+                                    is MessageListItem.Album -> item.messages.any { it.id == pinnedMsg.id }
+                                }
                             }
-                        }
-                        if (targetIndex != -1) {
-                            coroutineScope.launch { listState.animateScrollToItem(targetIndex) }
-                        } else {
-                            // Если сообщение старое — наш проверенный LoadMore с offset: -20 подкачает его!
-                            onIntent(ChatDetailsIntent.LoadMoreMessages(pinnedMsg.id))
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
+                            if (targetIndex != -1) {
+                                coroutineScope.launch { listState.animateScrollToItem(targetIndex) }
+                            } else {
+                                // Если сообщение старое — наш проверенный LoadMore с offset: -20 подкачает его!
+                                onIntent(ChatDetailsIntent.LoadMoreMessages(pinnedMsg.id))
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                }
             }
         }
+    }
+    if (state.invitePreview != null) {
+        com.ghostgram.app.presentation.components.dialog.ChatInviteDialog(
+            preview = state.invitePreview!!,
+            isLoading = state.isJoiningChat,
+            onJoinClick = { onIntent(ChatDetailsIntent.OnConfirmJoinChat(state.invitePreview!!.inviteLink)) },
+            onDismiss = { onIntent(ChatDetailsIntent.OnDismissInviteDialog) }
+        )
     }
     if (activeViewerMessageId != null) {
         // Фильтруем все сообщения чата, у которых есть фото или видео

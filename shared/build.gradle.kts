@@ -56,49 +56,56 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
 
-            // KTOR: Общая логика и парсинг JSON
+            // KTOR
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
 
-            // KOIN: Общий DI
+            // KOIN
             api(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
 
-            implementation(libs.kotlinx.coroutines.core)
-
+            // ROOM
             implementation(libs.androidx.room.runtime)
             implementation(libs.androidx.sqlite.bundled)
 
+            // KOTLINX
+            implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
+
+            // DATASTORE
             implementation(libs.androidx.datastore.preferences.core)
             implementation(libs.okio)
 
+            // NAVIGATION
             implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.material.icons.extended)
 
+            // COIL
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)
 
+            // compottie
+            implementation(libs.compottie)
+            implementation(libs.filekit.compose)
+
+            // modules
             implementation(project(":core:network"))
             implementation(project(":core:tdlib"))
             implementation(project(":core:database"))
             implementation(project(":core:crypto"))
             implementation(project(":domain"))
             implementation(project(":data"))
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.compottie)
-            implementation(libs.filekit.compose)
         }
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
             implementation("net.java.dev.jna:jna:5.19.1@aar")
             implementation("com.airbnb.android:lottie:6.7.1")
+            implementation("com.airbnb.android:lottie-compose:6.4.1")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

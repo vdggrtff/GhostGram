@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -116,6 +117,8 @@ class ChatRepositoryImpl(
                         if (handler.handle(type, jsonObject)) break
                     }
                 } catch (e: Exception) {
+                    println("❌ [REPO CRASH] Ошибка в обработке обновления: ${e.message}")
+                    e.printStackTrace()
                 }
             }
             .launchIn(repoScope)
@@ -249,9 +252,47 @@ class ChatRepositoryImpl(
             }
     }
 
+    override suspend fun toggleChatMute(chatId: Long, isMuted: Boolean) {
+        // Если чат заглушен — ставим 0 (включить звук), если нет — ставим максимальное число (заглушить навсегда)
+        val muteFor = if (isMuted) 0 else 2147483647
+        val request = """
+            {
+                "@type": "setChatNotificationSettings",
+                "chat_id": $chatId,
+                "notification_settings": {
+                    "@type": "chatNotificationSettings",
+                    "use_default_mute_for": false,
+                    "mute_for": $muteFor
+                }
+            }
+        """.trimIndent()
+        tdlibClient.send(request)
+    }
+
     override fun toggleGhostMode() {
         _isGhostModeEnabled.update { !it }
         println("👻 Ghost Mode теперь: ${_isGhostModeEnabled.value}")
+    }
+
+    override suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean) {
+        val requestType = if (isChosen) "removeMessageReaction" else "addMessageReaction"
+
+        val requestJson = buildJsonObject {
+            put("@type", requestType)
+            put("chat_id", chatId)
+            put("message_id", messageId)
+            put("reaction_type", buildJsonObject {
+                put("@type", "reactionTypeEmoji")
+                put("emoji", emoji)
+            })
+            if (!isChosen) {
+                put("is_big", false)
+                put("update_recent_reactions", true)
+            }
+        }.toString()
+
+        println("❤️ [РЕАКЦИЯ] $requestType: $emoji для msg=$messageId")
+        tdlibClient.send(requestJson)
     }
 
     override fun observeGhostMode(): Flow<Boolean> = _isGhostModeEnabled.asStateFlow()
@@ -521,6 +562,90 @@ class ChatRepositoryImpl(
         return result
     }
 
+    override suspend fun checkInviteLink(inviteLink: String): entity.InviteLinkResult {
+        val trimmed = inviteLink.trim()
+        val fullInviteLink = when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            trimmed.startsWith("t.me/") -> "https://$trimmed"
+            trimmed.startsWith("+") -> "https://t.me/$trimmed"
+            else -> trimmed
+        }
+
+        println("🚪 [INVITE] Проверяем ссылку: $fullInviteLink")
+
+        val response = tdlibClient.sendAndAwait(
+            requestType = "checkChatInviteLink",
+            parameters = mapOf("invite_link" to fullInviteLink),
+            timeoutMs = 5000
+        ) ?: return entity.InviteLinkResult.Error("Сервер не ответил вовремя")
+
+        if (response["@type"]?.jsonPrimitive?.content == "chatInviteLinkInfo") {
+            val chatId = response["chat_id"]?.jsonPrimitive?.longOrNull ?: 0L
+            val createsJoinRequest = response["creates_join_request"]?.jsonPrimitive?.booleanOrNull ?: false
+
+            // 💥 ГЛАВНОЕ ИСПРАВЛЕНИЕ:
+            // Если chatId != 0L и нет премодерации заявками (createsJoinRequest == false) —
+            // Telegram разрешает читать этот чат БЕЗ подписки! СРАЗУ ОТКРЫВАЕМ!
+            if (chatId != 0L && !createsJoinRequest) {
+                println("🌐 [INVITE] Чат доступен для чтения! Сразу открываем: ID=$chatId")
+                return entity.InviteLinkResult.AlreadyJoined(chatId)
+            }
+
+            // 💥 Показываем диалог ТОЛЬКО если вход строго закрыт (chatId == 0L или createsJoinRequest == true)
+            val title = response["title"]?.jsonPrimitive?.content ?: "Приватный чат"
+            val description = response["description"]?.jsonPrimitive?.content ?: ""
+            val memberCount = response["member_count"]?.jsonPrimitive?.intOrNull ?: 0
+            val isPublic = response["is_public"]?.jsonPrimitive?.booleanOrNull ?: false
+            val typeObj = response["type"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
+            val isChannel = typeObj == "chatTypeSupergroup" && isPublic
+
+            return entity.InviteLinkResult.NeedsJoin(
+                entity.ChatInvitePreview(
+                    inviteLink = fullInviteLink,
+                    title = title,
+                    description = description,
+                    memberCount = memberCount,
+                    isChannel = isChannel,
+                    createsJoinRequest = createsJoinRequest
+                )
+            )
+        }
+
+        return entity.InviteLinkResult.Error("Ссылка-приглашение недействительна")
+    }
+
+    override suspend fun joinChatByInvite(inviteLink: String): Long? {
+        println("📥 [INVITE] Пользователь нажал 'Вступить': $inviteLink")
+        val response = tdlibClient.sendAndAwait(
+            requestType = "joinChatByInviteLink",
+            parameters = mapOf("invite_link" to inviteLink),
+            timeoutMs = 8000
+        )
+
+        return response?.get("id")?.jsonPrimitive?.longOrNull
+    }
+
+    override suspend fun resolveUsernameToChatId(username: String): Long? {
+        val trimmed = username.trim()
+        val cleanUsername = trimmed
+            .removePrefix("@")
+            .substringAfterLast("t.me/")
+            .substringAfterLast("domain=")
+            .substringBefore("?")
+            .substringBefore("/")
+            .trim()
+
+        if (cleanUsername.isBlank()) return null
+
+        val response = tdlibClient.sendAndAwait(
+            requestType = "searchPublicChat",
+            parameters = mapOf("username" to cleanUsername),
+            timeoutMs = 4000
+        ) ?: return null
+
+        return response["id"]?.jsonPrimitive?.longOrNull
+    }
+
     override fun openChat(chatId: Long) {
         // Говорим TDLib: "Юзер смотрит на этот чат! Дай инфу и начни скачивать всё необходимое!"
         tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
@@ -529,22 +654,5 @@ class ChatRepositoryImpl(
 
     override fun closeChat(chatId: Long) {
         tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
-    }
-
-    override suspend fun toggleChatMute(chatId: Long, isMuted: Boolean) {
-        // Если чат заглушен — ставим 0 (включить звук), если нет — ставим максимальное число (заглушить навсегда)
-        val muteFor = if (isMuted) 0 else 2147483647
-        val request = """
-            {
-                "@type": "setChatNotificationSettings",
-                "chat_id": $chatId,
-                "notification_settings": {
-                    "@type": "chatNotificationSettings",
-                    "use_default_mute_for": false,
-                    "mute_for": $muteFor
-                }
-            }
-        """.trimIndent()
-        tdlibClient.send(request)
     }
 }

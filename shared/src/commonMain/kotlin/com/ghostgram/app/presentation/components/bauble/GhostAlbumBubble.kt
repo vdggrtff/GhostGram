@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.ghostgram.app.presentation.components.bauble.layout.MessageTimeAndStatus
+import com.ghostgram.app.presentation.components.bauble.layout.ReactionsRow
 import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.ui.theme.GhostSurfaceElevated
 import com.ghostgram.app.ui.theme.TelegramColors
@@ -48,9 +50,11 @@ fun GhostAlbumBubble(
     replyMessage: Message? = null,
     onLongClick: () -> Unit,
     onMediaClick: (Long) -> Unit,
+    onReactionClick: (Long, String, Boolean) -> Unit = { _, _, _ -> }
 ) {
     val baseMessage = albumMessages.last()
     val isOutgoing = baseMessage.isOutgoing
+    val messageWithReactions = albumMessages.firstOrNull { it.reactions.isNotEmpty() } ?: baseMessage
 
     Row(
         modifier = Modifier
@@ -72,67 +76,81 @@ fun GhostAlbumBubble(
 
         val bubbleShape = rememberAlbumShape(isOutgoing, isFirstInGroup, isLastInGroup)
         val backgroundColor = rememberAlbumColor(baseMessage, isOutgoing)
-
-        Box(
-            modifier = Modifier
-                .widthIn(min = 180.dp, max = 290.dp)
-                .clip(bubbleShape)
-                .combinedClickable(
-                    onClick = {},
-                    onLongClick = onLongClick
-                )
-                .background(backgroundColor)
-                .padding(6.dp)
+        Column(
+            horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start,
+            modifier = Modifier.wrapContentWidth()
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-
-                // 2. ЦВЕТНОЕ ИМЯ АВТОРА В ГРУППЕ (НАД АЛЬБОМОМ)
-                if (isGroup && !isOutgoing && isFirstInGroup) {
-                    val authorColor = TelegramColors.getColorForUser(baseMessage.senderId)
-                    Text(
-                        text = baseMessage.senderName.ifBlank { "Участник" },
-                        color = authorColor,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            Box(
+                modifier = Modifier
+                    .widthIn(min = 180.dp, max = 290.dp)
+                    .clip(bubbleShape)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = onLongClick
                     )
-                }
+                    .background(backgroundColor)
+                    .padding(6.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
 
-                // Цитата (Reply), если есть
-                if (baseMessage.replyToMessageId != 0L) {
-                    ReplyToMessage(replyMessage = replyMessage, isOutgoing = isOutgoing)
-                }
+                    // 2. ЦВЕТНОЕ ИМЯ АВТОРА В ГРУППЕ (НАД АЛЬБОМОМ)
+                    if (isGroup && !isOutgoing && isFirstInGroup) {
+                        val authorColor = TelegramColors.getColorForUser(baseMessage.senderId)
+                        Text(
+                            text = baseMessage.senderName.ifBlank { "Участник" },
+                            color = authorColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
 
-                // СЕТКА КАРТИНОК И ВИДЕО (2 в ряд)
-                albumMessages.chunked(2).forEach { rowMessages ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        rowMessages.forEach { msg ->
-                            AlbumMediaItem(
-                                message = msg,
-                                modifier = Modifier.weight(1f),
-                                onMediaClick = onMediaClick
-                            )
+                    // Цитата (Reply), если есть
+                    if (baseMessage.replyToMessageId != 0L) {
+                        ReplyToMessage(replyMessage = replyMessage, isOutgoing = isOutgoing)
+                    }
+
+                    // СЕТКА КАРТИНОК И ВИДЕО (2 в ряд)
+                    albumMessages.chunked(2).forEach { rowMessages ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            rowMessages.forEach { msg ->
+                                AlbumMediaItem(
+                                    message = msg,
+                                    modifier = Modifier.weight(1f),
+                                    onMediaClick = onMediaClick
+                                )
+                            }
                         }
                     }
-                }
 
-                // Подпись альбома
-                val caption = albumMessages.map { it.text }.firstOrNull { it.isNotBlank() }
-                if (!caption.isNullOrBlank()) {
-                    Text(
-                        text = caption,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    // Подпись альбома
+                    val caption = albumMessages.map { it.text }.firstOrNull { it.isNotBlank() }
+                    if (!caption.isNullOrBlank()) {
+                        Text(
+                            text = caption,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    // Время и галочки
+                    MessageTimeAndStatus(
+                        message = baseMessage,
+                        textColor = Color.White,
+                        iconColor = Color.White,
+                        modifier = Modifier.align(Alignment.End).padding(end = 4.dp, bottom = 2.dp)
                     )
                 }
-
-                // Время и галочки
-                MessageTimeAndStatus(
-                    message = baseMessage,
-                    textColor = Color.White,
-                    iconColor = Color.White,
-                    modifier = Modifier.align(Alignment.End).padding(end = 4.dp, bottom = 2.dp)
+            }
+            if (messageWithReactions.reactions.isNotEmpty()) {
+                ReactionsRow(
+                    reactions = messageWithReactions.reactions,
+                    isOutgoing = isOutgoing,
+                    onReactionClick = { emoji, isChosen ->
+                        onReactionClick(messageWithReactions.id, emoji, isChosen)
+                    },
+                    modifier = Modifier.padding(top = 3.dp)
                 )
             }
         }
@@ -166,19 +184,29 @@ private fun AlbumMediaItem(
         if (model != null) {
             AsyncImage(
                 model = model,
-                contentDescription = null,
+                contentDescription = "Фото альбома",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        } else if (isVideo) {
-            Text("🎬", fontSize = 24.sp)
+        } else {
+            // 💥 ГЛАВНЫЙ ФИКС: СПИННЕР ЗАГРУЗКИ ВМЕСТО МЕРТВОГО СЕРОГО КВАДРАТА!
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            }
         }
 
-        // Оверлей для видео
+        // Оверлей для видео (кнопка Play и хронометраж)
         if (isVideo) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
 
-            if (message.isSending) {
+            if (message.isSending || (videoPath.isNullOrBlank() && model == null)) {
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             } else {
                 Box(
@@ -188,17 +216,20 @@ private fun AlbumMediaItem(
                     Text("▶", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 2.dp))
                 }
 
-                Text(
-                    text = message.fileExtraInfo ?: "0:00",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(4.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                )
+                val durationText = message.fileExtraInfo
+                if (!durationText.isNullOrBlank() && durationText != "0:00") {
+                    Text(
+                        text = durationText,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
     }

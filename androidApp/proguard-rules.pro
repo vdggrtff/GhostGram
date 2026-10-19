@@ -1,35 +1,27 @@
-# GHOSTGRAM UNIVERSAL R8 / PROGUARD SHIELD (v0.2.0)
+# GhostGram R8 / ProGuard Configuration (v0.2.0)
 # ==============================================================================
 
-# 💥 1. ВЕСЬ КОД НАШЕГО ПРИЛОЖЕНИЯ (Защищаем от обфускации)
-# 💥 ГАСИМ ВОРНИНГ ЛИНТЕРА СТУДИИ И ЗАЩИЩАЕМ ЯДРО TDLIB:
+# TDLib Core & Native bindings
 -dontwarn org.drinkless.tdlib.**
 -keep class org.drinkless.tdlib.** { *; }
 -keepclassmembers class org.drinkless.tdlib.** { *; }
 
-# Защита нашего KMP-клиента и нативных вызовов:
+# Application modules & models
 -keep class com.ghostgram.** { *; }
 -keepclassmembers class com.ghostgram.** { *; }
--keepclasseswithmembernames class * {
-    native <methods>;
-}
-
 -keep class entity.** { *; }
 -keepclassmembers class entity.** { *; }
-
 -keep class repository.** { *; }
 -keepclassmembers class repository.** { *; }
-
 -keep class usecase.** { *; }
 -keepclassmembers class usecase.** { *; }
 
-# 💥 2. ВСЕ НА ТИВНЫЕ C++ МЕТОДЫ (JNI для TDLib)
+# Keep native C++ method signatures for JNI
 -keepclasseswithmembernames class * {
     native <methods>;
 }
 
-
-# 💥 3. KOTLIN COROUTINES & FLOW
+# Kotlin Coroutines & Flow
 -keepattributes *Annotation*, InnerClasses, EnclosingMethod, Signature
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
@@ -37,40 +29,37 @@
     volatile <fields>;
 }
 
-# 💥 4. KOTLINX SERIALIZATION (JSON)
+# Serialization (JSON)
 -keep class kotlinx.serialization.** { *; }
 -keepclassmembers class kotlinx.serialization.** { *; }
 -dontnote kotlinx.serialization.**
 
-# 💥 5. KOIN
+# Koin DI
 -keep class org.koin.** { *; }
 -keepclassmembers class org.koin.** { *; }
 -dontwarn org.koin.**
 
-# 💥 6. AIRBNB LOTTIE
--keep class com.airbnb.lottie.** { *; }
--dontwarn com.airbnb.lottie.**
-
-# 💥 7. KTOR, OKIO, COIL 3, COMPOTTIE
--keep class io.ktor.** { *; }
--dontwarn io.ktor.**
+# Libraries (Lottie, Ktor, Coil)
 -dontwarn okio.**
--keep class coil3.** { *; }
+-dontwarn io.ktor.**
+-keep class io.ktor.** { *; }
 -dontwarn coil3.**
--keep class io.github.alexzhirkevich.compottie.** { *; }
+-keep class coil3.** { *; }
+-dontwarn com.airbnb.lottie.**
+-keep class com.airbnb.lottie.** { *; }
 -dontwarn io.github.alexzhirkevich.compottie.**
+-keep class io.github.alexzhirkevich.compottie.**
 
-# 💥 8. COMPOSE RUNTIME
+# Compose Runtime
 -keepclassmembers class androidx.compose.runtime.RecomposeScopeImpl { *; }
 
+# JNA reflection support
 -dontwarn com.sun.jna.**
 -keep class com.sun.jna.** { *; }
 -keepclassmembers class com.sun.jna.** { *; }
 
-# 💥 Защищаем наш интерфейс TdNativeAndroid от переименования функций!
-# (Если R8 переименует td_json_client_create в a(), C++ не сможет его вызвать)
+# Preserve native function names used by C++ symbol lookup
 -keep interface **.TdNativeAndroid { *; }
 -keepclassmembers interface **.TdNativeAndroid { *; }
-
 -keep class **.TelegramNativeClient { *; }
 -keepclassmembers class **.TelegramNativeClient { *; }

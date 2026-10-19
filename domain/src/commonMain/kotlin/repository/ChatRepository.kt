@@ -46,6 +46,10 @@ interface ChatRepository {
 
     fun observeGhostMode(): Flow<Boolean>
     fun toggleGhostMode()
+    suspend fun toggleChatMute(chatId: Long, isMuted: Boolean)
+
+    suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean)
+
     fun markChatAsRead(chatId: Long, messageIds: List<Long>)
 
     suspend fun loadMoreMessages(chatId: Long, fromMessageId: Long)
@@ -82,8 +86,11 @@ interface ChatRepository {
 
     suspend fun getSharedMedia(chatId: Long, filterType: String, fromMessageId: Long = 0L): List<Message>
 
+    suspend fun checkInviteLink(inviteLink: String): entity.InviteLinkResult
+    suspend fun joinChatByInvite(inviteLink: String): Long?
+
+    suspend fun resolveUsernameToChatId(username: String): Long?
+
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)
-
-    suspend fun toggleChatMute(chatId: Long, isMuted: Boolean)
 }

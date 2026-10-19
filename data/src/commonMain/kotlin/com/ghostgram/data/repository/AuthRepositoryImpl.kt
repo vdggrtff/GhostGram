@@ -59,7 +59,6 @@ class AuthRepositoryImpl(
     }
 
     override fun logOut() {
-        // Отправляем в Telegram команду на уничтожение сессии на сервере и локально
         tdlibClient.send("""{"@type": "logOut"}""")
     }
 }

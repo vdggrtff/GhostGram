@@ -81,6 +81,10 @@ class TdlibMessageParser(
                 val mediaFile = videoContainer?.get(if (contentType == "messageAnimation") "animation" else "video")?.jsonObject
                 val videoPath = mediaFile?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
                 val videoFileId = mediaFile?.get("id")?.jsonPrimitive?.intOrNull
+                val targetMediaType = when (contentType) {
+                    "messageVideoNote" -> MessageMediaType.VIDEO_NOTE // 💥 НАСТОЯЩИЙ КРУЖОЧЕК!
+                    else -> MessageMediaType.VIDEO
+                }
 
                 // 💥 КАЧАЕМ ПРЕВЬЮ НА МАКСИМАЛЬНОЙ СКОРОСТИ (priority = 32)!
                 if (path.isNullOrBlank() && thumbFileId != null) {
@@ -98,7 +102,7 @@ class TdlibMessageParser(
                     fileExtraInfo = if (duration > 0) "$duration сек" else "GIF",
                     isOutgoing = isOutgoing,
                     // Все гифки и видео отправляем как VIDEO
-                    mediaType = MessageMediaType.VIDEO,
+                    mediaType = targetMediaType,
                     date = date, isSending = isSending,
                     replyToMessageId = replyToId, isEdited = editDate > 0, senderId = senderId, mediaAlbumId = mediaAlbumId
                 )
