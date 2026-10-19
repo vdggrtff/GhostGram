@@ -18,6 +18,9 @@ import com.ghostgram.app.utils.TgsDecoder
 import com.ghostgram.app.utils.TgsStickerPlayer
 import com.ghostgram.app.utils.WebmStickerPlayer
 import entity.Message
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.withContext
 
 @Composable
 fun StickerMessageContent(message: Message) {
@@ -38,33 +41,6 @@ fun StickerMessageContent(message: Message) {
     }
 
     // 💥 2. АНИМИРОВАННЫЙ СТИКЕР .TGS (ПОЛНОЦЕННАЯ АНИМАЦИЯ БЕЗ ТОРМОЗОВ):
-    /*val isTgs = (videoOrTgsPath != null && videoOrTgsPath.endsWith(".tgs", ignoreCase = true)) ||
-            (thumbPath != null && thumbPath.endsWith(".tgs", ignoreCase = true))
-
-    if (isTgs) {
-        val tgsFilePath = (videoOrTgsPath?.takeIf { it.endsWith(".tgs", true) }
-            ?: thumbPath?.takeIf { it.endsWith(".tgs", true) } ?: "")
-        val cleanPath = if (tgsFilePath.startsWith("file://")) tgsFilePath.removePrefix("file://") else tgsFilePath
-
-        var tgsJson by remember(cleanPath) { mutableStateOf<String?>(null) }
-
-        LaunchedEffect(cleanPath) {
-            tgsJson = TgsDecoder.decodeTgsToJson(cleanPath)
-        }
-
-        if (tgsJson != null) {
-            // 💥 ВЫЗЫВАЕМ НАШ АППАРАТНЫЙ ДВИЖОК!
-            TgsStickerPlayer(
-                tgsJson = tgsJson!!,
-                modifier = Modifier.size(140.dp)
-            )
-        } else {
-            Box(modifier = Modifier.size(140.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = GhostPrimary)
-            }
-        }
-        return
-    }*/
     val isTgs = (videoOrTgsPath != null && videoOrTgsPath.endsWith(".tgs", ignoreCase = true)) ||
             (thumbPath != null && thumbPath.endsWith(".tgs", ignoreCase = true))
 
@@ -78,7 +54,9 @@ fun StickerMessageContent(message: Message) {
 
         LaunchedEffect(cleanPath) {
             if (tgsJson == null) {
-                tgsJson = TgsDecoder.decodeTgsToJson(cleanPath)
+                tgsJson = withContext(Dispatchers.IO) {
+                    TgsDecoder.decodeTgsToJson(cleanPath)
+                }
             }
         }
 
