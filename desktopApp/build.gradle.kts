@@ -27,8 +27,8 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.AppImage)
             packageName = "com.ghostgram.app"
-            packageVersion = "0.1.0"
-            description = "Modern, Privacy-First Telegram Client"
+            packageVersion = "0.3.0"
+            description = "GhostGRAM Desktop Telegram Client"
             copyright = "© 2026 GhostGRAM"
             vendor = "GhostGRAM"
         }
