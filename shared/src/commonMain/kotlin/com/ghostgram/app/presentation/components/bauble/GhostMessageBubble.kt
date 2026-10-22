@@ -54,6 +54,7 @@ fun GhostMessageBubble(
     isLastInGroup: Boolean = true,
     replyMessage: Message? = null,
     onLongClick: () -> Unit,
+    onVideoClick: (String) -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     onReactionClick: (Long, String, Boolean) -> Unit,
@@ -112,13 +113,10 @@ fun GhostMessageBubble(
                     .then(if (isVideoNote) Modifier else Modifier.clip(bubbleShape))
                     .then(
                         when {
-                            /*isSticker || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
-                            else -> Modifier.background(backgroundColor)*/
                             isSticker || isVideoNote || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
                             else -> Modifier.background(backgroundColor)
                         }
                     )
-                    //.padding(horizontal = 12.dp, vertical = 7.dp)
                     .padding(
                         horizontal = if (isVideoNote) 0.dp else 12.dp,
                         vertical = if (isVideoNote) 0.dp else 7.dp
@@ -155,10 +153,11 @@ fun GhostMessageBubble(
                             }
                         }
 
-                        MessageMediaType.VIDEO/*, MessageMediaType.VIDEO_NOTE */-> {
+                        MessageMediaType.VIDEO-> {
                             VideoMessageContent(
                                 message = message,
                                 bubbleShape = bubbleShape,
+                                onVideoClick = onVideoClick,
                                 hasText = hasText,
                                 isOutgoing = isOutgoing
                             )
@@ -206,9 +205,6 @@ fun GhostMessageBubble(
                         val displayText = if (isEncrypted) "🔒 ${message.text}" else message.text
 
                         // 💥 Превращаем обычный текст в подсвеченный!
-                       /* val annotatedText = remember(displayText, searchQuery) {
-                            HighlightUtils.buildHighlightedText(displayText, searchQuery)
-                        }*/
                         val annotatedText = remember(displayText, searchQuery) {
                             LinkifyUtils.createLinkedText(
                                 text = displayText,

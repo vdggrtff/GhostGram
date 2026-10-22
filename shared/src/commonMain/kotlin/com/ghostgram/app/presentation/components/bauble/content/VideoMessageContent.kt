@@ -43,6 +43,7 @@ import entity.Message
 @Composable
 fun VideoMessageContent(
     message: Message,
+    onVideoClick: (String) -> Unit,
     bubbleShape: Shape,
     hasText: Boolean,
     isOutgoing: Boolean,
@@ -58,7 +59,7 @@ fun VideoMessageContent(
             .background(Color(0xFF1E2330))
             .clickable {
                 if (!message.isSending && !videoPath.isNullOrBlank()) {
-                    openVideoInSystemPlayer(videoPath)
+                    onVideoClick(videoPath)
                 }
             },
         contentAlignment = Alignment.Center

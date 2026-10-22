@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,8 +55,6 @@ import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -338,6 +335,9 @@ fun ChatDetailsScreen(
                                         onMediaClick = { activeViewerMessageId = item.message.id },
                                         onLongClick = { selectedMessageForMenu = item.message },
                                         replyMessage = repliedMsg,
+                                        onVideoClick = {
+                                            activeViewerMessageId = item.message.id
+                                        },
                                         onReactionClick = { msgId, emoji, isChosen ->
                                             onIntent(
                                                 ChatDetailsIntent.OnToggleReaction(
