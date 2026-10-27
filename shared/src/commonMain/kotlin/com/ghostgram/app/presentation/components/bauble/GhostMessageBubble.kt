@@ -156,10 +156,7 @@ fun GhostMessageBubble(
                         MessageMediaType.VIDEO-> {
                             VideoMessageContent(
                                 message = message,
-                                bubbleShape = bubbleShape,
                                 onVideoClick = onVideoClick,
-                                hasText = hasText,
-                                isOutgoing = isOutgoing
                             )
                         }
 

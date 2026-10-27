@@ -44,10 +44,6 @@ import entity.Message
 fun VideoMessageContent(
     message: Message,
     onVideoClick: (String) -> Unit,
-    bubbleShape: Shape,
-    hasText: Boolean,
-    isOutgoing: Boolean,
-    onMediaClick: (String) -> Unit = {}
 ) {
     val thumbModel = message.photoPath?.let { if (it.startsWith("/")) "file://$it" else it }
     val videoPath = message.fileName

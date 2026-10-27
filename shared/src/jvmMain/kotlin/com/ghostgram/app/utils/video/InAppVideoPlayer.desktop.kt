@@ -8,8 +8,12 @@ import com.ghostgram.app.utils.openVideoInSystemPlayer
 actual fun InAppVideoPlayer(
     videoPath: String,
     controlsVisible: Boolean,
+    playbackSpeed: Float,
+    isLooping: Boolean,
     onToggleControls: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onZoomChanged: (Boolean) -> Unit,
+    onTransformGestureChanged: (Boolean) -> Unit
 ) {
     LaunchedEffect(videoPath) {
         openVideoInSystemPlayer(videoPath)

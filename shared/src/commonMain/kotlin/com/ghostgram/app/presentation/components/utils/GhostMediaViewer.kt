@@ -26,8 +26,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -113,6 +118,11 @@ fun GhostMediaViewer(
 
     val isCurrentVideo =
         currentMessage.mediaType == MessageMediaType.VIDEO
+
+    var playbackSpeed by remember { mutableStateOf(1f) }
+    var isLooping by remember { mutableStateOf(false) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
+    var showOptionsMenu by remember { mutableStateOf(false) }
 
     // Автоматически скрываем HUD во время просмотра видео.
     LaunchedEffect(
@@ -240,10 +250,12 @@ fun GhostMediaViewer(
                                 InAppVideoPlayer(
                                     videoPath = message.fileName!!,
                                     controlsVisible = isHudVisible,
-                                    onToggleControls = {
-                                        isHudVisible = !isHudVisible
-                                    },
-                                    onDismiss = onDismiss
+                                    playbackSpeed = playbackSpeed,
+                                    isLooping = isLooping,
+                                    onToggleControls = { isHudVisible = !isHudVisible },
+                                    onDismiss = onDismiss,
+                                    onZoomChanged = { isZoomed -> isCurrentMediaZoomed = isZoomed },
+                                    onTransformGestureChanged = { isGestureActive -> isTransformGestureActive = isGestureActive }
                                 )
                             }
 
@@ -386,75 +398,154 @@ fun GhostMediaViewer(
                 // -------------------------------------------------
 
                 AnimatedVisibility(
-                    // 💥 ПРЯЧЕМ ХУД, ЕСЛИ ФОТО УВЕЛИЧЕНО!
                     visible = isHudVisible && !isCurrentMediaZoomed,
-                    enter = fadeIn(tween(150)),
-                    exit = fadeOut(tween(150)),
+                    enter = fadeIn(androidx.compose.animation.core.tween(150)),
+                    exit = fadeOut(androidx.compose.animation.core.tween(150)),
                     modifier = Modifier.align(Alignment.TopCenter)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                // 💥 Легкий мягкий градиент вместо черной грязи:
                                 Brush.verticalGradient(
                                     listOf(
-                                        Color.Black.copy(alpha = 0.45f),
+                                        Color.Black.copy(alpha = 0.5f),
                                         Color.Transparent
                                     )
                                 )
                             )
                             .statusBarsPadding()
-                            .padding(
-                                horizontal = 16.dp,
-                                vertical = 8.dp
-                            ),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        // 💥 SpaceBetween разносит левую и правую части по краям экрана!
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // 💥 1. ЛЕВАЯ ЧАСТЬ: Стрелка назад
                         IconButton(onClick = onDismiss) {
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Закрыть",
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Назад",
                                 tint = Color.White
                             )
                         }
 
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
+                        // 💥 2. ЦЕНТР: Имя автора + Дата + Счетчик страниц
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "${pagerState.currentPage + 1} из ${mediaMessages.size}",
+                                text = currentMessage.senderName.ifBlank { "Влад" },
                                 color = Color.White,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
-
                             Text(
-                                text = "${currentMessage.senderName.ifBlank { "Медиа" }} • ${
-                                    TimeFormatter.formatTime(currentMessage.date)
-                                }",
+                                text = "${TimeFormatter.formatTime(currentMessage.date)}  •  ${pagerState.currentPage + 1} из ${mediaMessages.size}",
                                 color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 12.sp
+                                fontSize = 11.sp
                             )
                         }
 
-                        IconButton(
-                            onClick = {
-                                val sourcePath = currentMessage.fileName ?: currentMessage.photoPath
-                                if (!sourcePath.isNullOrBlank()) {
-                                    val extension = if (isCurrentVideo) "mp4" else "jpg"
-                                    val fileName = "ghostgram_${currentMessage.id}.$extension"
-                                    val savedPath = saveMediaToDownloads(sourcePath, fileName)
-                                    saveStatusText = if (savedPath != null) "✓ Сохранено в Загрузки" else "❌ Ошибка сохранения"
+                        // 💥 3. ПРАВАЯ ЧАСТЬ: Скачать + Шестеренка + Меню
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Скачать
+                            IconButton(
+                                onClick = {
+                                    val sourcePath = currentMessage.fileName ?: currentMessage.photoPath
+                                    if (!sourcePath.isNullOrBlank()) {
+                                        val extension = if (isCurrentVideo) "mp4" else "jpg"
+                                        val fileName = "ghostgram_${currentMessage.id}.$extension"
+                                        val savedPath = saveMediaToDownloads(sourcePath, fileName)
+                                        saveStatusText = if (savedPath != null) "✓ Сохранено в Загрузки" else "❌ Ошибка сохранения"
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = "Скачать", tint = Color.White)
+                            }
+
+                            // Кнопки видео (Шестеренка и 3 точки)
+                            if (isCurrentVideo) {
+                                // 💥 ШЕСТЕРЕНКА СКОРОСТИ
+                                Box {
+                                    IconButton(onClick = { showSpeedMenu = true }) {
+                                        if (playbackSpeed != 1f) {
+                                            Text(
+                                                text = "${playbackSpeed}x",
+                                                color = GhostPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.Settings, contentDescription = "Скорость", tint = Color.White)
+                                        }
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showSpeedMenu,
+                                        onDismissRequest = { showSpeedMenu = false },
+                                        modifier = Modifier.background(Color(0xFF212734))
+                                    ) {
+                                        val speeds = listOf(
+                                            0.5f to "0.5x Медленно",
+                                            1f to "1x Обычная",
+                                            1.5f to "1.5x Быстро",
+                                            2f to "2x Очень быстро"
+                                        )
+                                        speeds.forEach { (sp, label) ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = label,
+                                                        color = if (playbackSpeed == sp) GhostPrimary else Color.White,
+                                                        fontWeight = if (playbackSpeed == sp) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                },
+                                                onClick = {
+                                                    playbackSpeed = sp
+                                                    showSpeedMenu = false
+                                                }
+                                            )
+                                        }
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = if (isLooping) "✓ Зацикливание" else "Зацикливание видео",
+                                                    color = if (isLooping) GhostPrimary else Color.White
+                                                )
+                                            },
+                                            onClick = {
+                                                isLooping = !isLooping
+                                                showSpeedMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // 💥 МЕНЮ «3 ТОЧКИ»
+                                Box {
+                                    IconButton(onClick = { showOptionsMenu = true }) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "Опции", tint = Color.White)
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showOptionsMenu,
+                                        onDismissRequest = { showOptionsMenu = false },
+                                        modifier = Modifier.background(Color(0xFF212734))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Сохранить в Загрузки", color = Color.White) },
+                                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null, tint = Color.White) },
+                                            onClick = {
+                                                showOptionsMenu = false
+                                                val sourcePath = currentMessage.fileName ?: currentMessage.photoPath
+                                                if (!sourcePath.isNullOrBlank()) {
+                                                    saveMediaToDownloads(sourcePath, "ghostgram_${currentMessage.id}.mp4")
+                                                    saveStatusText = "✓ Сохранено в Загрузки"
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Скачать",
-                                tint = Color.White
-                            )
                         }
                     }
                 }

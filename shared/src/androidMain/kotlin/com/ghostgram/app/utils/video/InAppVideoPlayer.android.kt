@@ -1,7 +1,15 @@
 package com.ghostgram.app.utils.video
 
-import android.net.Uri
-import android.view.TextureView
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -9,46 +17,33 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,506 +53,454 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import com.ghostgram.app.ui.theme.GhostPrimary
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.abs
 
+@OptIn(UnstableApi::class)
 @Composable
 actual fun InAppVideoPlayer(
     videoPath: String,
     controlsVisible: Boolean,
+    playbackSpeed: Float,
+    isLooping: Boolean,
     onToggleControls: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onZoomChanged: (Boolean) -> Unit,
+    onTransformGestureChanged: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val cleanPath = remember(videoPath) {
+        if (videoPath.startsWith("file://")) videoPath.removePrefix("file://") else videoPath
+    }
 
-    val cleanPath = videoPath.removePrefix("file://")
+    var isPlaying by remember { mutableStateOf(true) }
+    var currentPositionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
+    var isBuffering by remember { mutableStateOf(true) }
+    var isEnded by remember { mutableStateOf(false) }
 
-    var seekNoticeText by remember { mutableStateOf<String?>(null) }
+    // 💥 СТЕЙТЫ ЗУМА И СВАЙПА ЗАКРЫТИЯ
+    val scaleAnim = remember { Animatable(1f) }
+    val offsetXAnim = remember { Animatable(0f) }
+    val offsetYAnim = remember { Animatable(0f) }
+    val dismissOffsetYAnim = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Плашка всплывающей перемотки (±10 сек)
+    var seekTooltipText by remember { mutableStateOf<String?>(null) }
+    var seekTooltipAlignment by remember { mutableStateOf(Alignment.Center) }
 
     val exoPlayer = remember(cleanPath) {
         ExoPlayer.Builder(context).build().apply {
-            val isUri =
-                cleanPath.startsWith("content://") ||
-                        cleanPath.startsWith("http://") ||
-                        cleanPath.startsWith("https://")
-
             val file = File(cleanPath)
-
-            if (isUri || file.exists()) {
-                val uri = if (isUri) {
-                    Uri.parse(cleanPath)
-                } else {
-                    Uri.fromFile(file)
-                }
-
-                setMediaItem(MediaItem.fromUri(uri))
+            if (file.exists()) {
+                setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(file)))
                 prepare()
                 playWhenReady = true
             }
         }
     }
 
-    var isPlaying by remember(exoPlayer) {
-        mutableStateOf(exoPlayer.isPlaying)
+    // Скорость и зацикливание
+    LaunchedEffect(playbackSpeed) {
+        exoPlayer.setPlaybackSpeed(playbackSpeed)
     }
-
-    var currentPositionMs by remember(exoPlayer) {
-        mutableStateOf(0L)
-    }
-
-    var durationMs by remember(exoPlayer) {
-        mutableStateOf(0L)
-    }
-
-    // Соотношение сторон исходного видео.
-    var videoAspectRatio by remember(cleanPath) {
-        mutableStateOf(16f / 9f)
-    }
-
-    // Состояние зума видео.
-    var videoScale by remember(cleanPath) {
-        mutableStateOf(1f)
-    }
-
-    var videoOffset by remember(cleanPath) {
-        mutableStateOf(Offset.Zero)
+    LaunchedEffect(isLooping, durationMs) {
+        // Короткие видео до 15 сек крутим по кругу автоматически, длинные — по кнопке
+        val shouldLoop = isLooping || (durationMs in 1L..15_000L)
+        exoPlayer.repeatMode = if (shouldLoop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
-
+            override fun onPlaybackStateChanged(state: Int) {
+                isBuffering = state == Player.STATE_BUFFERING
+                if (state == Player.STATE_READY) {
+                    durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                }
+                if (state == Player.STATE_ENDED) {
+                    isEnded = true
+                    isPlaying = false
+                }
+            }
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
-            }
-
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) {
-                    durationMs =
-                        exoPlayer.duration.coerceAtLeast(0L)
-                }
-            }
-
-            override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (
-                    videoSize.width > 0 &&
-                    videoSize.height > 0
-                ) {
-                    val rawRatio =
-                        videoSize.width *
-                                videoSize.pixelWidthHeightRatio /
-                                videoSize.height.toFloat()
-
-                    videoAspectRatio =
-                        if (
-                            videoSize.unappliedRotationDegrees % 180 != 0
-                        ) {
-                            1f / rawRatio
-                        } else {
-                            rawRatio
-                        }
-                }
+                if (playing) isEnded = false
             }
         }
-
         exoPlayer.addListener(listener)
-
         onDispose {
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
     }
 
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            currentPositionMs =
-                exoPlayer.currentPosition.coerceAtLeast(0L)
-
-            durationMs =
-                exoPlayer.duration.coerceAtLeast(0L)
-
-            delay(200)
+    // Таймер позиции
+    LaunchedEffect(exoPlayer, isPlaying) {
+        while (isActive) {
+            if (isPlaying) {
+                currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+            }
+            delay(50)
         }
     }
 
-    BoxWithConstraints(
+    // 💥 ФУНКЦИЯ PLAY / REPLAY (С рестартом с 00:00 если закончилось!)
+    fun handlePlayPause() {
+        if (isEnded || (durationMs > 0L && currentPositionMs >= durationMs - 300L)) {
+            exoPlayer.seekTo(0L)
+            exoPlayer.play()
+            isEnded = false
+        } else {
+            if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+        }
+    }
+
+    // 💥 ФУНКЦИЯ ПЕРЕМОТКИ НА ±10 СЕКУНД
+    fun seekRelative(seconds: Int, isForward: Boolean) {
+        val target = if (isForward) {
+            (exoPlayer.currentPosition + (seconds * 1000L)).coerceAtMost(durationMs)
+        } else {
+            (exoPlayer.currentPosition - (seconds * 1000L)).coerceAtLeast(0L)
+        }
+        exoPlayer.seekTo(target)
+        currentPositionMs = target
+
+        // Показываем плашку перемотки
+        seekTooltipText = if (isForward) "$seconds сек ⏩" else "⏪ $seconds сек"
+        seekTooltipAlignment = if (isForward) Alignment.CenterEnd else Alignment.CenterStart
+        coroutineScope.launch {
+            delay(650)
+            seekTooltipText = null
+        }
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .clip(RectangleShape)
-            .background(Color.Black)
-    ) {
-        // Масштабируем именно видео, а не контролы.
-        // Исходное соотношение сторон сохраняется.
-        val safeAspectRatio =
-            videoAspectRatio.coerceIn(0.25f, 4f)
+            // 💥 1. ЖЕСТЫ ТАПА: ОДИНОЧНЫЙ = ХУД, ДВОЙНОЙ СЛЕВА = -10с, СПРАВА = +10с, ЦЕНТР = ЗУМ!
+            .pointerInput(cleanPath) {
+                detectTapGestures(
+                    onTap = { onToggleControls() },
+                    onDoubleTap = { tapPos ->
+                        val screenWidth = size.width
+                        when {
+                            // Левая треть экрана: -10 сек
+                            tapPos.x < screenWidth * 0.35f -> seekRelative(10, isForward = false)
+                            // Правая треть экрана: +10 сек
+                            tapPos.x > screenWidth * 0.65f -> seekRelative(10, isForward = true)
+                            // Центр экрана: Зум 2.5x / Сброс в 1x
+                            else -> {
+                                coroutineScope.launch {
+                                    if (scaleAnim.value > 1.05f) {
+                                        onZoomChanged(false)
+                                        launch { scaleAnim.animateTo(1f, tween(200)) }
+                                        launch { offsetXAnim.animateTo(0f, tween(200)) }
+                                        launch { offsetYAnim.animateTo(0f, tween(200)) }
+                                    } else {
+                                        onZoomChanged(true)
+                                        launch { scaleAnim.animateTo(2.5f, tween(200)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+            // 💥 2. ПИНЧ-ТУ-ЗУМ 2 ПАЛЬЦАМИ + СВАЙП ВВЕРХ/ВНИЗ ДЛЯ ВЫХОДА
+            .pointerInput(cleanPath) {
+                awaitEachGesture {
+                    var isPinching = false
+                    var isVerticalDrag = false
+                    var totalDragY = 0f
+                    var totalDragX = 0f
 
-        val viewportAspectRatio =
-            maxWidth.value /
-                    maxHeight.value.coerceAtLeast(1f)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val pointers = event.changes
+                        val pressedPointers = pointers.filter { it.pressed }
 
-        val videoWidth: Dp
-        val videoHeight: Dp
+                        // 💥 2 ПАЛЬЦА: СВОБОДНЫЙ ЗУМ ВИДЕО ДО 4X!
+                        if (pressedPointers.size >= 2) {
+                            if (!isPinching) {
+                                isPinching = true
+                                onTransformGestureChanged(true)
+                            }
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val newScale = (scaleAnim.value * zoom).coerceIn(1f, 4.5f)
 
-        if (safeAspectRatio >= viewportAspectRatio) {
-            videoWidth = maxWidth
-            videoHeight = maxWidth / safeAspectRatio
-        } else {
-            videoWidth = maxHeight * safeAspectRatio
-            videoHeight = maxHeight
-        }
+                            coroutineScope.launch { scaleAnim.snapTo(newScale) }
+                            onZoomChanged(newScale > 1.05f)
 
-        key(cleanPath) {
-            AndroidView(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(
-                        width = videoWidth,
-                        height = videoHeight
-                    )
-                    .graphicsLayer {
-                        scaleX = videoScale
-                        scaleY = videoScale
-                        translationX = videoOffset.x
-                        translationY = videoOffset.y
-                    },
-                factory = { ctx ->
-                    TextureView(ctx).also { textureView ->
-                        exoPlayer.setVideoTextureView(textureView)
+                            if (newScale > 1.05f) {
+                                val maxOffsetX = size.width * (newScale - 1f) / 2f
+                                val maxOffsetY = size.height * (newScale - 1f) / 2f
+                                coroutineScope.launch {
+                                    offsetXAnim.snapTo((offsetXAnim.value + pan.x).coerceIn(-maxOffsetX, maxOffsetX))
+                                    offsetYAnim.snapTo((offsetYAnim.value + pan.y).coerceIn(-maxOffsetY, maxOffsetY))
+                                }
+                            }
+                            pointers.forEach { it.consume() }
+                        }
+                        // 💥 1 ПАЛЕЦ: ПАНОРАМИРОВАНИЕ ИЛИ СВАЙП ВЫХОДА
+                        else if (pressedPointers.size == 1 && !isPinching) {
+                            val change = pressedPointers.first()
+                            val pan = change.positionChange()
+
+                            if (scaleAnim.value > 1.05f) {
+                                val maxOffsetX = size.width * (scaleAnim.value - 1f) / 2f
+                                val maxOffsetY = size.height * (scaleAnim.value - 1f) / 2f
+                                coroutineScope.launch {
+                                    offsetXAnim.snapTo((offsetXAnim.value + pan.x).coerceIn(-maxOffsetX, maxOffsetX))
+                                    offsetYAnim.snapTo((offsetYAnim.value + pan.y).coerceIn(-maxOffsetY, maxOffsetY))
+                                }
+                                change.consume()
+                            } else {
+                                // Масштаб 1х: свайп вверх/вниз для закрытия
+                                totalDragY += pan.y
+                                totalDragX += pan.x
+
+                                if (!isVerticalDrag && abs(totalDragY) > 8f && abs(totalDragY) > abs(totalDragX) * 1.3f) {
+                                    isVerticalDrag = true
+                                }
+
+                                if (isVerticalDrag) {
+                                    coroutineScope.launch {
+                                        dismissOffsetYAnim.snapTo(dismissOffsetYAnim.value + pan.y)
+                                    }
+                                    change.consume()
+                                }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+
+                    onTransformGestureChanged(false)
+
+                    // Отпустили палец при свайпе выхода:
+                    if (scaleAnim.value <= 1.05f) {
+                        if (abs(dismissOffsetYAnim.value) > 160f) {
+                            onDismiss() // 💥 ВИДЕО ЗАКРЫВАЕТСЯ ПРИ СВАЙПЕ!
+                        } else {
+                            coroutineScope.launch { dismissOffsetYAnim.animateTo(0f, tween(150)) }
+                        }
                     }
                 }
-            )
-        }
-
-        // Обработка касаний и жестов.
-        // Этот слой располагается над видео, но под контролами.
-        Box(
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // САМ ВИДЕОПЛЕЕР С ТРАНСФОРМАЦИЕЙ
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    useController = false
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(cleanPath, controlsVisible) {
-                    detectTapGestures(
-                        onTap = {
-                            onToggleControls()
-                        },
-                        onDoubleTap = { position ->
-                            val screenWidth = size.width
-
-                            when {
-                                // 💥 1. ЛЕВАЯ ТРЕТЬ ЭКРАНА (< 33%): ПЕРЕМОТКА -10 СЕКУНД
-                                position.x < screenWidth * 0.33f -> {
-                                    val target = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                                    exoPlayer.seekTo(target)
-                                    seekNoticeText = "-10 сек"
-                                    if (!controlsVisible) onToggleControls()
-                                }
-
-                                // 💥 2. ПРАВАЯ ТРЕТЬ ЭКРАНА (> 66%): ПЕРЕМОТКА +10 СЕКУНД
-                                position.x > screenWidth * 0.66f -> {
-                                    val duration = exoPlayer.duration.coerceAtLeast(0L)
-                                    val target = (exoPlayer.currentPosition + 10_000L).coerceAtMost(duration)
-                                    exoPlayer.seekTo(target)
-                                    seekNoticeText = "+10 сек"
-                                    if (!controlsVisible) onToggleControls()
-                                }
-
-                                // 💥 3. ЦЕНТР ЭКРАНА (33% - 66%): ЗУМ 2.5X И СБРОС В 1X!
-                                else -> {
-                                    if (videoScale > 1.05f) {
-                                        videoScale = 1f
-                                        videoOffset = Offset.Zero
-                                    } else {
-                                        videoScale = 2.5f
-                                    }
-                                }
-                            }
-                        }
-                    )
-                }
-                .pointerInput(cleanPath) {
-                    awaitEachGesture {
-                        awaitFirstDown(
-                            requireUnconsumed = false
-                        )
-
-                        var totalX = 0f
-                        var totalY = 0f
-                        var dragAxis = 0
-                        var hadMultipleTouches = false
-
-                        do {
-                            val event = awaitPointerEvent(
-                                PointerEventPass.Main
-                            )
-
-                            val pressedPointers =
-                                event.changes.filter { it.pressed }
-
-                            when {
-                                // Два пальца: изменение масштаба.
-                                pressedPointers.size >= 2 -> {
-                                    hadMultipleTouches = true
-
-                                    val zoomChange =
-                                        event.calculateZoom()
-
-                                    val panChange =
-                                        event.calculatePan()
-
-                                    val newScale =
-                                        (
-                                                videoScale * zoomChange
-                                                ).coerceIn(1f, 4f)
-
-                                    if (newScale <= 1.02f) {
-                                        videoScale = 1f
-                                        videoOffset = Offset.Zero
-                                    } else {
-                                        videoScale = newScale
-
-                                        val maxOffsetX =
-                                            size.width *
-                                                    (newScale - 1f) / 2f
-
-                                        val maxOffsetY =
-                                            size.height *
-                                                    (newScale - 1f) / 2f
-
-                                        videoOffset = Offset(
-                                            x = (
-                                                    videoOffset.x +
-                                                            panChange.x
-                                                    ).coerceIn(
-                                                    -maxOffsetX,
-                                                    maxOffsetX
-                                                ),
-                                            y = (
-                                                    videoOffset.y +
-                                                            panChange.y
-                                                    ).coerceIn(
-                                                    -maxOffsetY,
-                                                    maxOffsetY
-                                                )
-                                        )
-                                    }
-
-                                    event.changes.forEach {
-                                        it.consume()
-                                    }
-                                }
-
-                                // Один палец: панорамирование
-                                // увеличенного видео или закрытие.
-                                pressedPointers.size == 1 &&
-                                        !hadMultipleTouches -> {
-
-                                    val change =
-                                        pressedPointers.first()
-
-                                    val delta =
-                                        change.position -
-                                                change.previousPosition
-
-                                    if (videoScale > 1.05f) {
-                                        val maxOffsetX =
-                                            size.width *
-                                                    (videoScale - 1f) / 2f
-
-                                        val maxOffsetY =
-                                            size.height *
-                                                    (videoScale - 1f) / 2f
-
-                                        videoOffset = Offset(
-                                            x = (
-                                                    videoOffset.x + delta.x
-                                                    ).coerceIn(
-                                                    -maxOffsetX,
-                                                    maxOffsetX
-                                                ),
-                                            y = (
-                                                    videoOffset.y + delta.y
-                                                    ).coerceIn(
-                                                    -maxOffsetY,
-                                                    maxOffsetY
-                                                )
-                                        )
-
-                                        if (
-                                            delta.x != 0f ||
-                                            delta.y != 0f
-                                        ) {
-                                            change.consume()
-                                        }
-                                    } else {
-                                        totalX += delta.x
-                                        totalY += delta.y
-
-                                        val touchSlop =
-                                            viewConfiguration.touchSlop
-
-                                        if (dragAxis == 0) {
-                                            if (
-                                                abs(totalY) > touchSlop &&
-                                                abs(totalY) >
-                                                abs(totalX) * 1.2f
-                                            ) {
-                                                dragAxis = 2
-                                            } else if (
-                                                abs(totalX) > touchSlop &&
-                                                abs(totalX) >
-                                                abs(totalY)
-                                            ) {
-                                                dragAxis = 1
-                                            }
-                                        }
-
-                                        // Горизонтальный жест оставляем
-                                        // HorizontalPager.
-                                        // Вертикальный используем
-                                        // для закрытия просмотрщика.
-                                        if (dragAxis == 2) {
-                                            change.consume()
-                                        }
-                                    }
-                                }
-                            }
-                        } while (
-                            event.changes.any { it.pressed }
-                        )
-
-                        val dismissThreshold =
-                            size.height * 0.18f
-
-                        if (
-                            !hadMultipleTouches &&
-                            videoScale <= 1.05f &&
-                            dragAxis == 2 &&
-                            abs(totalY) > dismissThreshold
-                        ) {
-                            onDismiss()
-                        }
-                    }
+                .graphicsLayer {
+                    scaleX = scaleAnim.value
+                    scaleY = scaleAnim.value
+                    translationX = offsetXAnim.value
+                    translationY = offsetYAnim.value + dismissOffsetYAnim.value
+                    alpha = (1f - (abs(dismissOffsetYAnim.value) / 500f)).coerceIn(0.2f, 1f)
                 }
         )
 
-        if (seekNoticeText != null) {
-            LaunchedEffect(seekNoticeText) {
-                kotlinx.coroutines.delay(800)
-                seekNoticeText = null // Сама исчезает через 0.8 сек
-            }
+        // Крутилка буферизации
+        if (isBuffering) {
+            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(48.dp))
+        }
+
+        // 💥 ВСПЛЫВАЮЩАЯ ПЛАШКА ПЕРЕМОТКИ (±10 СЕК)
+        AnimatedVisibility(
+            visible = seekTooltipText != null,
+            enter = fadeIn(tween(100)),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier
+                .align(seekTooltipAlignment)
+                .padding(horizontal = 36.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color.Black.copy(alpha = 0.75f))
-                    .padding(horizontal = 18.dp, vertical = 10.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 Text(
-                    text = seekNoticeText!!,
+                    text = seekTooltipText.orEmpty(),
                     color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        // Центральная кнопка Play / Pause.
-        if (controlsVisible) {
+        // 💥 КОНТРОЛЫ (ХУД)
+        if (controlsVisible && scaleAnim.value <= 1.05f) {
+            // КНОПКА ПО ЦЕНТРУ (Play / Pause / Replay)
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(68.dp)
+                    .size(64.dp)
                     .clip(CircleShape)
-                    .background(
-                        Color.Black.copy(alpha = 0.65f)
-                    )
-                    .clickable {
-                        if (exoPlayer.isPlaying) {
-                            exoPlayer.pause()
-                        } else {
-                            if (
-                                exoPlayer.playbackState ==
-                                Player.STATE_ENDED
-                            ) {
-                                exoPlayer.seekTo(0L)
-                            }
-
-                            exoPlayer.play()
-                        }
-                    },
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable { handlePlayPause() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isPlaying) {
-                        Icons.Default.Pause
-                    } else {
-                        Icons.Default.PlayArrow
-                    },
-                    contentDescription = "Play/Pause",
+                    imageVector = if (isPlaying && !isEnded) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(36.dp)
                 )
             }
 
-            // Таймлайн.
+            // ТАЙМЛАЙН
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f)
-                            )
-                        )
-                    )
-                    .padding(
-                        horizontal = 20.dp,
-                        vertical = 12.dp
-                    )
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
-                Slider(
-                    value = if (durationMs > 0L) {
-                        (
-                                currentPositionMs.toFloat() /
-                                        durationMs.toFloat()
-                                ).coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    },
-                    onValueChange = { fraction ->
-                        val position =
-                            (fraction * durationMs).toLong()
+                var isScrubbing by remember { mutableStateOf(false) }
+                var scrubFraction by remember { mutableStateOf<Float?>(null) }
+                var trackWidthPx by remember { mutableStateOf(1f) }
 
-                        currentPositionMs = position
-                        exoPlayer.seekTo(position)
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = GhostPrimary,
-                        activeTrackColor = GhostPrimary,
-                        inactiveTrackColor =
-                            Color.White.copy(alpha = 0.3f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                val animatedTrackHeight by animateDpAsState(
+                    targetValue = if (isScrubbing) 6.dp else 2.5.dp,
+                    animationSpec = tween(150),
+                    label = "trackHeight"
+                )
+                val animatedThumbRadius by animateDpAsState(
+                    targetValue = if (isScrubbing) 8.dp else 3.5.dp,
+                    animationSpec = tween(150),
+                    label = "thumbRadius"
                 )
 
+                val progress = if (durationMs > 0L) {
+                    scrubFraction ?: (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+
+                val previewTimeMs = (progress * durationMs).toLong()
+
+                // Мини-экранчик с таймкодом
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(30.dp)
+                ) {
+                    if (isScrubbing && durationMs > 0L) {
+                        val tooltipWidth = 60.dp
+                        val density = LocalDensity.current
+                        val tooltipWidthPx = with(density) { tooltipWidth.toPx() }
+
+                        val rawOffset = (trackWidthPx * progress) - (tooltipWidthPx / 2f)
+                        val clampedOffset = rawOffset.coerceIn(0f, (trackWidthPx - tooltipWidthPx).coerceAtLeast(0f))
+                        val offsetDp = with(density) { clampedOffset.toDp() }
+
+                        Box(
+                            modifier = Modifier
+                                .offset(x = offsetDp, y = 0.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.85f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = formatTimeMs(previewTimeMs),
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Полоска
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .onSizeChanged { trackWidthPx = it.width.toFloat().coerceAtLeast(1f) }
+                        .pointerInput(durationMs) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                if (durationMs <= 0L) return@awaitEachGesture
+
+                                isScrubbing = true
+                                var curX = down.position.x
+                                val initialFrac = (curX / size.width).coerceIn(0f, 1f)
+                                scrubFraction = initialFrac
+                                exoPlayer.seekTo((initialFrac * durationMs).toLong())
+
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (change.pressed) {
+                                        curX = change.position.x
+                                        val frac = (curX / size.width).coerceIn(0f, 1f)
+                                        scrubFraction = frac
+                                        exoPlayer.seekTo((frac * durationMs).toLong())
+                                        change.consume()
+                                    }
+                                } while (event.changes.any { it.pressed })
+
+                                isScrubbing = false
+                                scrubFraction = null
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(animatedTrackHeight)
+                    ) {
+                        val trackH = size.height
+                        val corner = CornerRadius(trackH / 2f, trackH / 2f)
+
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = 0.28f),
+                            size = size,
+                            cornerRadius = corner
+                        )
+
+                        val activeW = size.width * progress
+                        drawRoundRect(
+                            color = Color.White,
+                            size = Size(activeW, trackH),
+                            cornerRadius = corner
+                        )
+
+                        drawCircle(
+                            color = Color.White,
+                            radius = animatedThumbRadius.toPx(),
+                            center = Offset(activeW, trackH / 2f)
+                        )
+                    }
+                }
+
+                // Таймер
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.End
                 ) {
                     Text(
-                        text = formatTimeMs(currentPositionMs),
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Text(
-                        text = formatTimeMs(durationMs),
-                        color = Color.White.copy(alpha = 0.8f),
+                        text = "${formatTimeMs(currentPositionMs)} / ${formatTimeMs(durationMs)}",
+                        color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -566,6 +509,7 @@ actual fun InAppVideoPlayer(
         }
     }
 }
+
 
 @Composable
 actual fun MediaViewerSystemBars() {
@@ -609,13 +553,9 @@ actual fun MediaViewerSystemBars() {
     }
 }
 
-private fun formatTimeMs(ms: Long): String {
-    val totalSeconds =
-        (ms.coerceAtLeast(0L) / 1000).toInt()
-
+private fun formatTimeMs(millis: Long): String {
+    val totalSeconds = (millis / 1000).coerceAtLeast(0L)
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-
-    return "${minutes.toString().padStart(2, '0')}:" +
-            seconds.toString().padStart(2, '0')
+    return "${if (minutes < 10) "0$minutes" else "$minutes"}:${if (seconds < 10) "0$seconds" else "$seconds"}"
 }

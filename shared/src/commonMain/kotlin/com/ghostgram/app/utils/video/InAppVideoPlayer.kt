@@ -6,8 +6,12 @@ import androidx.compose.runtime.Composable
 expect fun InAppVideoPlayer(
     videoPath: String,
     controlsVisible: Boolean,
+    playbackSpeed: Float = 1f,
+    isLooping: Boolean = false,
     onToggleControls: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onZoomChanged: (Boolean) -> Unit = {},
+    onTransformGestureChanged: (Boolean) -> Unit = {}
 )
 
 @Composable
