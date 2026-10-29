@@ -35,6 +35,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleInChatSearch
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleMute
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 import repository.ChatRepository
 import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
@@ -63,6 +65,8 @@ class ChatDetailsViewModel(
 
     private val _state = MutableStateFlow(ChatDetailsState())
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
+
+    private var lastTypingSentMs = 0L
 
     private var sessionJob: Job? = null
 
@@ -86,7 +90,20 @@ class ChatDetailsViewModel(
 
         when (intent) {
             // Текст и сообщения
-            is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
+            //is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
+            is OnInputChanged -> {
+                _state.update { it.copy(inputText = intent.text) }
+
+                // 💥 КРОССПЛАТФОРМЕННОЕ ВРЕМЯ (KMP):
+                if (intent.text.isNotBlank()) {
+                    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+
+                    if (now - lastTypingSentMs > 3500) {
+                        lastTypingSentMs = now
+                        repo.sendChatAction(chatId)
+                    }
+                }
+            }
             is OnSendMessage -> sendMessage(repo)
             is OnEditMessageClick -> startEditing(intent.message)
             is OnCancelEdit -> _state.update { it.copy(editingMessage = null, inputText = "") }
@@ -188,6 +205,7 @@ class ChatDetailsViewModel(
             is OnResetPendingNavigation -> {
                 _state.update { it.copy(pendingNavigationChatId = null) }
             }
+            is OnToggleMute -> toggleMute(repo)
         }
     }
 
@@ -210,6 +228,47 @@ class ChatDetailsViewModel(
                             isGroup = chat.isGroup,
                             pinnedMessageId = chat.pinnedMessageId
                         )
+                    }
+                }
+            }
+            if (chatId > 0) {
+                launch {
+                    repo.observeUserStatus(chatId).collect { status ->
+                        if (status != null) {
+                            // 💥 Превращаем данные в текст ЗДЕСЬ, в presentation-слое:
+                            val displayText = com.ghostgram.app.utils.TimeFormatter.formatUserStatus(status)
+
+                            _state.update {
+                                it.copy(
+                                    isOnline = status.isOnline,
+                                    statusText = displayText
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            launch {
+                repo.observeChatTyping(chatId).collect { typing ->
+                    println("🧠 [VM TYPING] ViewModel получила статус: '$typing'")
+                    _state.update { it.copy(typingText = typing) }
+                }
+            }
+            launch {
+                repo.observeChat(chatId).collect { chat ->
+                    if (chat != null) {
+                        _state.update {
+                            it.copy(
+                                chatTitle = chat.title,
+                                avatarPath = chat.avatarPath,
+                                unreadCount = chat.unreadCount,
+                                isGroup = chat.isGroup,
+                                memberCount = chat.memberCount,
+                                isChannel = chat.isChannel,
+                                isMuted = chat.isMuted,
+                                pinnedMessageId = chat.pinnedMessageId
+                            )
+                        }
                     }
                 }
             }
@@ -469,6 +528,18 @@ class ChatDetailsViewModel(
                     currentSearchIndex = 0
                 )
             }
+        }
+    }
+    private fun toggleMute(repo: ChatRepository) {
+        val currentMute = _state.value.isMuted
+        val newMute = !currentMute
+
+        // Оптимистично меняем статус в UI сразу:
+        _state.update { it.copy(isMuted = newMute) }
+
+        viewModelScope.launch {
+            // Шлем команду в TDLib (метод toggleChatMute у нас уже написан в репозитории!)
+            repo.toggleChatMute(chatId, currentMute)
         }
     }
 

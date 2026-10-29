@@ -26,9 +26,11 @@ import entity.TelegramSticker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
@@ -69,11 +72,16 @@ class ChatRepositoryImpl(
     private val messageParser = TdlibMessageParser(tdlibClient, downloadTracker)
     private val mediaSender = TdlibMediaSender(tdlibClient, cryptoLayer)
 
+    private val _typingMap = MutableStateFlow<Map<Long, String?>>(emptyMap())
+    private val typingResetJobs = mutableMapOf<Long, Job>()
+    private val _userStatusMap = MutableStateFlow<Map<Long, entity.UserOnlineStatus>>(emptyMap())
+
     // Потоки состояния
     private val _myProfile = MutableStateFlow(MyProfile())
     private val _searchResults = MutableStateFlow<List<PublicChat>>(emptyList())
     private val _messageSearchResults = MutableStateFlow<List<Chat>>(emptyList())
     private val _recentStickers = MutableStateFlow<List<TelegramSticker>>(emptyList())
+
 
     private val handlers: List<TdlibUpdateHandler> = listOf(
         SearchUpdateHandler(_searchResults, _messageSearchResults, _chatsMap),
@@ -111,6 +119,72 @@ class ChatRepositoryImpl(
                 try {
                     val jsonObject = jsonParser.parseToJsonElement(rawJson).jsonObject
                     val type = jsonObject["@type"]?.jsonPrimitive?.content ?: return@onEach
+
+                    if (type == "user") {
+                        val userId = jsonObject["id"]?.jsonPrimitive?.longOrNull ?: return@onEach
+                        val statusObj = jsonObject["status"]?.jsonObject
+                        val info = parseUserStatus(statusObj)
+                        //println("🟢 [STATUS] getUser для $userId: online=${info.first}, text='${info.second}'")
+                        _userStatusMap.update { it + (userId to info) }
+                    }
+
+                    // 💥 2. ОНЛАЙН ИЗ ОБНОВЛЕНИЯ updateUser:
+                    if (type == "updateUser") {
+                        val userObj = jsonObject["user"]?.jsonObject
+                        val userId = userObj?.get("id")?.jsonPrimitive?.longOrNull ?: return@onEach
+                        val statusObj = userObj["status"]?.jsonObject
+                        val info = parseUserStatus(statusObj)
+                        _userStatusMap.update { it + (userId to info) }
+                    }
+
+                    // 💥 3. ОНЛАЙН ИЗ ПЕРЕКЛЮЧЕНИЯ updateUserStatus:
+                    if (type == "updateUserStatus") {
+                        val userId = jsonObject["user_id"]?.jsonPrimitive?.longOrNull ?: return@onEach
+                        val statusObj = jsonObject["status"]?.jsonObject
+                        val info = parseUserStatus(statusObj)
+                        //println("🟢 [STATUS] Переключение онлайна для $userId: online=${info.first}")
+                        _userStatusMap.update { it + (userId to info) }
+                    }
+
+                    if (rawJson.contains("ChatAction", ignoreCase = true)) {
+                        println("🕵️ [RAW CHAT ACTION] Прилетел сырой пакет печати: $rawJson")
+                    }
+
+                    // Ответ на открытие чата:
+                    if (rawJson.contains("open_chat_check")) {
+                        println("📂 [OPEN CHAT RESULT] Ответ от TDLib на открытие чата: $rawJson")
+                    }
+
+                    // 💥 2. ПЕРЕХВАТ updateUserChatAction:
+                    if (type == "updateChatAction" || type == "updateUserChatAction") {
+                        val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return@onEach
+                        val actionObj = jsonObject["action"]?.jsonObject
+                        val actionType = actionObj?.get("@type")?.jsonPrimitive?.content ?: ""
+
+                        val actionText = when (actionType) {
+                            "chatActionTyping" -> "печатает..."
+                            "chatActionRecordingVoiceNote" -> "записывает голосовое..."
+                            "chatActionRecordingVideoNote" -> "записывает видео..."
+                            "chatActionUploadingPhoto" -> "отправляет фото..."
+                            "chatActionUploadingVideo" -> "отправляет видео..."
+                            "chatActionUploadingDocument" -> "отправляет файл..."
+                            "chatActionChoosingSticker" -> "выбирает стикер..."
+                            "chatActionCancel" -> null // 💥 Собеседник перестал писать — сбрасываем сразу!
+                            else -> null
+                        }
+
+                        println("✍️ [TYPING SUCCESS] Чат $chatId: '$actionText'")
+                        _typingMap.update { it + (chatId to actionText) }
+
+                        typingResetJobs[chatId]?.cancel()
+                        if (actionText != null) {
+                            // Автосброс через 4.5 сек, если от Telegram не пришел cancel
+                            typingResetJobs[chatId] = repoScope.launch {
+                                delay(4500)
+                                _typingMap.update { it + (chatId to null) }
+                            }
+                        }
+                    }
 
                     // Просто перебираем хэндлеры
                     for (handler in handlers) {
@@ -646,13 +720,54 @@ class ChatRepositoryImpl(
         return response["id"]?.jsonPrimitive?.longOrNull
     }
 
-    override fun openChat(chatId: Long) {
+
+    override fun observeChatTyping(chatId: Long): Flow<String?> =
+        _typingMap.map { it[chatId] }
+
+    override fun observeUserStatus(userId: Long): Flow<entity.UserOnlineStatus?> {
+        if (userId > 0) tdlibClient.send("""{"@type": "getUser", "user_id": $userId}""")
+        return _userStatusMap.map { it[userId] }
+    }
+
+    override fun sendChatAction(chatId: Long) {
+        tdlibClient.send("""
+            {
+                "@type": "sendChatAction",
+                "chat_id": $chatId,
+                "action": {"@type": "chatActionTyping"}
+            }
+        """.trimIndent())
+    }
+
+
+
+    /*override fun openChat(chatId: Long) {
         // Говорим TDLib: "Юзер смотрит на этот чат! Дай инфу и начни скачивать всё необходимое!"
         tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId}""")
         tdlibClient.send("""{"@type": "getChat", "chat_id": $chatId}""")
+    }*/
+    override fun openChat(chatId: Long) {
+        println("📂 [OPEN CHAT] Отправляем openChat для ID: $chatId")
+        // Шлем с меткой @extra, чтобы увидеть ответ ядра в логах!
+        tdlibClient.send("""{"@type": "openChat", "chat_id": $chatId, "@extra": "open_chat_check"}""")
+        tdlibClient.send("""{"@type": "getChat", "chat_id": $chatId}""")
+        if (chatId > 0) {
+            tdlibClient.send("""{"@type": "getUser", "user_id": $chatId}""")
+        }
     }
 
     override fun closeChat(chatId: Long) {
         tdlibClient.send("""{"@type": "closeChat", "chat_id": $chatId}""")
     }
+}
+
+private fun parseUserStatus(statusObj: JsonObject?): entity.UserOnlineStatus {
+    val type = statusObj?.get("@type")?.jsonPrimitive?.content ?: ""
+    val isOnline = type == "userStatusOnline"
+    val wasOnline = statusObj?.get("was_online")?.jsonPrimitive?.intOrNull ?: 0
+    return entity.UserOnlineStatus(
+        isOnline = isOnline,
+        wasOnline = wasOnline,
+        statusType = type
+    )
 }

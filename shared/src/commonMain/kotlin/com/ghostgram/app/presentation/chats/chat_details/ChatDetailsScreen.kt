@@ -43,6 +43,7 @@ import com.ghostgram.app.presentation.chats.chat_details.utils.shouldShowDateHea
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
 import com.ghostgram.app.presentation.components.fab.FabGetDown
+import com.ghostgram.app.presentation.components.input.ChannelBottomBar
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
 import com.ghostgram.app.presentation.components.topbar.InChatSearchBar
@@ -236,6 +237,11 @@ fun ChatDetailsScreen(
                         isGhostMode = state.isGhostMode,
                         isCryptoMode = state.isCryptoMode,
                         isGroup = state.isGroup,
+                        isChannel = state.isChannel,
+                        memberCount = state.memberCount,
+                        typingText = state.typingText,
+                        isOnline = state.isOnline,
+                        statusText = state.statusText,
                         onIntent = onIntent,
                         onBackClick = onBackClick,
                         onProfileClick = onProfileClick,
@@ -243,17 +249,24 @@ fun ChatDetailsScreen(
                 }
             },
             bottomBar = {
-                GhostInput(
-                    isCatchUpLoading = state.isCatchUpLoading,
-                    unreadCount = state.unreadCount,
-                    smartReplies = state.smartReplies,
-                    isRepliesLoading = state.isRepliesLoading,
-                    inputText = state.inputText,
-                    onIntent = onIntent,
-                    fileLauncher = fileLauncher,
-                    replyingToMessage = state.replyingToMessage,
-                    editingMessage = state.editingMessage
-                )
+                if (state.isChannel) {
+                    ChannelBottomBar(
+                        isMuted = state.isMuted,
+                        onToggleMute = { onIntent(ChatDetailsIntent.OnToggleMute) } // или твой вызов мута
+                    )
+                } else {
+                    GhostInput(
+                        isCatchUpLoading = state.isCatchUpLoading,
+                        unreadCount = state.unreadCount,
+                        smartReplies = state.smartReplies,
+                        isRepliesLoading = state.isRepliesLoading,
+                        inputText = state.inputText,
+                        onIntent = onIntent,
+                        fileLauncher = fileLauncher,
+                        replyingToMessage = state.replyingToMessage,
+                        editingMessage = state.editingMessage
+                    )
+                }
             },
             floatingActionButton = {
                 FabGetDown(

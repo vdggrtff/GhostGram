@@ -39,7 +39,13 @@ data class ChatDetailsState(
     val pinnedMessage: Message? = null,
     val pendingNavigationChatId: Long? = null,
     val invitePreview: ChatInvitePreview? = null,
-    val isJoiningChat: Boolean = false
+    val isJoiningChat: Boolean = false,
+    val typingText: String? = null,    // 💥 Текст "печатает..."
+    val memberCount: Int = 0,          // 💥 Участники
+    val isChannel: Boolean = false,
+    val isOnline: Boolean = false,
+    val isMuted: Boolean = false,
+    val statusText: String = "",
 )
 
 // Действия на экране чата
@@ -84,4 +90,5 @@ sealed interface ChatDetailsIntent {
     data class OnConfirmJoinChat(val inviteLink: String) : ChatDetailsIntent
     data object OnDismissInviteDialog : ChatDetailsIntent
     data object OnResetPendingNavigation : ChatDetailsIntent
+    data object OnToggleMute : ChatDetailsIntent
 }

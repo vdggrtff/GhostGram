@@ -91,6 +91,12 @@ interface ChatRepository {
 
     suspend fun resolveUsernameToChatId(username: String): Long?
 
+    fun observeChatTyping(chatId: Long): Flow<String?>
+
+    fun observeUserStatus(userId: Long): Flow<entity.UserOnlineStatus?>
+
+    fun sendChatAction(chatId: Long)
+
     fun openChat(chatId: Long)
     fun closeChat(chatId: Long)
 }

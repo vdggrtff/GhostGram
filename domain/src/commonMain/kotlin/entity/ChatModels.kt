@@ -11,9 +11,9 @@ data class Message(
     val text: String,
     val isOutgoing: Boolean = false,
     val isDeletedLocally: Boolean = false,
-    val photoPath: String? = null, // Локальный путь к скачанной фотографии
+    val photoPath: String? = null,
     val mediaType: MessageMediaType = MessageMediaType.TEXT,
-    val fileName: String? = null,       // Например: "document.pdf"
+    val fileName: String? = null,
     val fileExtraInfo: String? = null,   // Размер ("12.4 MB"), длительность ("0:45") или эмодзи стикера
     val isRead: Boolean = false,
     val date: Int = 0,
@@ -32,9 +32,19 @@ data class Chat(
     val title: String,
     val unreadCount: Int,
     val lastMessage: Message?,
-    val avatarPath: String? = null, // Локальный путь к аватарке
+    val avatarPath: String? = null,
     val isJoined: Boolean = false,
     val order: Long = 0L,
     val isGroup: Boolean = false,
-    val pinnedMessageId: Long = 0L
+    val pinnedMessageId: Long = 0L,
+    val isChannel: Boolean = false,
+    val memberCount: Int = 0,
+    val isMuted: Boolean = false
+    //val isOnline: Boolean = false,
+)
+
+data class UserOnlineStatus(
+    val isOnline: Boolean = false,
+    val wasOnline: Int = 0,
+    val statusType: String = ""
 )
