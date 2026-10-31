@@ -14,7 +14,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import kotlin.collections.forEach
 
 class SearchUpdateHandler(
     private val chatCache: ChatMemoryCache,

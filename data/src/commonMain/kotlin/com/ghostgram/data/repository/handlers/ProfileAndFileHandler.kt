@@ -4,7 +4,6 @@ import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.data.repository.utils.ChatMemoryCache
 import com.ghostgram.data.repository.utils.DownloadTracker
-import entity.Chat
 import entity.MyProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +15,6 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlin.to
 
 class ProfileAndFileHandler(
     private val chatCache: ChatMemoryCache,
