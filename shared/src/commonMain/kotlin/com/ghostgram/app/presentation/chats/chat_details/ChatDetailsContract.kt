@@ -46,6 +46,10 @@ data class ChatDetailsState(
     val isOnline: Boolean = false,
     val isMuted: Boolean = false,
     val statusText: String = "",
+    val flyingEmoji: String? = null,
+    val availableReactions: List<String> = emptyList(), // 💥 Реальные доступные реакции сообщения
+    val activeBurstMessageId: Long? = null,              // На каком сообщении взорвать партиклы
+    val burstEmoji: String? = null
 )
 
 // Действия на экране чата
@@ -91,4 +95,9 @@ sealed interface ChatDetailsIntent {
     data object OnDismissInviteDialog : ChatDetailsIntent
     data object OnResetPendingNavigation : ChatDetailsIntent
     data object OnToggleMute : ChatDetailsIntent
+    data class OnTriggerFlyingReaction(val emoji: String) : ChatDetailsIntent
+    data object OnClearFlyingReaction : ChatDetailsIntent
+    data class OnLoadAvailableReactions(val messageId: Long) : ChatDetailsIntent
+    data class OnTriggerBurst(val messageId: Long, val emoji: String) : ChatDetailsIntent
+    data object OnClearBurst : ChatDetailsIntent
 }

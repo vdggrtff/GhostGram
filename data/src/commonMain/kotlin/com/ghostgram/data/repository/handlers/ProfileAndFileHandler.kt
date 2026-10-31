@@ -2,11 +2,13 @@ package com.ghostgram.data.repository.handlers
 
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
+import com.ghostgram.data.repository.utils.ChatMemoryCache
 import com.ghostgram.data.repository.utils.DownloadTracker
 import entity.Chat
 import entity.MyProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -17,13 +19,15 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.to
 
 class ProfileAndFileHandler(
-    private val myProfileFlow: MutableStateFlow<MyProfile>,
-    private val chatsMap: MutableStateFlow<Map<Long, Chat>>,
+    private val chatCache: ChatMemoryCache,
     private val tdlibClient: TelegramFlowClient,
     private val messageDao: MessageDao,
     private val repoScope: CoroutineScope,
     private val tracker: DownloadTracker // Наш трекер
 ) : TdlibUpdateHandler {
+
+    private val _myProfile = MutableStateFlow(MyProfile())
+    val myProfile = _myProfile.asStateFlow()
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
 
@@ -39,7 +43,7 @@ class ProfileAndFileHandler(
             val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
             val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
-            myProfileFlow.value = MyProfile(
+            _myProfile.value = MyProfile(
                 firstName = firstName,
                 lastName = lastName,
                 username = username,
@@ -66,14 +70,13 @@ class ProfileAndFileHandler(
 
                 // А) Это твоя аватарка?
                 if (fileId == tracker.myAvatarFileId) {
-                    myProfileFlow.update { it.copy(avatarPath = path) }
+                    _myProfile.update { it.copy(avatarPath = path) }
                 }
 
                 // Б) Это аватарка чата?
                 tracker.chatAvatars.remove(fileId)?.let { chatId ->
-                    chatsMap.update { current ->
-                        val chat = current[chatId]
-                        if (chat != null) current + (chatId to chat.copy(avatarPath = path)) else current
+                    chatCache.updateChat(chatId) { chat ->
+                        chat.copy(avatarPath = path)
                     }
                 }
 

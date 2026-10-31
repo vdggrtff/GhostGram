@@ -10,6 +10,8 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCan
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCatchUpClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearBurst
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearFlyingReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmJoinChat
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
@@ -19,6 +21,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEdi
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInChatSearchQueryChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnLoadAvailableReactions
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetPendingNavigation
@@ -39,6 +42,8 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTriggerBurst
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTriggerFlyingReaction
 import entity.Message
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -47,7 +52,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.TimeZone
 import repository.ChatRepository
 import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
@@ -206,6 +210,23 @@ class ChatDetailsViewModel(
                 _state.update { it.copy(pendingNavigationChatId = null) }
             }
             is OnToggleMute -> toggleMute(repo)
+            is OnTriggerFlyingReaction -> _state.update { it.copy(flyingEmoji = intent.emoji) }
+            is OnClearFlyingReaction -> _state.update { it.copy(flyingEmoji = null) }
+            is OnLoadAvailableReactions -> {
+                viewModelScope.launch {
+                    val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+                    val reactions = repo.getAvailableReactions(chatId, intent.messageId)
+                    _state.update { it.copy(availableReactions = reactions) }
+                }
+            }
+
+            // Запуск локального взрыва на сообщении
+            is OnTriggerBurst -> {
+                _state.update { it.copy(activeBurstMessageId = intent.messageId, burstEmoji = intent.emoji) }
+            }
+            is OnClearBurst -> {
+                _state.update { it.copy(activeBurstMessageId = null, burstEmoji = null) }
+            }
         }
     }
 

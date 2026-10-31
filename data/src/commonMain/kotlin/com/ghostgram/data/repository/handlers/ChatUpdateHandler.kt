@@ -2,11 +2,13 @@ package com.ghostgram.data.repository.handlers
 
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
+import com.ghostgram.data.repository.utils.ChatMemoryCache
 import com.ghostgram.data.repository.utils.DownloadTracker
 import entity.Chat
 import entity.Message
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -16,15 +18,17 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlin.collections.emptyList
+import kotlin.to
 
 class ChatUpdateHandler(
-    private val chatsMap: MutableStateFlow<Map<Long, Chat>>,
-    private val lastReadOutboxMap: MutableMap<Long, Long>,
+    private val chatCache: ChatMemoryCache,
     private val tdlibClient: TelegramFlowClient,
     private val messageDao: MessageDao,
     private val repoScope: CoroutineScope,
     private val tracker: DownloadTracker,
 ) : TdlibUpdateHandler {
+
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         when (type) {
@@ -41,7 +45,7 @@ class ChatUpdateHandler(
                 val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
                 val lastReadOutbox =
                     chatObj["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
-                if (lastReadOutbox != 0L) lastReadOutboxMap[id] = lastReadOutbox
+                if (lastReadOutbox != 0L) chatCache.lastReadOutboxMap[id] = lastReadOutbox
                 val photoObj = chatObj["photo"]?.jsonObject
                 val smallPhoto = photoObj?.get("small")?.jsonObject
                 val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
@@ -75,45 +79,21 @@ class ChatUpdateHandler(
                 } else null
 
                 //chatsMap.update { it + (id to chat) }
-                chatsMap.update { current ->
-                    val existing = current[id]
+                chatCache.putOrUpdate(id) { existing ->
                     val path = if (!avatarPath.isNullOrBlank()) avatarPath else existing?.avatarPath
                     val lastMessage = if (previewText != null) {
-                        Message(
-                            id = 0,
-                            chatId = id,
-                            senderName = "",
-                            text = previewText,
-                            date = dateUnix
-                        )
+                        Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
                     } else existing?.lastMessage
 
-                    if (existing != null) {
-                        current + (id to existing.copy(
-                            title = title,
-                            unreadCount = unreadCount,
-                            lastMessage = lastMessage,
-                            avatarPath = path,
-                            isJoined = isJoined,
-                            isMuted = isMuted,
-                            isGroup = isGroup,
-                            isChannel = isChannel,
-                            pinnedMessageId = pinnedMsgId
-                        ))
-                    } else {
-                        current + (id to Chat(
-                            id = id,
-                            title = title,
-                            unreadCount = unreadCount,
-                            lastMessage = lastMessage,
-                            avatarPath = path,
-                            isJoined = isJoined,
-                            isMuted = isMuted,
-                            isGroup = isGroup,
-                            isChannel = isChannel,
-                            pinnedMessageId = pinnedMsgId
-                        ))
-                    }
+                    existing?.copy(
+                        title = title, unreadCount = unreadCount, lastMessage = lastMessage,
+                        avatarPath = path, isJoined = isJoined, isMuted = isMuted,
+                        isGroup = isGroup, isChannel = isChannel, pinnedMessageId = pinnedMsgId
+                    ) ?: Chat(
+                        id = id, title = title, unreadCount = unreadCount, lastMessage = lastMessage,
+                        avatarPath = path, isJoined = isJoined, isMuted = isMuted,
+                        isGroup = isGroup, isChannel = isChannel, pinnedMessageId = pinnedMsgId
+                    )
                 }
                 return true
             }
@@ -132,9 +112,8 @@ class ChatUpdateHandler(
                 }
 
                 if (!avatarPath.isNullOrBlank()) {
-                    chatsMap.update { current ->
-                        val chat = current[chatId]
-                        if (chat != null) current + (chatId to chat.copy(avatarPath = avatarPath)) else current
+                    chatCache.updateChat(chatId) { chat ->
+                        chat.copy(avatarPath = avatarPath)
                     }
                 }
                 return true
@@ -149,10 +128,8 @@ class ChatUpdateHandler(
                 if (listType == "chatListMain") {
                     val order = positionObj["order"]?.jsonPrimitive?.longOrNull ?: 0L
 
-                    chatsMap.update { current ->
-                        val chat = current[chatId]
-                        // Обновляем позицию чата
-                        if (chat != null) current + (chatId to chat.copy(order = order)) else current
+                    chatCache.updateChat(chatId) { chat ->
+                        chat.copy(order = order)
                     }
                 }
                 return true
@@ -165,23 +142,18 @@ class ChatUpdateHandler(
 
                 val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
 
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) {
-                        val lastMessage = if (previewText != null) {
-                            Message(
-                                id = 0,
-                                chatId = chatId,
-                                senderName = "",
-                                text = previewText,
-                                date = dateUnix
-                            )
-                        } else null
+                chatCache.updateChat(chatId) { chat ->
+                    val lastMessage = if (previewText != null) {
+                        Message(
+                            id = 0,
+                            chatId = chatId,
+                            senderName = "",
+                            text = previewText,
+                            date = dateUnix
+                        )
+                    } else null
 
-                        current + (chatId to chat.copy(lastMessage = lastMessage))
-                    } else {
-                        current
-                    }
+                    chat.copy(lastMessage = lastMessage)
                 }
                 return true
             }
@@ -191,9 +163,8 @@ class ChatUpdateHandler(
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val unreadCount = jsonObject["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
 
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) current + (chatId to chat.copy(unreadCount = unreadCount)) else current
+                chatCache.updateChat(chatId) { chat ->
+                    chat.copy(unreadCount = unreadCount)
                 }
                 return true
             }
@@ -205,7 +176,7 @@ class ChatUpdateHandler(
                     jsonObject["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull
                         ?: return true
 
-                lastReadOutboxMap[chatId] = lastReadId
+                chatCache.lastReadOutboxMap[chatId] = lastReadId
                 repoScope.launch {
                     messageDao.markOutboxAsRead(chatId, lastReadId)
                 }
@@ -216,9 +187,8 @@ class ChatUpdateHandler(
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val pinnedId = jsonObject["pinned_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
 
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) current + (chatId to chat.copy(pinnedMessageId = pinnedId)) else current
+                chatCache.updateChat(chatId) { chat ->
+                    chat.copy(pinnedMessageId = pinnedId)
                 }
                 return true
             }
@@ -228,9 +198,8 @@ class ChatUpdateHandler(
                 val muteFor = notifObj?.get("mute_for")?.jsonPrimitive?.intOrNull ?: 0
                 val isMuted = muteFor > 0
 
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) current + (chatId to chat.copy(isMuted = isMuted)) else current
+                chatCache.updateChat(chatId) { chat ->
+                    chat.copy(isMuted = isMuted)
                 }
                 return true
             }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostSecureGreen
 import com.ghostgram.app.ui.theme.TelegramColors
+import com.ghostgram.app.utils.MessageParticleBurst
 import entity.Message
 import entity.MessageMediaType
 
@@ -53,6 +55,9 @@ fun GhostMessageBubble(
     isFirstInGroup: Boolean = true, // Новые параметры
     isLastInGroup: Boolean = true,
     replyMessage: Message? = null,
+    isBursting: Boolean = false,
+    burstEmoji: String? = null,
+    onBurstFinished: () -> Unit = {},
     onLongClick: () -> Unit,
     onVideoClick: (String) -> Unit,
     onMediaClick: (String) -> Unit,
@@ -235,7 +240,35 @@ fun GhostMessageBubble(
                     )
                 }
             }
-            if (message.reactions.isNotEmpty()) {
+            Box(
+                modifier = Modifier.wrapContentSize(),
+                contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                // Постоянные капсулы реакций
+                if (message.reactions.isNotEmpty()) {
+                    ReactionsRow(
+                        reactions = message.reactions,
+                        isOutgoing = isOutgoing,
+                        onReactionClick = { emoji, isChosen ->
+                            onReactionClick(message.id, emoji, isChosen)
+                        },
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+
+                // 💥 САЛЮТ ВЗРЫВАЕТСЯ ПРЯМО ИЗ КАПСУЛЫ РЕАКЦИИ!
+                if (isBursting && !burstEmoji.isNullOrBlank()) {
+                    MessageParticleBurst(
+                        emoji = burstEmoji,
+                        onFinished = onBurstFinished,
+                        modifier = Modifier
+                            .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
+                            // Приподнимаем центр взрыва на 8dp над капсулой
+                            .offset(y = (-8).dp)
+                    )
+                }
+            }
+            /*if (message.reactions.isNotEmpty()) {
                 ReactionsRow(
                     reactions = message.reactions,
                     isOutgoing = isOutgoing,
@@ -245,6 +278,14 @@ fun GhostMessageBubble(
                     modifier = Modifier.padding(top = 3.dp)
                 )
             }
+
+            if (isBursting && !burstEmoji.isNullOrBlank()) {
+                MessageParticleBurst(
+                    emoji = burstEmoji,
+                    onFinished = onBurstFinished,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }*/
         }
     }
 }

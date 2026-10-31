@@ -17,7 +17,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-class MessageUpdateHandler(
+    class MessageUpdateHandler(
     private val messageDao: MessageDao,
     private val repoScope: CoroutineScope,
     private val tdlibClient: TelegramFlowClient,          // Нужен для скачивания картинок
@@ -369,39 +369,6 @@ class MessageUpdateHandler(
                 )
             }
 
-            /*"messagePhoto" -> {
-                val caption =
-                    contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
-                val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray
-                val largestPhoto = photoSizes?.lastOrNull()?.jsonObject?.get("photo")?.jsonObject
-                val fileId = largestPhoto?.get("id")?.jsonPrimitive?.intOrNull
-                val photoPath =
-                    largestPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-
-                // Просим TDLib скачать фотку, если её нет на диске
-                if (photoPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.messagePhotos[fileId] = msgId // Записали в трекер!
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 1, "offset": 0, "limit": 0, "synchronous": false}""")
-                }
-
-                MessageEntity(
-                    id = msgId,
-                    chatId = chatId,
-                    senderName = realSenderName,
-                    text = caption,
-                    isOutgoing = isOutgoing,
-                    photoPath = photoPath,
-                    mediaType = "PHOTO",
-                    date = date,
-                    mediaAlbumId = mediaAlbumId,
-                    isSending = isSending,
-                    replyToMessageId = replyToMessageId,
-                    isEdited = isEdited,
-                    senderId = senderId,
-                    senderAvatarPath = realSenderAvatar,
-                    reactionsJson = reactionsJson
-                )
-            }*/
             "messagePhoto" -> {
                 val caption = contentObj["caption"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 val photoSizes = contentObj["photo"]?.jsonObject?.get("sizes")?.jsonArray

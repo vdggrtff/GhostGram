@@ -48,6 +48,8 @@ interface ChatRepository {
     fun toggleGhostMode()
     suspend fun toggleChatMute(chatId: Long, isMuted: Boolean)
 
+    suspend fun getAvailableReactions(chatId: Long, messageId: Long): List<String>
+
     suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean)
 
     fun markChatAsRead(chatId: Long, messageIds: List<Long>)
@@ -79,7 +81,6 @@ interface ChatRepository {
 
     suspend fun getPinnedMessage(chatId: Long): Message?
 
-    fun observeRecentStickers(): Flow<List<entity.TelegramSticker>>
     fun loadRecentStickers()
 
     suspend fun getChatFullProfile(chatId: Long): ChatFullProfile?
@@ -90,6 +91,8 @@ interface ChatRepository {
     suspend fun joinChatByInvite(inviteLink: String): Long?
 
     suspend fun resolveUsernameToChatId(username: String): Long?
+
+    fun observeRecentStickers(): Flow<List<entity.TelegramSticker>>
 
     fun observeChatTyping(chatId: Long): Flow<String?>
 

@@ -51,6 +51,7 @@ import com.ghostgram.app.presentation.components.utils.GhostMediaViewer
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
+import com.ghostgram.app.utils.FlyingReactionOverlay
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
@@ -345,6 +346,9 @@ fun ChatDetailsScreen(
                                         isGroup = state.isGroup,
                                         isFirstInGroup = isFirstInGroup, // 👈
                                         isLastInGroup = isLastInGroup,   // 👈
+                                        isBursting = state.activeBurstMessageId == item.message.id,
+                                        burstEmoji = state.burstEmoji,
+                                        onBurstFinished = { onIntent(ChatDetailsIntent.OnClearBurst) },
                                         onMediaClick = { activeViewerMessageId = item.message.id },
                                         onLongClick = { selectedMessageForMenu = item.message },
                                         replyMessage = repliedMsg,
@@ -438,6 +442,10 @@ fun ChatDetailsScreen(
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
+               FlyingReactionOverlay(
+                    emoji = state.flyingEmoji,
+                    onFinished = { onIntent(ChatDetailsIntent.OnClearFlyingReaction) }
+                )
             }
         }
     }

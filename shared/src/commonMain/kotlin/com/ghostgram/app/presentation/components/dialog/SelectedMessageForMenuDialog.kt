@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,17 +36,23 @@ import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostTextSecondary
 import entity.Message
 import entity.MessageMediaType
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
 fun SelectedMessageForMenuDialog(
     msg: Message,
     clipboardManager: ClipboardManager,
+    availableReactions: List<String> = emptyList(),
     onIntent: (ChatDetailsIntent) -> Unit,
     onDismiss: () -> Unit
 ){
+
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(msg.id) {
+        onIntent(ChatDetailsIntent.OnLoadAvailableReactions(msg.id))
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = GhostCard,
@@ -53,10 +60,34 @@ fun SelectedMessageForMenuDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
 
-                // 💥 1. БЛОК БЫСТРЫХ РЕАКЦИЙ СВЕРХУ (Как в Telegram!)
-                val popularEmojis = listOf("👍", "❤️", "🔥", "😂", "👏", "🤯", "🎉")
+                val emojisToShow = if (availableReactions.isNotEmpty()) {
+                    availableReactions
+                } else {
+                    listOf("👍", "❤️", "🔥", "😂", "👏", "🤯", "🎉")
+                }
 
                 Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    emojisToShow.take(7).forEach { emoji ->
+                        val isChosen = msg.reactions.find { it.emoji == emoji }?.isChosen == true
+                        Text(
+                            text = emoji,
+                            fontSize = 26.sp,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable {
+                                    onIntent(ChatDetailsIntent.OnToggleReaction(msg.id, emoji, isChosen))
+                                    // 💥 ЗАПУСКАЕМ ВЗРЫВ ИМЕННО НА ЭТОМ СООБЩЕНИИ:
+                                    onIntent(ChatDetailsIntent.OnTriggerBurst(msg.id, emoji))
+                                    onDismiss()
+                                }
+                                .padding(4.dp)
+                        )
+                    }
+                }
+                /*Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
@@ -70,14 +101,17 @@ fun SelectedMessageForMenuDialog(
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .clickable {
-                                    // 💥 Отправляем Интент на переключение реакции!
+                                    // 💥 1. Шлем реакцию в ядро
                                     onIntent(ChatDetailsIntent.OnToggleReaction(msg.id, emoji, isChosen))
+                                    // 💥 2. Запускаем анимацию салюта!
+                                    onIntent(ChatDetailsIntent.OnTriggerFlyingReaction(emoji))
+                                    // 3. Закрываем меню
                                     onDismiss()
                                 }
                                 .padding(4.dp)
                         )
                     }
-                }
+                }*/
 
                 // Тонкая полоска-разделитель под реакциями
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(bottom = 8.dp))

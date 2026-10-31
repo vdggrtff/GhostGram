@@ -1,10 +1,12 @@
 package com.ghostgram.data.repository.handlers
 
 import AntiSpamFilter
+import com.ghostgram.data.repository.utils.ChatMemoryCache
 import entity.Chat
 import entity.Message
 import entity.PublicChat
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
@@ -12,12 +14,17 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlin.collections.forEach
 
 class SearchUpdateHandler(
-    private val searchResults: MutableStateFlow<List<PublicChat>>,
-    private val messageSearchResults: MutableStateFlow<List<Chat>>,
-    private val chatsMap: MutableStateFlow<Map<Long, Chat>>,
+    private val chatCache: ChatMemoryCache,
 ) : TdlibUpdateHandler {
+
+    private val _searchResults = MutableStateFlow<List<PublicChat>>(emptyList())
+    val searchResults = _searchResults.asStateFlow()
+
+    private val _messageSearchResults = MutableStateFlow<List<Chat>>(emptyList())
+    val messageSearchResults = _messageSearchResults.asStateFlow()
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         //val extra = jsonObject["@extra"]?.jsonPrimitive?.content
@@ -37,7 +44,7 @@ class SearchUpdateHandler(
 
             chatIds.forEach { elem ->
                 val id = elem.jsonPrimitive.longOrNull ?: return@forEach
-                val chat = chatsMap.value[id]
+                val chat = chatCache.getChat(id) //chatsMap.value[id]
 
                 if (chat != null) {
                     if (!AntiSpamFilter.isSpam(chat.title, "public")) {
@@ -63,7 +70,7 @@ class SearchUpdateHandler(
                 }
             }
 
-            searchResults.value = chatsList
+            _searchResults.value = chatsList
             return true
         }
 
@@ -100,7 +107,7 @@ class SearchUpdateHandler(
 
                 println("💬 [ПОИСК СООБЩЕНИЙ] Парсим сообщение из чата $chatId. Текст: '$text'")
 
-                val chat = chatsMap.value[chatId]
+                val chat = chatCache.getChat(chatId) //chatsMap.value[chatId]
                 val chatTitle = chat?.title ?: "Найденный диалог"
                 val chatAvatar = chat?.avatarPath
 
@@ -114,7 +121,7 @@ class SearchUpdateHandler(
             }
 
             println("✅ [ПОИСК СООБЩЕНИЙ] Итого сформировано чатов для UI: ${results.size}")
-            messageSearchResults.value = results
+            _messageSearchResults.value = results
             return true
         }
 
