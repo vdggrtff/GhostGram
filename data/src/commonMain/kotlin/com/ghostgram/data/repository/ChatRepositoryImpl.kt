@@ -20,6 +20,7 @@ import com.ghostgram.data.repository.utils.SearchStemmer
 import com.ghostgram.data.repository.utils.TdlibLinkResolver
 import com.ghostgram.data.repository.utils.TdlibMediaSender
 import com.ghostgram.data.repository.utils.TdlibMessageParser
+import com.ghostgram.data.repository.utils.UserMemoryCache
 import entity.Chat
 import entity.Message
 import entity.MyProfile
@@ -70,6 +71,7 @@ class ChatRepositoryImpl(
     private val profileHandler =
         ProfileAndFileHandler(chatCache, tdlibClient, messageDao, repoScope, downloadTracker)
     private val stickerHandler = StickerUpdateHandler(tdlibClient, downloadTracker)
+    private val userCache = UserMemoryCache()
 
     private val _isGhostModeEnabled = MutableStateFlow(true)
 
@@ -82,7 +84,8 @@ class ChatRepositoryImpl(
             tdlibClient,
             chatCache,
             downloadTracker,
-            cryptoLayer
+            cryptoLayer,
+            userCache
         ),
         ChatUpdateHandler(chatCache, tdlibClient, messageDao, repoScope, downloadTracker),
         profileHandler,
@@ -218,8 +221,48 @@ class ChatRepositoryImpl(
         emoji: String,
         isChosen: Boolean,
     ) {
-        val type = if (isChosen) "removeMessageReaction" else "addMessageReaction"
-        tdlibClient.send("""{"@type": "$type", "chat_id": $chatId, "message_id": $messageId, "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$emoji"}, "is_big": true}""")
+        if (isChosen) {
+            // 💥 1. СНИМАЕМ РЕАКЦИЮ (БЕЗ is_big, чтобы TDLib не падал с 400 ошибкой!):
+            tdlibClient.send("""
+                {
+                    "@type": "removeMessageReaction",
+                    "chat_id": $chatId,
+                    "message_id": $messageId,
+                    "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$emoji"}
+                }
+            """.trimIndent())
+        } else {
+            // 💥 2. ЕСЛИ МЕНЯЕМ РЕАКЦИЮ: проверяем, была ли уже выбрана другая реакция
+            val currentMsg = messageDao.observeMessages(chatId).firstOrNull()?.find { it.id == messageId }
+            val oldReactions = currentMsg?.reactionsJson?.let {
+                runCatching { jsonParser.decodeFromString<List<entity.MessageReactionItem>>(it) }.getOrNull()
+            }
+            val previousChosenEmoji = oldReactions?.firstOrNull { it.isChosen }?.emoji
+
+            // Если уже стоял другой смайлик — сначала снимаем его!
+            if (!previousChosenEmoji.isNullOrBlank() && previousChosenEmoji != emoji) {
+                tdlibClient.send("""
+                    {
+                        "@type": "removeMessageReaction",
+                        "chat_id": $chatId,
+                        "message_id": $messageId,
+                        "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$previousChosenEmoji"}
+                    }
+                """.trimIndent())
+            }
+
+            // Ставим новую реакцию
+            tdlibClient.send("""
+                {
+                    "@type": "addMessageReaction",
+                    "chat_id": $chatId,
+                    "message_id": $messageId,
+                    "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$emoji"},
+                    "is_big": true,
+                    "update_recent_reactions": true
+                }
+            """.trimIndent())
+        }
     }
 
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {

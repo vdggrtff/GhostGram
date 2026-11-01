@@ -36,7 +36,7 @@ class ChatStatusAndActionHandler(
                 val userId = userObj?.get("id")?.jsonPrimitive?.longOrNull ?: return false
                 val statusObj = userObj["status"]?.jsonObject
                 _userStatusMap.update { it + (userId to parseUserStatus(statusObj)) }
-                return true
+                return false
             }
 
             "updateUserStatus" -> {

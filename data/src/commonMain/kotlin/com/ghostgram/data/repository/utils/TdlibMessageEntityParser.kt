@@ -17,7 +17,7 @@ class TdlibMessageEntityParser(
     private val tdlibClient: TelegramFlowClient,
     private val tracker: DownloadTracker,
     private val cryptoLayer: CryptoLayer,
-    private val usersCache: MutableMap<Long, Pair<String, String?>>
+    private val userCache: UserMemoryCache
 ) {
 
     fun parseSingleMessageToEntity(
@@ -32,24 +32,23 @@ class TdlibMessageEntityParser(
         replyToMessageId: Long = 0L,
         isEdited: Boolean = false,
         senderId: Long = 0L,
-        reactionsJson: String = ""
+        reactionsJson: String = "",
     ): MessageEntity? {
         val contentType = contentObj?.get("@type")?.jsonPrimitive?.content ?: return null
 
-        var realSenderName = "Собеседник"
-        var realSenderAvatar: String? = null
-
-        if (isOutgoing) {
-            realSenderName = "Вы"
+        val (realSenderName, realSenderAvatar) = if (isOutgoing) {
+            "Вы" to null
         } else if (senderId != 0L) {
-            val cachedUser = usersCache[senderId]
-            if (cachedUser != null) {
-                realSenderName = cachedUser.first
-                realSenderAvatar = cachedUser.second
+            val cached = userCache.getUser(senderId)
+            if (cached != null) {
+                cached.name to cached.avatarPath
             } else {
+                // Если юзера еще нет в памяти — просим TDLib загрузить его
                 tdlibClient.send("""{"@type": "getUser", "user_id": $senderId}""")
-                realSenderName = "Участник"
+                "Участник" to null
             }
+        } else {
+            "Собеседник" to null
         }
 
         return when (contentType) {

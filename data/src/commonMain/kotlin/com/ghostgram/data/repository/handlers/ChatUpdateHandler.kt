@@ -99,73 +99,63 @@ class ChatUpdateHandler(
             }
 
             "updateChatPhoto" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
                 val photoObj = jsonObject["photo"]?.jsonObject
                 val smallPhoto = photoObj?.get("small")?.jsonObject
-                val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
-                val avatarPath =
-                    smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-
-                if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.chatAvatars[fileId] = chatId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
-                }
-
-                if (!avatarPath.isNullOrBlank()) {
-                    chatCache.updateChat(chatId) { chat ->
-                        chat.copy(avatarPath = avatarPath)
-                    }
-                }
+                val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                chatCache.updateChat(chatId) { it.copy(avatarPath = path) }
                 return true
             }
 
             "updateChatPosition" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
-                val positionObj = jsonObject["position"]?.jsonObject ?: return true
-                val listType = positionObj["list"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
+                val position = jsonObject["position"]?.jsonObject ?: return false
+                val listType = position["list"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
 
-                // Нас интересует только главный список чатов
-                if (listType == "chatListMain") {
-                    val order = positionObj["order"]?.jsonPrimitive?.longOrNull ?: 0L
-
-                    chatCache.updateChat(chatId) { chat ->
-                        chat.copy(order = order)
-                    }
+                if (listType == "chatListMain" || listType == null) {
+                    val order = position["order"]?.jsonPrimitive?.longOrNull ?: 0L
+                    chatCache.updateChat(chatId) { it.copy(order = order) }
                 }
                 return true
             }
 
             "updateChatLastMessage" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
                 val lastMsgObj = jsonObject["last_message"]?.jsonObject
-                val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
+                val positions = jsonObject["positions"]?.jsonArray
 
-                val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
+                // Достаем новый порядок (order)
+                val newOrder = positions?.firstOrNull()?.jsonObject?.get("order")?.jsonPrimitive?.longOrNull
+
+                val contentObj = lastMsgObj?.get("content")?.jsonObject
+                val previewText = contentObj?.get("text")?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: contentObj?.get("caption")?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: when (contentObj?.get("@type")?.jsonPrimitive?.content) {
+                        "messagePhoto" -> "📷 Фотография"
+                        "messageVideo" -> "📹 Видео"
+                        "messageVoiceNote" -> "🎤 Голосовое сообщение"
+                        "messageSticker" -> "✨ Стикер"
+                        "messageDocument" -> "📎 Файл"
+                        else -> "Новое сообщение"
+                    }
+                val date = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
 
                 chatCache.updateChat(chatId) { chat ->
-                    val lastMessage = if (previewText != null) {
-                        Message(
-                            id = 0,
-                            chatId = chatId,
-                            senderName = "",
-                            text = previewText,
-                            date = dateUnix
-                        )
-                    } else null
-
-                    chat.copy(lastMessage = lastMessage)
+                    val updatedMsg = Message(id = 0, chatId = chatId, senderName = "", text = previewText, date = date)
+                    chat.copy(
+                        lastMessage = updatedMsg,
+                        order = newOrder ?: chat.order // Если Telegram прислал новый order — чат летит вверх!
+                    )
                 }
                 return true
             }
 
+
             // 2. МЫ ПРОЧИТАЛИ СООБЩЕНИЯ (Сбрасываем счетчик)
             "updateChatReadInbox" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
                 val unreadCount = jsonObject["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
-
-                chatCache.updateChat(chatId) { chat ->
-                    chat.copy(unreadCount = unreadCount)
-                }
+                chatCache.updateChat(chatId) { it.copy(unreadCount = unreadCount) }
                 return true
             }
 
@@ -201,6 +191,12 @@ class ChatUpdateHandler(
                 chatCache.updateChat(chatId) { chat ->
                     chat.copy(isMuted = isMuted)
                 }
+                return true
+            }
+            "updateChatTitle" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
+                val title = jsonObject["title"]?.jsonPrimitive?.content ?: return false
+                chatCache.updateChat(chatId) { it.copy(title = title) }
                 return true
             }
         }

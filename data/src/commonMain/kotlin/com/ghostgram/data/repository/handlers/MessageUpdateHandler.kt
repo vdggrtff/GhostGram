@@ -8,6 +8,7 @@ import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.data.repository.utils.ChatMemoryCache
 import com.ghostgram.data.repository.utils.DownloadTracker
 import com.ghostgram.data.repository.utils.TdlibMessageEntityParser
+import com.ghostgram.data.repository.utils.UserMemoryCache
 import entity.MessageMediaType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -26,13 +27,11 @@ class MessageUpdateHandler(
     private val chatCache: ChatMemoryCache,
     private val tracker: DownloadTracker,
     private val cryptoLayer: CryptoLayer,
+    private val userCache: UserMemoryCache
 ) : TdlibUpdateHandler {
 
-    private val usersCache = mutableMapOf<Long, Pair<String, String?>>()
-
     // 💥 Вынесенный чистый парсер сущностей
-    private val entityParser =
-        TdlibMessageEntityParser(tdlibClient, tracker, cryptoLayer, usersCache)
+    private val entityParser = TdlibMessageEntityParser(tdlibClient, tracker, cryptoLayer, userCache)
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         return when (type) {
@@ -43,7 +42,7 @@ class MessageUpdateHandler(
             "updateMessageContent" -> handleMessageContent(jsonObject)
             "updateMessageEdited" -> handleMessageEdited(jsonObject)
             "user", "updateUser" -> handleUserUpdate(type, jsonObject)
-            "updateFile" -> handleFileUpdate(jsonObject) // 💥 ВОТ ОН, ВОЗВРАЩАЕТ АВАТАРКИ В ГРУППЫ!
+            "updateFile" -> handleFileUpdate(jsonObject)
             "updateMessageInteractionInfo" -> handleMessageInteractionInfo(jsonObject)
             else -> false
         }
@@ -200,15 +199,19 @@ class MessageUpdateHandler(
         val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
         val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
 
+        // Запоминаем в памяти
+        userCache.putUser(userId, fullName, avatarPath)
+
+        // Если фото еще качается — ставим на слежение в трекер
         if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
             tracker.chatAvatars[fileId] = userId
             tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 16, "offset": 0, "limit": 0, "synchronous": false}""")
         }
 
-        val finalPath = if (!avatarPath.isNullOrBlank()) avatarPath else null
-        usersCache[userId] = fullName to finalPath
-
-        repoScope.launch { messageDao.updateSenderInfo(userId, fullName, finalPath) }
+        // Обновляем базу Room
+        repoScope.launch {
+            messageDao.updateSenderInfo(userId, fullName, avatarPath)
+        }
         return true
     }
 
@@ -221,16 +224,29 @@ class MessageUpdateHandler(
         val path = localObj["path"]?.jsonPrimitive?.content
 
         if (isCompleted && !path.isNullOrBlank()) {
-            tracker.chatAvatars.remove(fileId)?.let { userId ->
-                val currentName = usersCache[userId]?.first ?: "Участник"
-                usersCache[userId] = currentName to path
-                repoScope.launch { messageDao.updateSenderInfo(userId, currentName, path) }
+            // 💥 АВАТАРКА ЧАТА ИЛИ УЧАСТНИКА:
+            tracker.chatAvatars.remove(fileId)?.let { targetId ->
+                // 1. Обновляем аватарку в чатах (ChatMemoryCache) -> для списка чатов и TopBar!
+                chatCache.updateChat(targetId) { it.copy(avatarPath = path) }
+
+                // 2. Обновляем аватарку юзера (UserMemoryCache) -> для пузырей сообщений в группах!
+                userCache.updateAvatar(targetId, path)
+                val userName = userCache.getUser(targetId)?.name ?: "Участник"
+                repoScope.launch {
+                    messageDao.updateSenderInfo(targetId, userName, path)
+                }
+            }
+            // Медиафайлы сообщений
+            tracker.messagePhotos.remove(fileId)?.let { msgId ->
+                repoScope.launch { messageDao.updateMessagePhoto(msgId, path) }
+            }
+            tracker.messageFiles.remove(fileId)?.let { msgId ->
+                repoScope.launch { messageDao.updateMessagePhoto(msgId, path) }
             }
         }
         return false
     }
 
-    // 💥 8. РЕАКЦИИ
     private fun handleMessageInteractionInfo(jsonObject: JsonObject): Boolean {
         val msgId = jsonObject["message_id"]?.jsonPrimitive?.longOrNull ?: return true
         val jsonStr = entityParser.extractReactionsJson(jsonObject)
