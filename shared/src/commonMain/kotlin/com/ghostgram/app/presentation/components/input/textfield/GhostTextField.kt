@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.Icons.AutoMirrored.Filled
 import androidx.compose.material.icons.Icons.Outlined
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
@@ -36,9 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter.Companion.tint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,15 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
-import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.ui.theme.GhostAccentGreen
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
-import com.ghostgram.app.ui.theme.GhostSecondary
 import com.ghostgram.app.ui.theme.GhostSurfaceElevated
 import com.ghostgram.app.ui.theme.GhostTextSecondary
-import com.ghostgram.app.utils.GhostAudioRecorder
+import com.ghostgram.app.presentation.components.player.GhostAudioRecorder
 import entity.Message
 import io.github.vinceglb.filekit.compose.PickerResultLauncher
 import okio.SYSTEM

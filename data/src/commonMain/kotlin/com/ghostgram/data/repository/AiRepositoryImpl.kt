@@ -1,7 +1,6 @@
 package com.ghostgram.data.repository
 
 import api.GeminiApiClient
-import entity.LocalSettingsManager
 import repository.AiRepository
 
 class AiRepositoryImpl(

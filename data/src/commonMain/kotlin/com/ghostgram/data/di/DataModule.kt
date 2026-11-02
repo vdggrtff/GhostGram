@@ -1,19 +1,22 @@
 package com.ghostgram.data.di
 
-import AccountSession
+import session.AccountSession
 import com.ghostgram.core.crypto.CryptoLayer
 import com.ghostgram.core.database.GhostDatabase
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.core.tdlib.di.TdlibConfig
+import com.ghostgram.data.local.LocalSettingsManager
 import com.ghostgram.data.repository.AiRepositoryImpl
 import com.ghostgram.data.repository.AuthRepositoryImpl
 import com.ghostgram.data.repository.ChatRepositoryImpl
 import com.ghostgram.data.repository.ContactRepositoryImpl
 import org.koin.core.parameter.parametersOf
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import repository.AiRepository
 import repository.AuthRepository
 import repository.ChatRepository
+import repository.SettingsRepository
 
 val dataModule = module {
     // Указываем, что при запросе интерфейса (AiRepository) нужно отдать реализацию (AiRepositoryImpl)
@@ -42,6 +45,14 @@ val dataModule = module {
             )
         }
     }
+
+    single<SettingsRepository> {
+        LocalSettingsManager(
+            appStorage = get()
+        )
+    }
+
+    single { LocalSettingsManager(get()) } bind SettingsRepository::class
 
     factory<ChatRepository> { (accountId: String) ->
         val tdlibConfig: TdlibConfig = get { parametersOf(accountId) }

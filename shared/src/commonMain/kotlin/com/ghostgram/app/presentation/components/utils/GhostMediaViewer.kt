@@ -1,7 +1,6 @@
 package com.ghostgram.app.presentation.components.utils
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -24,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -65,8 +63,8 @@ import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.utils.TimeFormatter
 import com.ghostgram.app.utils.openVideoInSystemPlayer
 import com.ghostgram.app.utils.saveMediaToDownloads
-import com.ghostgram.app.utils.video.InAppVideoPlayer
-import com.ghostgram.app.utils.video.MediaViewerSystemBars
+import com.ghostgram.app.presentation.components.player.video.InAppVideoPlayer
+import com.ghostgram.app.presentation.components.player.video.MediaViewerSystemBars
 import entity.Message
 import entity.MessageMediaType
 import kotlinx.coroutines.launch

@@ -1,6 +1,6 @@
 package com.ghostgram.data.repository.handlers
 
-import AntiSpamFilter
+import usecase.AntiSpamFilter
 import com.ghostgram.data.repository.utils.ChatMemoryCache
 import entity.Chat
 import entity.Message

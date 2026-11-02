@@ -1,9 +1,8 @@
 package usecase
 
-import SessionManager
+import session.SessionManager
 import kotlinx.coroutines.flow.firstOrNull
 import repository.AiRepository
-import repository.ChatRepository
 
 class GenerateCatchUpSummaryUseCase(
     private val sessionManager: SessionManager,

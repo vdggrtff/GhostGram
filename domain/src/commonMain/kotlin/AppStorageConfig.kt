@@ -1,1 +1,0 @@
-data class AppStorageConfig(val basePath: String)

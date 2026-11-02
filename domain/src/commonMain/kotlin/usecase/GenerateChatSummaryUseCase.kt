@@ -1,8 +1,7 @@
 package usecase
 
-import SessionManager
+import session.SessionManager
 import repository.AiRepository
-import repository.ChatRepository
 
 /**
  * Юзкейс: Сгенерировать краткую выжимку (Summary) для конкретного чата.

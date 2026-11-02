@@ -1,6 +1,6 @@
 package com.ghostgram.app.presentation.chats
 
-import SessionManager
+import session.SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job

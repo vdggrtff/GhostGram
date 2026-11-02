@@ -1,6 +1,6 @@
 package com.ghostgram.app.presentation.auth
 
-import SessionManager
+import session.SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import entity.AuthState

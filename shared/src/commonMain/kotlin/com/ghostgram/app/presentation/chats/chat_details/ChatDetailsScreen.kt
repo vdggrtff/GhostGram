@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearFlyingReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
 import com.ghostgram.app.presentation.chats.chat_details.utils.ChatDetailsDialogs
 import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem
@@ -51,7 +52,7 @@ import com.ghostgram.app.presentation.components.utils.GhostMediaViewer
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
-import com.ghostgram.app.utils.FlyingReactionOverlay
+import com.ghostgram.app.presentation.components.animations.FlyingReactionOverlay
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
@@ -444,7 +445,7 @@ fun ChatDetailsScreen(
                 }
                FlyingReactionOverlay(
                     emoji = state.flyingEmoji,
-                    onFinished = { onIntent(ChatDetailsIntent.OnClearFlyingReaction) }
+                    onFinished = { onIntent(OnClearFlyingReaction) }
                 )
             }
         }

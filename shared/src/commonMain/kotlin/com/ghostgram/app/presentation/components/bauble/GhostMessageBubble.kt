@@ -43,7 +43,7 @@ import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostSecureGreen
 import com.ghostgram.app.ui.theme.TelegramColors
-import com.ghostgram.app.utils.MessageParticleBurst
+import com.ghostgram.app.presentation.components.animations.MessageParticleBurst
 import entity.Message
 import entity.MessageMediaType
 
