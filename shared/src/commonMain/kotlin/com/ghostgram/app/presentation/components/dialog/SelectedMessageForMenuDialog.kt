@@ -79,39 +79,18 @@ fun SelectedMessageForMenuDialog(
                                 .clip(CircleShape)
                                 .clickable {
                                     onIntent(ChatDetailsIntent.OnToggleReaction(msg.id, emoji, isChosen))
+                                    // 💥 ЗАПУСКАЕМ ОРИГИНАЛЬНЫЙ TGS ЭФФЕКТ:
+                                    onIntent(ChatDetailsIntent.OnPlayReactionEffect(msg.id, emoji))
+                                    onDismiss()
+                                    /*onIntent(ChatDetailsIntent.OnToggleReaction(msg.id, emoji, isChosen))
                                     // 💥 ЗАПУСКАЕМ ВЗРЫВ ИМЕННО НА ЭТОМ СООБЩЕНИИ:
                                     onIntent(ChatDetailsIntent.OnTriggerBurst(msg.id, emoji))
-                                    onDismiss()
+                                    onDismiss()*/
                                 }
                                 .padding(4.dp)
                         )
                     }
                 }
-                /*Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    popularEmojis.forEach { emoji ->
-                        val isChosen = msg.reactions.find { it.emoji == emoji }?.isChosen == true
-                        Text(
-                            text = emoji,
-                            fontSize = 26.sp,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable {
-                                    // 💥 1. Шлем реакцию в ядро
-                                    onIntent(ChatDetailsIntent.OnToggleReaction(msg.id, emoji, isChosen))
-                                    // 💥 2. Запускаем анимацию салюта!
-                                    onIntent(ChatDetailsIntent.OnTriggerFlyingReaction(emoji))
-                                    // 3. Закрываем меню
-                                    onDismiss()
-                                }
-                                .padding(4.dp)
-                        )
-                    }
-                }*/
 
                 // Тонкая полоска-разделитель под реакциями
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(bottom = 8.dp))

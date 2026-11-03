@@ -42,7 +42,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -198,6 +200,60 @@ class ChatRepositoryImpl(
 
     override fun observeRecentStickers(): Flow<List<TelegramSticker>> =
         stickerHandler.recentStickers
+
+    override suspend fun getReactionEffectFilePath(chatId: Long, messageId: Long, emoji: String): String? {
+        println("🎬 [REPO 1] Запрашиваем анимацию getEmojiReaction для '$emoji'...")
+
+        // 💥 ВОТ ОН, НАСТОЯЩИЙ МЕТОД TDLIB ДЛЯ САЛЮТОВ РЕАКЦИЙ:
+        val response = tdlibClient.sendAndAwait(
+            requestType = "getEmojiReaction",
+            parameters = mapOf("emoji" to emoji),
+            timeoutMs = 4000
+        )
+
+        if (response == null || response["@type"]?.jsonPrimitive?.content == "error") {
+            println("❌ [REPO ERROR] TDLib ошибка getEmojiReaction: $response")
+            return null
+        }
+
+        println("🎬 [REPO 2] emojiReaction успешно получен от Telegram!")
+
+        // 💥 Достаем effect_animation (или around_animation)
+        val effectAnimation = response["effect_animation"]?.jsonObject
+            ?: response["around_animation"]?.jsonObject
+            ?: response["activate_animation"]?.jsonObject
+
+        val stickerFileObj = effectAnimation?.get("sticker")?.jsonObject
+        val fileId = stickerFileObj?.get("id")?.jsonPrimitive?.intOrNull
+
+        if (fileId == null) {
+            println("❌ [REPO ERROR] Не найден file_id в effect_animation: $effectAnimation")
+            return null
+        }
+
+        var localPath = stickerFileObj["local"]?.jsonObject?.get("path")?.jsonPrimitive?.content
+        val isCompleted = stickerFileObj["local"]?.jsonObject?.get("is_downloading_completed")?.jsonPrimitive?.booleanOrNull ?: false
+
+        // Если .tgs файл еще не скачан — качаем его
+        if (!isCompleted || localPath.isNullOrBlank()) {
+            println("📥 [REPO 3] Скачиваем фирменный .tgs файл эффекта fileId=$fileId...")
+            val downloadRes = tdlibClient.sendAndAwait(
+                requestType = "downloadFile",
+                parameters = mapOf(
+                    "file_id" to fileId,
+                    "priority" to 32,
+                    "offset" to 0,
+                    "limit" to 0,
+                    "synchronous" to true
+                ),
+                timeoutMs = 8000
+            )
+            localPath = downloadRes?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+        }
+
+        println("✅ [REPO 4] Путь к .tgs эффекту Telegram: '$localPath'")
+        return localPath
+    }
 
     override fun loadRecentStickers() =
         tdlibClient.send("""{"@type": "getRecentStickers", "is_attached": false}""")

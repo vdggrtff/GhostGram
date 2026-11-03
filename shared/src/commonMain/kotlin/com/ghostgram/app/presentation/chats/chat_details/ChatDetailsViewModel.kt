@@ -24,6 +24,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInp
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnLoadAvailableReactions
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPlayReactionEffect
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetPendingNavigation
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnRunAiSearch
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchNext
@@ -225,7 +226,33 @@ class ChatDetailsViewModel(
                 _state.update { it.copy(activeBurstMessageId = intent.messageId, burstEmoji = intent.emoji) }
             }
             is OnClearBurst -> {
-                _state.update { it.copy(activeBurstMessageId = null, burstEmoji = null) }
+                _state.update { it.copy(activeBurstMessageId = null, burstEffectJson = null) }
+            }
+            is OnPlayReactionEffect -> {
+                viewModelScope.launch {
+                    println("🎬 [EFFECT 1] Запрос эффекта для '${intent.emoji}' msg=${intent.messageId}")
+                    val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+
+                    val filePath = repo.getReactionEffectFilePath(chatId, intent.messageId, intent.emoji)
+                    println("🎬 [EFFECT 2] Путь к .tgs файлу: '$filePath'")
+
+                    if (!filePath.isNullOrBlank()) {
+                        val effectJson = com.ghostgram.app.utils.TgsDecoder.decodeTgsToJson(filePath)
+                        println("🎬 [EFFECT 3] JSON распакован! Длина: ${effectJson?.length ?: 0} символов")
+
+                        if (!effectJson.isNullOrBlank()) {
+                            _state.update {
+                                it.copy(
+                                    activeBurstMessageId = intent.messageId,
+                                    burstEffectJson = effectJson
+                                )
+                            }
+                            println("🎬 [EFFECT 4] Стейт обновлен! Запускаем плеер!")
+                        }
+                    } else {
+                        println("❌ [EFFECT ERROR] TDLib не вернул путь к файлу эффекта!")
+                    }
+                }
             }
         }
     }

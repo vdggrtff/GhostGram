@@ -348,7 +348,7 @@ fun ChatDetailsScreen(
                                         isFirstInGroup = isFirstInGroup, // 👈
                                         isLastInGroup = isLastInGroup,   // 👈
                                         isBursting = state.activeBurstMessageId == item.message.id,
-                                        burstEmoji = state.burstEmoji,
+                                        burstEffectJson = state.burstEffectJson, // 💥 Передаем JSON!
                                         onBurstFinished = { onIntent(ChatDetailsIntent.OnClearBurst) },
                                         onMediaClick = { activeViewerMessageId = item.message.id },
                                         onLongClick = { selectedMessageForMenu = item.message },
@@ -357,13 +357,18 @@ fun ChatDetailsScreen(
                                             activeViewerMessageId = item.message.id
                                         },
                                         onReactionClick = { msgId, emoji, isChosen ->
-                                            onIntent(
+                                            /*onIntent(
                                                 ChatDetailsIntent.OnToggleReaction(
                                                     msgId,
                                                     emoji,
                                                     isChosen
                                                 )
-                                            )
+                                            )*/
+                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen))
+                                            // 💥 ЕСЛИ МЫ СТАВИМ РЕАКЦИЮ (не снимаем) — СРАЗУ ЗАПУСКАЕМ САЛЮТ!
+                                            if (!isChosen) {
+                                                onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
+                                            }
                                         }
                                     )
                                 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,7 +58,7 @@ fun GhostMessageBubble(
     isLastInGroup: Boolean = true,
     replyMessage: Message? = null,
     isBursting: Boolean = false,
-    burstEmoji: String? = null,
+    burstEffectJson: String? = null,
     onBurstFinished: () -> Unit = {},
     onLongClick: () -> Unit,
     onVideoClick: (String) -> Unit,
@@ -249,6 +251,7 @@ fun GhostMessageBubble(
                     ReactionsRow(
                         reactions = message.reactions,
                         isOutgoing = isOutgoing,
+                        authorAvatarPath = if (!isOutgoing) message.senderAvatarPath else null,
                         onReactionClick = { emoji, isChosen ->
                             onReactionClick(message.id, emoji, isChosen)
                         },
@@ -257,35 +260,37 @@ fun GhostMessageBubble(
                 }
 
                 // 💥 САЛЮТ ВЗРЫВАЕТСЯ ПРЯМО ИЗ КАПСУЛЫ РЕАКЦИИ!
-                if (isBursting && !burstEmoji.isNullOrBlank()) {
-                    MessageParticleBurst(
-                        emoji = burstEmoji,
+                /*if (isBursting && !burstEffectJson.isNullOrBlank()) {
+                    com.ghostgram.app.presentation.components.player.TgsEffectPlayer(
+                        tgsJson = burstEffectJson,
                         onFinished = onBurstFinished,
                         modifier = Modifier
-                            .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
-                            // Приподнимаем центр взрыва на 8dp над капсулой
-                            .offset(y = (-8).dp)
+                            .size(130.dp) // Идеальный размер для эффекта
+                            .align(if (isOutgoing) Alignment.BottomEnd else Alignment.BottomStart)
+                            .offset(y = 10.dp) // Накрывает капсулу и край пузыря
                     )
+                }*/
+                if (isBursting && !burstEffectJson.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
+                            // 💥 Ставим анкер РОВНО в центр капсулы реакции:
+                            .offset(
+                                x = if (isOutgoing) (-24).dp else 24.dp,
+                                y = 14.dp
+                            )
+                            // 💥 Размер 0x0 dp: сообщение не сдвинется ни на 1 пиксель!
+                            .size(0.dp)
+                            .wrapContentSize(align = Alignment.Center, unbounded = true)
+                    ) {
+                        com.ghostgram.app.presentation.components.player.TgsEffectPlayer(
+                            tgsJson = burstEffectJson,
+                            onFinished = onBurstFinished,
+                            modifier = Modifier.size(150.dp)
+                        )
+                    }
                 }
             }
-            /*if (message.reactions.isNotEmpty()) {
-                ReactionsRow(
-                    reactions = message.reactions,
-                    isOutgoing = isOutgoing,
-                    onReactionClick = { emoji, isChosen ->
-                        onReactionClick(message.id, emoji, isChosen)
-                    },
-                    modifier = Modifier.padding(top = 3.dp)
-                )
-            }
-
-            if (isBursting && !burstEmoji.isNullOrBlank()) {
-                MessageParticleBurst(
-                    emoji = burstEmoji,
-                    onFinished = onBurstFinished,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }*/
         }
     }
 }

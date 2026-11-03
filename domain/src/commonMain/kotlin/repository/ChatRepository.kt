@@ -94,6 +94,8 @@ interface ChatRepository {
 
     fun observeRecentStickers(): Flow<List<entity.TelegramSticker>>
 
+    suspend fun getReactionEffectFilePath(chatId: Long, messageId: Long, emoji: String): String?
+
     fun observeChatTyping(chatId: Long): Flow<String?>
 
     fun observeUserStatus(userId: Long): Flow<entity.UserOnlineStatus?>
