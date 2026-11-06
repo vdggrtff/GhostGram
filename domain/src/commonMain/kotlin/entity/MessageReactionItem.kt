@@ -6,5 +6,7 @@ import kotlinx.serialization.Serializable
 data class MessageReactionItem(
     val emoji: String,
     val count: Int,
-    val isChosen: Boolean // Поставил ли эту реакцию текущий пользователь
+    val isChosen: Boolean,
+    val customEmojiId: Long = 0L,
+    val customEmojiPath: String? = null
 )

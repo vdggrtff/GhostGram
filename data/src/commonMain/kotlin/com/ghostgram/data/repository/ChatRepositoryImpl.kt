@@ -42,7 +42,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -69,7 +71,7 @@ class ChatRepositoryImpl(
 
     // 💥 2. ХЭНДЛЕРЫ-ХОЗЯЕВА СВОИХ СОСТОЯНИЙ
     private val statusAndActionHandler = ChatStatusAndActionHandler(repoScope)
-    private val searchHandler = SearchUpdateHandler(chatCache)
+    private val searchHandler =  SearchUpdateHandler(chatCache, tdlibClient, repoScope)
     private val profileHandler =
         ProfileAndFileHandler(chatCache, tdlibClient, messageDao, repoScope, downloadTracker)
     private val stickerHandler = StickerUpdateHandler(tdlibClient, downloadTracker)
@@ -202,39 +204,44 @@ class ChatRepositoryImpl(
         stickerHandler.recentStickers
 
     override suspend fun getReactionEffectFilePath(chatId: Long, messageId: Long, emoji: String): String? {
-        println("🎬 [REPO 1] Запрашиваем анимацию getEmojiReaction для '$emoji'...")
+        val isCustom = emoji.isBlank() || emoji == "🎭"
 
-        // 💥 ВОТ ОН, НАСТОЯЩИЙ МЕТОД TDLIB ДЛЯ САЛЮТОВ РЕАКЦИЙ:
-        val response = tdlibClient.sendAndAwait(
-            requestType = "getEmojiReaction",
-            parameters = mapOf("emoji" to emoji),
-            timeoutMs = 4000
-        )
+        val response = if (isCustom) {
+            println("🎬 [REPO 1] Запрашиваем анимацию getCustomEmojiReactionAnimations для кастомной реакции...")
+            // 💥 ДЛЯ КАСТОМНЫХ РЕАКЦИЙ TELEGRAM ИСПОЛЬЗУЕТ getCustomEmojiReactionAnimations!
+            tdlibClient.sendAndAwait(
+                requestType = "getCustomEmojiReactionAnimations",
+                timeoutMs = 4000
+            )
+        } else {
+            println("🎬 [REPO 1] Запрашиваем анимацию getEmojiReaction для '$emoji'...")
+            tdlibClient.sendAndAwait(
+                requestType = "getEmojiReaction",
+                parameters = mapOf("emoji" to emoji),
+                timeoutMs = 4000
+            )
+        }
 
         if (response == null || response["@type"]?.jsonPrimitive?.content == "error") {
-            println("❌ [REPO ERROR] TDLib ошибка getEmojiReaction: $response")
+            println("❌ [REPO ERROR] TDLib ошибка анимации: $response")
             return null
         }
 
-        println("🎬 [REPO 2] emojiReaction успешно получен от Telegram!")
-
-        // 💥 Достаем effect_animation (или around_animation)
-        val effectAnimation = response["effect_animation"]?.jsonObject
-            ?: response["around_animation"]?.jsonObject
-            ?: response["activate_animation"]?.jsonObject
-
-        val stickerFileObj = effectAnimation?.get("sticker")?.jsonObject
-        val fileId = stickerFileObj?.get("id")?.jsonPrimitive?.intOrNull
-
-        if (fileId == null) {
-            println("❌ [REPO ERROR] Не найден file_id в effect_animation: $effectAnimation")
-            return null
+        // Для кастомных реакций возвращается список stickers, берем первый салют:
+        val effectSticker = if (isCustom) {
+            val stickers = response["stickers"]?.jsonArray
+            stickers?.firstOrNull()?.jsonObject?.get("sticker")?.jsonObject
+        } else {
+            val effectAnim = response["effect_animation"]?.jsonObject
+                ?: response["around_animation"]?.jsonObject
+                ?: response["activate_animation"]?.jsonObject
+            effectAnim?.get("sticker")?.jsonObject
         }
 
-        var localPath = stickerFileObj["local"]?.jsonObject?.get("path")?.jsonPrimitive?.content
-        val isCompleted = stickerFileObj["local"]?.jsonObject?.get("is_downloading_completed")?.jsonPrimitive?.booleanOrNull ?: false
+        val fileId = effectSticker?.get("id")?.jsonPrimitive?.intOrNull ?: return null
+        var localPath = effectSticker["local"]?.jsonObject?.get("path")?.jsonPrimitive?.content
+        val isCompleted = effectSticker["local"]?.jsonObject?.get("is_downloading_completed")?.jsonPrimitive?.booleanOrNull ?: false
 
-        // Если .tgs файл еще не скачан — качаем его
         if (!isCompleted || localPath.isNullOrBlank()) {
             println("📥 [REPO 3] Скачиваем фирменный .tgs файл эффекта fileId=$fileId...")
             val downloadRes = tdlibClient.sendAndAwait(
@@ -255,16 +262,65 @@ class ChatRepositoryImpl(
         return localPath
     }
 
+    override suspend fun getCustomEmojiPath(customEmojiId: Long): String? {
+        if (customEmojiId == 0L) return null
+        println("🖼️ [CUSTOM EMOJI 1] Запрашиваем стикер для ID=$customEmojiId...")
+
+        // 💥 ГЛАВНЫЙ ФИКС: передаем JsonArray, чтобы сериализатор TDLib не потерял массив!
+        val idsArray = buildJsonArray { add(customEmojiId) }
+
+        val response = tdlibClient.sendAndAwait(
+            requestType = "getCustomEmojiStickers",
+            parameters = mapOf("custom_emoji_ids" to idsArray),
+            timeoutMs = 5000
+        )
+
+        if (response == null || response["@type"]?.jsonPrimitive?.content == "error") {
+            println("❌ [CUSTOM EMOJI ERROR] Ошибка ответа TDLib: $response")
+            return null
+        }
+
+        val stickers = response["stickers"]?.jsonArray
+        val stickerObj = stickers?.firstOrNull()?.jsonObject ?: return null
+
+        // 💥 Берем превьюшку thumbnail (.webp) или сам файл стикера:
+        val thumbObj = stickerObj["thumbnail"]?.jsonObject?.get("file")?.jsonObject
+            ?: stickerObj["sticker"]?.jsonObject
+
+        val fileId = thumbObj?.get("id")?.jsonPrimitive?.intOrNull ?: return null
+        var localPath = thumbObj["local"]?.jsonObject?.get("path")?.jsonPrimitive?.content
+        val isCompleted = thumbObj["local"]?.jsonObject?.get("is_downloading_completed")?.jsonPrimitive?.booleanOrNull ?: false
+
+        if (!isCompleted || localPath.isNullOrBlank()) {
+            println("📥 [CUSTOM EMOJI 2] Скачиваем файл превью fileId=$fileId...")
+            val downloadRes = tdlibClient.sendAndAwait(
+                requestType = "downloadFile",
+                parameters = mapOf(
+                    "file_id" to fileId,
+                    "priority" to 32,
+                    "offset" to 0,
+                    "limit" to 0,
+                    "synchronous" to true
+                ),
+                timeoutMs = 6000
+            )
+            localPath = downloadRes?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+        }
+
+        println("✅ [CUSTOM EMOJI 3] Успешно скачано! Путь: '$localPath'")
+        return localPath
+    }
+
     override fun loadRecentStickers() =
         tdlibClient.send("""{"@type": "getRecentStickers", "is_attached": false}""")
 
     override fun observeSearchResults() = searchHandler.searchResults
     override fun observeMessageSearchResults() = searchHandler.messageSearchResults
     override fun searchPublicChats(query: String) =
-        tdlibClient.send("""{"@type": "searchPublicChats", "query": "$query"}""")
+        tdlibClient.send("""{"@type": "searchPublicChats", "query": "$query", "@extra": "search_public"}""")
 
     override fun searchMessages(query: String) =
-        tdlibClient.send("""{"@type": "searchMessages", "query": "$query", "offset_date": 0, "offset_chat_id": 0, "offset_message_id": 0, "limit": 20}""")
+        tdlibClient.send("""{"@type": "searchMessages", "query": "$query", "offset_date": 0, "offset_chat_id": 0, "offset_message_id": 0, "limit": 20, "@extra": "search_msg_"}""")
 
     override suspend fun toggleChatMute(chatId: Long, isMuted: Boolean) {
         val muteFor = if (isMuted) 0 else 2147483647
@@ -276,44 +332,64 @@ class ChatRepositoryImpl(
         messageId: Long,
         emoji: String,
         isChosen: Boolean,
+        customEmojiId: Long,
     ) {
+        // 💥 ФОРМИРУЕМ ПРАВИЛЬНЫЙ ТИП РЕАКЦИИ ДЛЯ TELEGRAM:
+        val reactionTypeJson = if (customEmojiId != 0L) {
+            """{"@type": "reactionTypeCustomEmoji", "custom_emoji_id": $customEmojiId}"""
+        } else {
+            """{"@type": "reactionTypeEmoji", "emoji": "$emoji"}"""
+        }
+
         if (isChosen) {
-            // 💥 1. СНИМАЕМ РЕАКЦИЮ (БЕЗ is_big, чтобы TDLib не падал с 400 ошибкой!):
+            // Снимаем реакцию
             tdlibClient.send("""
                 {
                     "@type": "removeMessageReaction",
                     "chat_id": $chatId,
                     "message_id": $messageId,
-                    "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$emoji"}
+                    "reaction_type": $reactionTypeJson
                 }
             """.trimIndent())
         } else {
-            // 💥 2. ЕСЛИ МЕНЯЕМ РЕАКЦИЮ: проверяем, была ли уже выбрана другая реакция
+            // Если меняем реакцию — снимаем предыдущую
             val currentMsg = messageDao.observeMessages(chatId).firstOrNull()?.find { it.id == messageId }
             val oldReactions = currentMsg?.reactionsJson?.let {
                 runCatching { jsonParser.decodeFromString<List<entity.MessageReactionItem>>(it) }.getOrNull()
             }
-            val previousChosenEmoji = oldReactions?.firstOrNull { it.isChosen }?.emoji
+            val previousChosen = oldReactions?.firstOrNull { it.isChosen }
 
-            // Если уже стоял другой смайлик — сначала снимаем его!
-            if (!previousChosenEmoji.isNullOrBlank() && previousChosenEmoji != emoji) {
-                tdlibClient.send("""
-                    {
-                        "@type": "removeMessageReaction",
-                        "chat_id": $chatId,
-                        "message_id": $messageId,
-                        "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$previousChosenEmoji"}
+            if (previousChosen != null) {
+                val isSame = if (customEmojiId != 0L) {
+                    previousChosen.customEmojiId == customEmojiId
+                } else {
+                    previousChosen.emoji == emoji
+                }
+
+                if (!isSame) {
+                    val oldTypeJson = if (previousChosen.customEmojiId != 0L) {
+                        """{"@type": "reactionTypeCustomEmoji", "custom_emoji_id": ${previousChosen.customEmojiId}}"""
+                    } else {
+                        """{"@type": "reactionTypeEmoji", "emoji": "${previousChosen.emoji}"}"""
                     }
-                """.trimIndent())
+                    tdlibClient.send("""
+                        {
+                            "@type": "removeMessageReaction",
+                            "chat_id": $chatId,
+                            "message_id": $messageId,
+                            "reaction_type": $oldTypeJson
+                        }
+                    """.trimIndent())
+                }
             }
 
-            // Ставим новую реакцию
+            // Ставим реакцию
             tdlibClient.send("""
                 {
                     "@type": "addMessageReaction",
                     "chat_id": $chatId,
                     "message_id": $messageId,
-                    "reaction_type": {"@type": "reactionTypeEmoji", "emoji": "$emoji"},
+                    "reaction_type": $reactionTypeJson,
                     "is_big": true,
                     "update_recent_reactions": true
                 }

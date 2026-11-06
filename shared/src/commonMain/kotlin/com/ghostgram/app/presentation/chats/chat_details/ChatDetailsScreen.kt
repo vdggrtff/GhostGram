@@ -32,9 +32,11 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearFlyingReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsScreen
 import com.ghostgram.app.presentation.chats.chat_details.utils.ChatDetailsDialogs
 import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem
 import com.ghostgram.app.presentation.chats.chat_details.utils.getSenderKey
@@ -82,7 +84,8 @@ fun ChatDetailsRoute(
         },
         onNavigateToChat = onNavigateToChat,
         scrollToMessageId = scrollToMessageId,
-        onMessageScrolled = onMessageScrolled
+        onMessageScrolled = onMessageScrolled,
+        onLoadCustomEmoji = { emojiId -> viewModel.getCustomEmojiPath(emojiId) }
     )
 }
 
@@ -97,6 +100,7 @@ fun ChatDetailsScreen(
     onNavigateToChat: (Long) -> Unit,
     scrollToMessageId: Long? = null,
     onMessageScrolled: () -> Unit = {},
+    onLoadCustomEmoji: suspend (Long) -> String? = { null },
     listState: LazyListState = rememberLazyListState(),
 ) {
 
@@ -357,19 +361,14 @@ fun ChatDetailsScreen(
                                             activeViewerMessageId = item.message.id
                                         },
                                         onReactionClick = { msgId, emoji, isChosen ->
-                                            /*onIntent(
-                                                ChatDetailsIntent.OnToggleReaction(
-                                                    msgId,
-                                                    emoji,
-                                                    isChosen
-                                                )
-                                            )*/
                                             onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen))
                                             // 💥 ЕСЛИ МЫ СТАВИМ РЕАКЦИЮ (не снимаем) — СРАЗУ ЗАПУСКАЕМ САЛЮТ!
                                             if (!isChosen) {
                                                 onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
                                             }
-                                        }
+                                        },
+                                        onLoadCustomEmoji = onLoadCustomEmoji,
+                                        burstEmoji = state.burstEmoji,
                                     )
                                 }
                             }

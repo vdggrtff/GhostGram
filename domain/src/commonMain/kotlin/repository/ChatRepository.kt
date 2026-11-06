@@ -50,7 +50,7 @@ interface ChatRepository {
 
     suspend fun getAvailableReactions(chatId: Long, messageId: Long): List<String>
 
-    suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean)
+    suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean, customEmojiId: Long = 0L )
 
     fun markChatAsRead(chatId: Long, messageIds: List<Long>)
 
@@ -95,6 +95,8 @@ interface ChatRepository {
     fun observeRecentStickers(): Flow<List<entity.TelegramSticker>>
 
     suspend fun getReactionEffectFilePath(chatId: Long, messageId: Long, emoji: String): String?
+
+    suspend fun getCustomEmojiPath(customEmojiId: Long): String?
 
     fun observeChatTyping(chatId: Long): Flow<String?>
 

@@ -60,11 +60,13 @@ fun GhostMessageBubble(
     isBursting: Boolean = false,
     burstEffectJson: String? = null,
     onBurstFinished: () -> Unit = {},
+    burstEmoji: String? = null,
     onLongClick: () -> Unit,
     onVideoClick: (String) -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     onReactionClick: (Long, String, Boolean) -> Unit,
+    onLoadCustomEmoji: suspend (Long) -> String? = { null },
 ) {
     val isOutgoing = message.isOutgoing
     val isVideo = message.mediaType == MessageMediaType.VIDEO /*|| message.mediaType == MessageMediaType.VIDEO_NOTE*/
@@ -246,30 +248,64 @@ fun GhostMessageBubble(
                 modifier = Modifier.wrapContentSize(),
                 contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart
             ) {
+                // 1. Постоянные капсулы (САЛЮТ ЖИВЕТ ВНУТРИ НИХ И САМ ЗНАЕТ СВОЕ МЕСТО!)
+                ReactionsRow(
+                    reactions = message.reactions,
+                    isOutgoing = isOutgoing,
+                    authorAvatarPath = if (!isOutgoing) message.senderAvatarPath else null,
+                    isBursting = isBursting,
+                    burstEffectJson = burstEffectJson,
+                    burstEmoji = burstEmoji,
+                    onBurstFinished = onBurstFinished,
+                    onReactionClick = { emoji, isChosen ->
+                        onReactionClick(message.id, emoji, isChosen)
+                    },
+                    onLoadCustomEmoji = onLoadCustomEmoji,
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+
+                // 💥 2. ВТОРОЙ САЛЮТ ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ РЕАКЦИЙ ЕЩЕ 0 (ПЕРВЫЙ ЛАЙК НА СООБЩЕНИИ)!
+                // Если реакция уже есть в списке — этот блок НЕ СРАБОТАЕТ, и дубликата не будет!
+                if (message.reactions.isEmpty() && isBursting && !burstEffectJson.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
+                            .offset(
+                                x = if (isOutgoing) (-24).dp else 24.dp,
+                                y = 14.dp
+                            )
+                            .size(0.dp)
+                            .wrapContentSize(align = Alignment.Center, unbounded = true)
+                    ) {
+                        com.ghostgram.app.presentation.components.player.TgsEffectPlayer(
+                            tgsJson = burstEffectJson,
+                            onFinished = onBurstFinished,
+                            modifier = Modifier.size(150.dp)
+                        )
+                    }
+                }
+            }
+            /*Box(
+                modifier = Modifier.wrapContentSize(),
+                contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
                 // Постоянные капсулы реакций
                 if (message.reactions.isNotEmpty()) {
                     ReactionsRow(
                         reactions = message.reactions,
                         isOutgoing = isOutgoing,
                         authorAvatarPath = if (!isOutgoing) message.senderAvatarPath else null,
+                        isBursting = isBursting,
+                        burstEffectJson = burstEffectJson,
+                        burstEmoji = burstEmoji,
+                        onBurstFinished = onBurstFinished,
                         onReactionClick = { emoji, isChosen ->
                             onReactionClick(message.id, emoji, isChosen)
                         },
+                        onLoadCustomEmoji = onLoadCustomEmoji,
                         modifier = Modifier.padding(top = 3.dp)
                     )
                 }
-
-                // 💥 САЛЮТ ВЗРЫВАЕТСЯ ПРЯМО ИЗ КАПСУЛЫ РЕАКЦИИ!
-                /*if (isBursting && !burstEffectJson.isNullOrBlank()) {
-                    com.ghostgram.app.presentation.components.player.TgsEffectPlayer(
-                        tgsJson = burstEffectJson,
-                        onFinished = onBurstFinished,
-                        modifier = Modifier
-                            .size(130.dp) // Идеальный размер для эффекта
-                            .align(if (isOutgoing) Alignment.BottomEnd else Alignment.BottomStart)
-                            .offset(y = 10.dp) // Накрывает капсулу и край пузыря
-                    )
-                }*/
                 if (isBursting && !burstEffectJson.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
@@ -290,7 +326,7 @@ fun GhostMessageBubble(
                         )
                     }
                 }
-            }
+            }*/
         }
     }
 }

@@ -226,31 +226,29 @@ class ChatDetailsViewModel(
                 _state.update { it.copy(activeBurstMessageId = intent.messageId, burstEmoji = intent.emoji) }
             }
             is OnClearBurst -> {
-                _state.update { it.copy(activeBurstMessageId = null, burstEffectJson = null) }
+                _state.update {
+                    it.copy(
+                        activeBurstMessageId = null,
+                        burstEffectJson = null,
+                        burstEmoji = null // 💥 ОЧИЩАЕМ
+                    )
+                }
             }
             is OnPlayReactionEffect -> {
                 viewModelScope.launch {
-                    println("🎬 [EFFECT 1] Запрос эффекта для '${intent.emoji}' msg=${intent.messageId}")
                     val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
-
                     val filePath = repo.getReactionEffectFilePath(chatId, intent.messageId, intent.emoji)
-                    println("🎬 [EFFECT 2] Путь к .tgs файлу: '$filePath'")
-
                     if (!filePath.isNullOrBlank()) {
                         val effectJson = com.ghostgram.app.utils.TgsDecoder.decodeTgsToJson(filePath)
-                        println("🎬 [EFFECT 3] JSON распакован! Длина: ${effectJson?.length ?: 0} символов")
-
                         if (!effectJson.isNullOrBlank()) {
                             _state.update {
                                 it.copy(
                                     activeBurstMessageId = intent.messageId,
-                                    burstEffectJson = effectJson
+                                    burstEffectJson = effectJson,
+                                    burstEmoji = intent.emoji // 💥 ЗАПОМИНАЕМ, ЧТО ВЗРЫВАТЬ!
                                 )
                             }
-                            println("🎬 [EFFECT 4] Стейт обновлен! Запускаем плеер!")
                         }
-                    } else {
-                        println("❌ [EFFECT ERROR] TDLib не вернул путь к файлу эффекта!")
                     }
                 }
             }
@@ -402,6 +400,10 @@ class ChatDetailsViewModel(
                 )
             }
         }
+    }
+    suspend fun getCustomEmojiPath(customEmojiId: Long): String? {
+        val repo = sessionManager.currentSession.value?.chatRepository ?: return null
+        return repo.getCustomEmojiPath(customEmojiId)
     }
 
     private fun sendMedia(repo: ChatRepository) {

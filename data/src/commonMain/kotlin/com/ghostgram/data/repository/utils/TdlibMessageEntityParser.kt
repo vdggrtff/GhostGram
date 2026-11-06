@@ -12,6 +12,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 class TdlibMessageEntityParser(
     private val tdlibClient: TelegramFlowClient,
@@ -261,10 +262,46 @@ class TdlibMessageEntityParser(
             val items = reactionsArr.mapNotNull { elem ->
                 val rObj = elem.jsonObject
                 val typeObj = rObj["type"]?.jsonObject
-                val emoji = typeObj?.get("emoji")?.jsonPrimitive?.content ?: return@mapNotNull null
+                val type = typeObj?.get("@type")?.jsonPrimitive?.content ?: ""
                 val count = rObj["total_count"]?.jsonPrimitive?.intOrNull ?: 1
                 val isChosen = rObj["is_chosen"]?.jsonPrimitive?.booleanOrNull ?: false
-                MessageReactionItem(emoji, count, isChosen)
+
+                // 💥 РАЗРУЛИВАЕМ ВСЕ ТРИ ТИПА РЕАКЦИЙ:
+                when (type) {
+                    // 1. Обычный эмодзи
+                    "reactionTypeEmoji" -> {
+                        val emoji = typeObj?.get("emoji")?.jsonPrimitive?.content ?: return@mapNotNull null
+                        MessageReactionItem(emoji = emoji, count = count, isChosen = isChosen)
+                    }
+
+                    "reactionTypeCustomEmoji" -> {
+                        val customId = typeObj?.get("custom_emoji_id")?.jsonPrimitive?.longOrNull ?: 0L
+
+                        // 💥 Если картинка еще не сохранена — фоново просим TDLib скачать стикер!
+                        if (customId != 0L) {
+                            tdlibClient.send("""{"@type": "getCustomEmojiStickers", "custom_emoji_ids": [$customId]}""")
+                        }
+
+                        MessageReactionItem(
+                            emoji = "", // Без текста!
+                            count = count,
+                            isChosen = isChosen,
+                            customEmojiId = customId,
+                            customEmojiPath = null // Подтянется из кэша стикеров
+                        )
+                    }
+
+                    // 3. 💥 ЗВЕЗДЫ TELEGRAM (Paid reaction):
+                    "reactionTypePaid" -> {
+                        MessageReactionItem(
+                            emoji = "⭐️", // Фирменная звезда Telegram Stars!
+                            count = count,
+                            isChosen = isChosen
+                        )
+                    }
+
+                    else -> null
+                }
             }
 
             if (items.isNotEmpty()) Json.encodeToString(items) else ""
