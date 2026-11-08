@@ -25,8 +25,8 @@ actual fun TgsEffectPlayer(
     )
 
     // 💥 1. ЖЕЛЕЗНЫЙ ТАЙМАУТ: если анимация зависнет или не стартанет — закрываем через 1.5 сек!
-    LaunchedEffect(Unit) {
-        delay(1500)
+    LaunchedEffect(tgsJson) {
+        delay(1300)
         onFinished()
     }
 

@@ -57,6 +57,7 @@ import repository.ChatRepository
 import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
 import usecase.SearchMessagesSemanticUseCase
+import kotlin.time.Clock
 
 class ChatDetailsViewModel(
     savedStateHandle: SavedStateHandle, // Koin сам отдаст его сюда!
@@ -72,6 +73,8 @@ class ChatDetailsViewModel(
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
 
     private var lastTypingSentMs = 0L
+
+    private var lastReactionToggleMs = 0L
 
     private var sessionJob: Job? = null
 
@@ -183,7 +186,13 @@ class ChatDetailsViewModel(
             is OnRunAiSearch -> runAiSearch(repo)
             is OnToggleReaction -> {
                 viewModelScope.launch {
-                    repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen)
+                    repo.toggleReaction(
+                        chatId = chatId,
+                        messageId = intent.messageId,
+                        emoji = intent.emoji,
+                        isChosen = intent.isChosen,
+                        customEmojiId = intent.customEmojiId
+                    )
                 }
             }
             is OnDismissInviteDialog -> _state.update { it.copy(invitePreview = null) }
@@ -605,6 +614,17 @@ class ChatDetailsViewModel(
         }
 
         _state.update { it.copy(currentSearchIndex = newIndex) }
+    }
+
+    private fun handleToggleReaction(repo: ChatRepository, intent: OnToggleReaction) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        // 💥 Защита от спама: не чаще одного переключения в 350мс на сообщение
+        if (now - lastReactionToggleMs < 350) return
+        lastReactionToggleMs = now
+
+        viewModelScope.launch {
+            repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen, intent.customEmojiId)
+        }
     }
 
     override fun onCleared() {

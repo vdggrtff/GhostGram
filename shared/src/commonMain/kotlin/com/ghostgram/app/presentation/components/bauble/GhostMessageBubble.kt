@@ -18,12 +18,18 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,11 +67,11 @@ fun GhostMessageBubble(
     burstEffectJson: String? = null,
     onBurstFinished: () -> Unit = {},
     burstEmoji: String? = null,
-    onLongClick: () -> Unit,
+    onLongClick: (Offset) -> Unit,
     onVideoClick: (String) -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onReactionClick: (Long, String, Boolean) -> Unit,
+    onReactionClick: (Long, String, Long, Boolean) -> Unit,
     onLoadCustomEmoji: suspend (Long) -> String? = { null },
 ) {
     val isOutgoing = message.isOutgoing
@@ -73,6 +79,7 @@ fun GhostMessageBubble(
     val isSticker = message.mediaType == MessageMediaType.STICKER
     val isVideoNote = message.mediaType == MessageMediaType.VIDEO_NOTE
     val hasText = message.text.isNotBlank()
+    var bubbleOffset by remember { mutableStateOf(Offset.Zero) }
 
     // Системное сообщение (например, E2EE handshake)
     if (message.fileExtraInfo == "SYSTEM") {
@@ -115,9 +122,12 @@ fun GhostMessageBubble(
                         max = 290.dp
                     ) // Ограничиваем только максимум, чтобы он сжимался под текст
                     .clip(bubbleShape)
+                    .onGloballyPositioned { coords ->
+                        bubbleOffset = coords.positionInRoot()
+                    }
                     .combinedClickable( // ЛОВИМ ДОЛГИЙ ТАП
                         onClick = {},
-                        onLongClick = onLongClick
+                        onLongClick = { onLongClick(bubbleOffset) }
                     )
                     .then(if (isVideoNote) Modifier else Modifier.clip(bubbleShape))
                     .then(
@@ -172,7 +182,8 @@ fun GhostMessageBubble(
                         MessageMediaType.VIDEO_NOTE -> {
                             VideoNoteContent(
                                 message = message,
-                                onLongClick = onLongClick
+                                onLongClick = onLongClick,
+                                offset = bubbleOffset
                             )
                         }
 
@@ -257,8 +268,8 @@ fun GhostMessageBubble(
                     burstEffectJson = burstEffectJson,
                     burstEmoji = burstEmoji,
                     onBurstFinished = onBurstFinished,
-                    onReactionClick = { emoji, isChosen ->
-                        onReactionClick(message.id, emoji, isChosen)
+                    onReactionClick = { emoji, customEmojiId, isChosen ->
+                        onReactionClick(message.id, emoji, customEmojiId, isChosen)
                     },
                     onLoadCustomEmoji = onLoadCustomEmoji,
                     modifier = Modifier.padding(top = 3.dp)

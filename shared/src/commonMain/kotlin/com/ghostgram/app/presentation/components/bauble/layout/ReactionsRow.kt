@@ -86,7 +86,7 @@ fun ReactionsRow(
     burstEffectJson: String? = null,
     burstEmoji: String? = null,
     onBurstFinished: () -> Unit = {},
-    onReactionClick: (emoji: String, isChosen: Boolean) -> Unit,
+    onReactionClick: (emoji: String, customEmojiId: Long, isChosen: Boolean) -> Unit,
     onLoadCustomEmoji: suspend (Long) -> String? = { null },
     modifier: Modifier = Modifier
 ) {
@@ -132,7 +132,7 @@ fun ReactionsRow(
                         .border(1.dp, capsuleBorder, RoundedCornerShape(16.dp))
                         .clickable {
                             isPressed = true
-                            onReactionClick(item.emoji, isChosen)
+                            onReactionClick(item.emoji, item.customEmojiId, isChosen)
                         }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically

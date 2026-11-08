@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +56,7 @@ import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.presentation.components.animations.FlyingReactionOverlay
+import com.ghostgram.app.presentation.components.dialog.TelegramContextMenu
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
@@ -107,6 +109,7 @@ fun ChatDetailsScreen(
     val coroutineScope = rememberCoroutineScope()
     var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+    var selectedMessageOffset by remember { mutableStateOf(Offset.Zero) }
     val defaultUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     @Suppress("DEPRECATION")
@@ -355,14 +358,16 @@ fun ChatDetailsScreen(
                                         burstEffectJson = state.burstEffectJson, // 💥 Передаем JSON!
                                         onBurstFinished = { onIntent(ChatDetailsIntent.OnClearBurst) },
                                         onMediaClick = { activeViewerMessageId = item.message.id },
-                                        onLongClick = { selectedMessageForMenu = item.message },
+                                        onLongClick = { offset ->
+                                            selectedMessageForMenu = item.message
+                                            selectedMessageOffset = offset // 💥 Запомнили позицию!
+                                        },
                                         replyMessage = repliedMsg,
                                         onVideoClick = {
                                             activeViewerMessageId = item.message.id
                                         },
-                                        onReactionClick = { msgId, emoji, isChosen ->
-                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen))
-                                            // 💥 ЕСЛИ МЫ СТАВИМ РЕАКЦИЮ (не снимаем) — СРАЗУ ЗАПУСКАЕМ САЛЮТ!
+                                        onReactionClick = { msgId, emoji, customEmojiId, isChosen ->
+                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
                                             if (!isChosen) {
                                                 onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
                                             }
@@ -389,15 +394,12 @@ fun ChatDetailsScreen(
                                         isFirstInGroup = isFirstInGroup,
                                         replyMessage = repliedMsg,
                                         onLongClick = { selectedMessageForMenu = baseMsg },
-                                        onReactionClick = { msgId, emoji, isChosen ->
-                                            onIntent(
-                                                ChatDetailsIntent.OnToggleReaction(
-                                                    msgId,
-                                                    emoji,
-                                                    isChosen
-                                                )
-                                            )
-                                        }
+                                        onReactionClick = { msgId, emoji, customEmojiId, isChosen ->
+                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
+                                            if (!isChosen) {
+                                                onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
+                                            }
+                                        },
                                     )
                                 }
                             }
@@ -462,6 +464,16 @@ fun ChatDetailsScreen(
             onDismiss = { onIntent(ChatDetailsIntent.OnDismissInviteDialog) }
         )
     }
+    if (selectedMessageForMenu != null) {
+        TelegramContextMenu(
+            msg = selectedMessageForMenu!!,
+            messagePosition = selectedMessageOffset,
+            availableReactions = state.availableReactions,
+            clipboardManager = clipboardManager,
+            onIntent = onIntent,
+            onDismiss = { selectedMessageForMenu = null }
+        )
+    }
     if (activeViewerMessageId != null) {
         // Фильтруем все сообщения чата, у которых есть фото или видео
         val chatMediaList = remember(state.messages) {
@@ -477,11 +489,11 @@ fun ChatDetailsScreen(
             onDismiss = { activeViewerMessageId = null }
         )
     }
-    ChatDetailsDialogs(
+    /*ChatDetailsDialogs(
         state = state,
         selectedMessageForMenu = selectedMessageForMenu,
         clipboardManager = clipboardManager,
         onDismissMessageMenu = { selectedMessageForMenu = null },
         onIntent = onIntent
-    )
+    )*/
 }
