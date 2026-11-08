@@ -1,7 +1,7 @@
 package com.ghostgram.app.presentation.chats.chat_details
 
-import AccountSession
-import SessionManager
+import session.AccountSession
+import session.SessionManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +10,8 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCan
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCancelReply
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCatchUpClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearBurst
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearFlyingReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmJoinChat
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnConfirmMediaSend
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
@@ -19,8 +21,10 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEdi
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInChatSearchQueryChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnLoadAvailableReactions
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPlayReactionEffect
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetPendingNavigation
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnRunAiSearch
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchNext
@@ -35,9 +39,12 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleCryptoMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleGhostMode
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleInChatSearch
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleMute
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleSendAsDocument
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTriggerBurst
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnTriggerFlyingReaction
 import entity.Message
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,6 +57,7 @@ import repository.ChatRepository
 import usecase.GenerateCatchUpSummaryUseCase
 import usecase.GenerateSmartRepliesUseCase
 import usecase.SearchMessagesSemanticUseCase
+import kotlin.time.Clock
 
 class ChatDetailsViewModel(
     savedStateHandle: SavedStateHandle, // Koin сам отдаст его сюда!
@@ -63,6 +71,10 @@ class ChatDetailsViewModel(
 
     private val _state = MutableStateFlow(ChatDetailsState())
     val state: StateFlow<ChatDetailsState> = _state.asStateFlow()
+
+    private var lastTypingSentMs = 0L
+
+    private var lastReactionToggleMs = 0L
 
     private var sessionJob: Job? = null
 
@@ -86,7 +98,20 @@ class ChatDetailsViewModel(
 
         when (intent) {
             // Текст и сообщения
-            is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
+            //is OnInputChanged -> _state.update { it.copy(inputText = intent.text) }
+            is OnInputChanged -> {
+                _state.update { it.copy(inputText = intent.text) }
+
+                // 💥 КРОССПЛАТФОРМЕННОЕ ВРЕМЯ (KMP):
+                if (intent.text.isNotBlank()) {
+                    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+
+                    if (now - lastTypingSentMs > 3500) {
+                        lastTypingSentMs = now
+                        repo.sendChatAction(chatId)
+                    }
+                }
+            }
             is OnSendMessage -> sendMessage(repo)
             is OnEditMessageClick -> startEditing(intent.message)
             is OnCancelEdit -> _state.update { it.copy(editingMessage = null, inputText = "") }
@@ -161,7 +186,13 @@ class ChatDetailsViewModel(
             is OnRunAiSearch -> runAiSearch(repo)
             is OnToggleReaction -> {
                 viewModelScope.launch {
-                    repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen)
+                    repo.toggleReaction(
+                        chatId = chatId,
+                        messageId = intent.messageId,
+                        emoji = intent.emoji,
+                        isChosen = intent.isChosen,
+                        customEmojiId = intent.customEmojiId
+                    )
                 }
             }
             is OnDismissInviteDialog -> _state.update { it.copy(invitePreview = null) }
@@ -188,6 +219,48 @@ class ChatDetailsViewModel(
             is OnResetPendingNavigation -> {
                 _state.update { it.copy(pendingNavigationChatId = null) }
             }
+            is OnToggleMute -> toggleMute(repo)
+            is OnTriggerFlyingReaction -> _state.update { it.copy(flyingEmoji = intent.emoji) }
+            is OnClearFlyingReaction -> _state.update { it.copy(flyingEmoji = null) }
+            is OnLoadAvailableReactions -> {
+                viewModelScope.launch {
+                    val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+                    val reactions = repo.getAvailableReactions(chatId, intent.messageId)
+                    _state.update { it.copy(availableReactions = reactions) }
+                }
+            }
+
+            // Запуск локального взрыва на сообщении
+            is OnTriggerBurst -> {
+                _state.update { it.copy(activeBurstMessageId = intent.messageId, burstEmoji = intent.emoji) }
+            }
+            is OnClearBurst -> {
+                _state.update {
+                    it.copy(
+                        activeBurstMessageId = null,
+                        burstEffectJson = null,
+                        burstEmoji = null // 💥 ОЧИЩАЕМ
+                    )
+                }
+            }
+            is OnPlayReactionEffect -> {
+                viewModelScope.launch {
+                    val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+                    val filePath = repo.getReactionEffectFilePath(chatId, intent.messageId, intent.emoji)
+                    if (!filePath.isNullOrBlank()) {
+                        val effectJson = com.ghostgram.app.utils.TgsDecoder.decodeTgsToJson(filePath)
+                        if (!effectJson.isNullOrBlank()) {
+                            _state.update {
+                                it.copy(
+                                    activeBurstMessageId = intent.messageId,
+                                    burstEffectJson = effectJson,
+                                    burstEmoji = intent.emoji // 💥 ЗАПОМИНАЕМ, ЧТО ВЗРЫВАТЬ!
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -210,6 +283,47 @@ class ChatDetailsViewModel(
                             isGroup = chat.isGroup,
                             pinnedMessageId = chat.pinnedMessageId
                         )
+                    }
+                }
+            }
+            if (chatId > 0) {
+                launch {
+                    repo.observeUserStatus(chatId).collect { status ->
+                        if (status != null) {
+                            // 💥 Превращаем данные в текст ЗДЕСЬ, в presentation-слое:
+                            val displayText = com.ghostgram.app.utils.TimeFormatter.formatUserStatus(status)
+
+                            _state.update {
+                                it.copy(
+                                    isOnline = status.isOnline,
+                                    statusText = displayText
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            launch {
+                repo.observeChatTyping(chatId).collect { typing ->
+                    println("🧠 [VM TYPING] ViewModel получила статус: '$typing'")
+                    _state.update { it.copy(typingText = typing) }
+                }
+            }
+            launch {
+                repo.observeChat(chatId).collect { chat ->
+                    if (chat != null) {
+                        _state.update {
+                            it.copy(
+                                chatTitle = chat.title,
+                                avatarPath = chat.avatarPath,
+                                unreadCount = chat.unreadCount,
+                                isGroup = chat.isGroup,
+                                memberCount = chat.memberCount,
+                                isChannel = chat.isChannel,
+                                isMuted = chat.isMuted,
+                                pinnedMessageId = chat.pinnedMessageId
+                            )
+                        }
                     }
                 }
             }
@@ -295,6 +409,10 @@ class ChatDetailsViewModel(
                 )
             }
         }
+    }
+    suspend fun getCustomEmojiPath(customEmojiId: Long): String? {
+        val repo = sessionManager.currentSession.value?.chatRepository ?: return null
+        return repo.getCustomEmojiPath(customEmojiId)
     }
 
     private fun sendMedia(repo: ChatRepository) {
@@ -471,6 +589,18 @@ class ChatDetailsViewModel(
             }
         }
     }
+    private fun toggleMute(repo: ChatRepository) {
+        val currentMute = _state.value.isMuted
+        val newMute = !currentMute
+
+        // Оптимистично меняем статус в UI сразу:
+        _state.update { it.copy(isMuted = newMute) }
+
+        viewModelScope.launch {
+            // Шлем команду в TDLib (метод toggleChatMute у нас уже написан в репозитории!)
+            repo.toggleChatMute(chatId, currentMute)
+        }
+    }
 
     private fun navigateSearch(next: Boolean) {
         val results = _state.value.inChatSearchResults
@@ -484,6 +614,17 @@ class ChatDetailsViewModel(
         }
 
         _state.update { it.copy(currentSearchIndex = newIndex) }
+    }
+
+    private fun handleToggleReaction(repo: ChatRepository, intent: OnToggleReaction) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        // 💥 Защита от спама: не чаще одного переключения в 350мс на сообщение
+        if (now - lastReactionToggleMs < 350) return
+        lastReactionToggleMs = now
+
+        viewModelScope.launch {
+            repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen, intent.customEmojiId)
+        }
     }
 
     override fun onCleared() {

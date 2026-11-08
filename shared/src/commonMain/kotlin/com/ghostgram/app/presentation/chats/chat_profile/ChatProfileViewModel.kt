@@ -1,6 +1,6 @@
 package com.ghostgram.app.presentation.chats.chat_profile
 
-import SessionManager
+import session.SessionManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

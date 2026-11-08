@@ -69,13 +69,10 @@ import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostTextSecondary
-import com.ghostgram.app.utils.GhostAudioPlayer
+import com.ghostgram.app.presentation.components.player.GhostAudioPlayer
 import com.ghostgram.app.utils.openVideoInSystemPlayer
 import entity.Message
 import entity.MessageMediaType
-import okio.FileSystem
-import okio.Path.Companion.toPath
-import okio.SYSTEM
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable

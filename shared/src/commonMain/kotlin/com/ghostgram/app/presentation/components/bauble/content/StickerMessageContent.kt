@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.utils.TgsDecoder
-import com.ghostgram.app.utils.TgsStickerPlayer
-import com.ghostgram.app.utils.WebmStickerPlayer
+import com.ghostgram.app.presentation.components.player.TgsStickerPlayer
+import com.ghostgram.app.presentation.components.player.WebmStickerPlayer
 import entity.Message
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO

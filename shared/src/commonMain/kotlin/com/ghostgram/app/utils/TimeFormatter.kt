@@ -44,4 +44,22 @@ object TimeFormatter {
         val d2 = Instant.fromEpochSeconds(unix2.toLong()).toLocalDateTime(TimeZone.currentSystemDefault()).date
         return d1 == d2
     }
+
+    fun formatUserStatus(status: entity.UserOnlineStatus?): String {
+        if (status == null) return "был(а) недавно"
+        if (status.isOnline) return "в сети"
+
+        return when (status.statusType) {
+            "userStatusRecently" -> "был(а) недавно"
+            "userStatusLastWeek" -> "был(а) на этой неделе"
+            "userStatusLastMonth" -> "был(а) в этом месяце"
+            "userStatusOffline" -> {
+                if (status.wasOnline == 0) return "не в сети"
+                val timeStr = formatTime(status.wasOnline)
+                val dateStr = formatDateHeader(status.wasOnline)
+                if (dateStr == "Сегодня") "был(а) в $timeStr" else "был(а) $dateStr в $timeStr"
+            }
+            else -> "был(а) недавно"
+        }
+    }
 }

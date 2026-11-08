@@ -31,24 +31,47 @@ import com.ghostgram.app.ui.theme.GhostPrimary
 import com.ghostgram.app.ui.theme.GhostTextSecondary
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Chat
+import entity.MessageMediaType
 
 @Composable
 fun GhostChatListItem(
     chat: Chat,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier // 💥 1. ТЕПЕРЬ ПРИНИМАЕТ MODIFIER СНАРУЖИ ДЛЯ АНИМАЦИИ!
 ) {
-    val timeString = TimeFormatter.formatTime(chat.lastMessage?.date ?: 0)
+    // 💥 2. Безопасное время: показываем только если дата реально существует!
+    val timeString = if ((chat.lastMessage?.date ?: 0) > 0) {
+        TimeFormatter.formatTime(chat.lastMessage!!.date)
+    } else ""
+
+    // 💥 3. Умное превью медиа: если текста нет, но отправлена фотка/стикер/кружок
+    val previewSubtitle = when {
+        chat.lastMessage == null -> "Нет сообщений"
+        chat.lastMessage!!.text.isNotBlank() -> chat.lastMessage!!.text
+        chat.lastMessage!!.mediaType == MessageMediaType.PHOTO -> "📷 Фотография"
+        chat.lastMessage!!.mediaType == MessageMediaType.VIDEO -> "📹 Видео"
+        chat.lastMessage!!.mediaType == MessageMediaType.VIDEO_NOTE -> "📹 Видеосообщение"
+        chat.lastMessage!!.mediaType == MessageMediaType.VOICE -> "🎤 Голосовое сообщение"
+        chat.lastMessage!!.mediaType == MessageMediaType.STICKER -> "✨ Стикер"
+        chat.lastMessage!!.mediaType == MessageMediaType.DOCUMENT -> "📎 Файл: ${chat.lastMessage!!.fileName ?: ""}".trim()
+        else -> "Сообщение"
+    }
+
     Row(
-        modifier = Modifier
+        modifier = modifier // 💥 ПРИМЕНЯЕМ ВХОДНОЙ MODIFIER ПЕРВЫМ!
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp), // От края до края!
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // АВАТАРКА
-        if (chat.avatarPath != null) {
+        val avatarModel = chat.avatarPath?.let {
+            if (it.startsWith("/")) "file://$it" else it
+        }
+
+        if (avatarModel != null) {
             AsyncImage(
-                model = chat.avatarPath,
+                model = avatarModel,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(54.dp).clip(CircleShape)
@@ -78,17 +101,17 @@ fun GhostChatListItem(
                 text = chat.title,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
 
             Text(
-                text = chat.lastMessage?.text ?: "Нет сообщений",
+                text = previewSubtitle, // 💥 Красивый умный текст
                 color = GhostTextSecondary,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -99,15 +122,18 @@ fun GhostChatListItem(
         // ВРЕМЯ И СЧЕТЧИК НЕПРОЧИТАННЫХ
         Column(
             horizontalAlignment = Alignment.End,
-            modifier = Modifier.height(44.dp), // Фиксируем высоту, чтобы элементы не прыгали
+            modifier = Modifier.height(44.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Временно хардкодим время (в следующем шаге достанем реальное из TDLib)
-            Text(
-                text = timeString,
-                color = GhostTextSecondary,
-                fontSize = 12.sp
-            )
+            if (timeString.isNotBlank()) {
+                Text(
+                    text = timeString,
+                    color = GhostTextSecondary,
+                    fontSize = 12.sp
+                )
+            } else {
+                Spacer(modifier = Modifier.height(14.dp))
+            }
 
             if (chat.unreadCount > 0) {
                 Box(
@@ -127,7 +153,7 @@ fun GhostChatListItem(
                     )
                 }
             } else {
-                Spacer(modifier = Modifier.size(22.dp)) // Пустое место, чтобы текст не прыгал
+                Spacer(modifier = Modifier.size(22.dp))
             }
         }
     }

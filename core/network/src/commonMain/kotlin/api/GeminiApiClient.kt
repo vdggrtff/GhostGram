@@ -1,7 +1,7 @@
 package api
 
 import com.ghostgram.core.network.BuildConfig
-import entity.LocalSettingsManager
+import repository.SettingsRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -16,7 +16,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class GeminiApiClient(
     private val httpClient: HttpClient,
-    private val settingsManager: LocalSettingsManager
+    private val settingsRepository: SettingsRepository
 ) {
 
     private val supabaseUrl = BuildConfig.SUPABASE_URL
@@ -26,7 +26,7 @@ class GeminiApiClient(
 
     suspend fun generateText(prompt: String): String {
         // ДОСТАЕМ ЛИЧНЫЙ КЛЮЧ ЮЗЕРА
-        val personalKey = settingsManager.getGeminiKey().trim()
+        val personalKey = settingsRepository.getGeminiApiKey().trim()
 
         println("🤖 [GEMINI CLIENT] Старт генерации! Длина промпта: ${prompt.length} символов")
         println("🔑 [GEMINI CLIENT] Личный ключ: ${if (personalKey.isNotBlank()) "ЕСТЬ (${personalKey.take(6)}...)" else "НЕТ (пусто)"}")

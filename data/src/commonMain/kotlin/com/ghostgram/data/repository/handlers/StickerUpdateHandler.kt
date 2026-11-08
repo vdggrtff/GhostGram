@@ -4,6 +4,7 @@ import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.data.repository.utils.DownloadTracker
 import entity.TelegramSticker
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -11,10 +12,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 class StickerUpdateHandler(
-    private val recentStickers: MutableStateFlow<List<TelegramSticker>>,
     private val tdlibClient: TelegramFlowClient,
     private val tracker: DownloadTracker
 ) : TdlibUpdateHandler {
+
+    private val _recentStickers = MutableStateFlow<List<TelegramSticker>>(emptyList())
+    val recentStickers = _recentStickers.asStateFlow()
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         // ЛОВИМ ОТВЕТ С НЕСТАНДАРТНЫМИ / НЕДАВНИМИ СТИКЕРАМИ
@@ -51,7 +54,7 @@ class StickerUpdateHandler(
                 )
             }
 
-            recentStickers.value = list
+            _recentStickers.value = list
             return true
         }
 

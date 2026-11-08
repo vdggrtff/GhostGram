@@ -6,7 +6,9 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnToggleStickers
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsState
 import com.ghostgram.app.presentation.components.bottom_sheet.StickerBottomSheet
-import com.ghostgram.app.presentation.components.dialog.*
+import com.ghostgram.app.presentation.components.dialog.GhostAlertDialog
+import com.ghostgram.app.presentation.components.dialog.PendingMediaDialog
+import com.ghostgram.app.presentation.components.dialog.SelectedMessageForMenuDialog
 import entity.Message
 
 @Composable
@@ -32,6 +34,7 @@ fun ChatDetailsDialogs(
         SelectedMessageForMenuDialog(
             msg = selectedMessageForMenu,
             clipboardManager = clipboardManager,
+            availableReactions = state.availableReactions,
             onIntent = onIntent,
             onDismiss = onDismissMessageMenu
         )

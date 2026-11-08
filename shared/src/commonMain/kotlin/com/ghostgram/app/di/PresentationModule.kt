@@ -29,7 +29,7 @@ val presentationModule = module {
 
     viewModel { AuthViewModel(sessionManager = get()) }
 
-    viewModel { SettingsViewModel(sessionManager = get(), settingsManager = get()) }
+    viewModel { SettingsViewModel(sessionManager = get(), settingsRepository = get()) }
 
     viewModel { ContactsViewModel(sessionManager = get()) }
 

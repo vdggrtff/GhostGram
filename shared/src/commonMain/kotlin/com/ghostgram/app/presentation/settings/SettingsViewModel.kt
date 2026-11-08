@@ -1,10 +1,10 @@
 package com.ghostgram.app.presentation.settings
 
-import AccountSession
-import SessionManager
+import session.AccountSession
+import session.SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import entity.LocalSettingsManager
+import com.ghostgram.data.local.LocalSettingsManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import repository.SettingsRepository
 
 data class SettingsState(
     val accounts: List<AccountSession> = emptyList(),
@@ -32,7 +33,7 @@ data class SettingsState(
 
 class SettingsViewModel(
     private val sessionManager: SessionManager,
-    private val settingsManager: LocalSettingsManager
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -61,7 +62,7 @@ class SettingsViewModel(
                 }
             }
         }
-        val savedKey = settingsManager.getGeminiKey()
+        val savedKey = settingsRepository.getGeminiApiKey()
         _state.update { it.copy(geminiApiKey = savedKey) }
     }
 
@@ -127,7 +128,7 @@ class SettingsViewModel(
         val cleanKey = key.trim()
 
         // 💥 ВОТ ОНО: ВЫЗЫВАЕМ ТОТ САМЫЙ МЕТОД СОХРАНЕНИЯ В ФАЙЛ!
-        settingsManager.saveGeminiKey(cleanKey)
+        settingsRepository.saveGeminiApiKey(cleanKey)
 
         _state.update {
             it.copy(

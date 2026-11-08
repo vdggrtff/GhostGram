@@ -24,17 +24,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearFlyingReaction
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsScreen
 import com.ghostgram.app.presentation.chats.chat_details.utils.ChatDetailsDialogs
 import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem
 import com.ghostgram.app.presentation.chats.chat_details.utils.getSenderKey
@@ -44,6 +47,7 @@ import com.ghostgram.app.presentation.chats.chat_details.utils.shouldShowDateHea
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
 import com.ghostgram.app.presentation.components.fab.FabGetDown
+import com.ghostgram.app.presentation.components.input.ChannelBottomBar
 import com.ghostgram.app.presentation.components.input.GhostInput
 import com.ghostgram.app.presentation.components.topbar.GhostTopBar
 import com.ghostgram.app.presentation.components.topbar.InChatSearchBar
@@ -51,13 +55,13 @@ import com.ghostgram.app.presentation.components.utils.GhostMediaViewer
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
+import com.ghostgram.app.presentation.components.animations.FlyingReactionOverlay
+import com.ghostgram.app.presentation.components.dialog.TelegramContextMenu
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -82,7 +86,8 @@ fun ChatDetailsRoute(
         },
         onNavigateToChat = onNavigateToChat,
         scrollToMessageId = scrollToMessageId,
-        onMessageScrolled = onMessageScrolled
+        onMessageScrolled = onMessageScrolled,
+        onLoadCustomEmoji = { emojiId -> viewModel.getCustomEmojiPath(emojiId) }
     )
 }
 
@@ -97,12 +102,14 @@ fun ChatDetailsScreen(
     onNavigateToChat: (Long) -> Unit,
     scrollToMessageId: Long? = null,
     onMessageScrolled: () -> Unit = {},
+    onLoadCustomEmoji: suspend (Long) -> String? = { null },
     listState: LazyListState = rememberLazyListState(),
 ) {
 
     val coroutineScope = rememberCoroutineScope()
     var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
     var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+    var selectedMessageOffset by remember { mutableStateOf(Offset.Zero) }
     val defaultUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     @Suppress("DEPRECATION")
@@ -239,6 +246,11 @@ fun ChatDetailsScreen(
                         isGhostMode = state.isGhostMode,
                         isCryptoMode = state.isCryptoMode,
                         isGroup = state.isGroup,
+                        isChannel = state.isChannel,
+                        memberCount = state.memberCount,
+                        typingText = state.typingText,
+                        isOnline = state.isOnline,
+                        statusText = state.statusText,
                         onIntent = onIntent,
                         onBackClick = onBackClick,
                         onProfileClick = onProfileClick,
@@ -246,17 +258,24 @@ fun ChatDetailsScreen(
                 }
             },
             bottomBar = {
-                GhostInput(
-                    isCatchUpLoading = state.isCatchUpLoading,
-                    unreadCount = state.unreadCount,
-                    smartReplies = state.smartReplies,
-                    isRepliesLoading = state.isRepliesLoading,
-                    inputText = state.inputText,
-                    onIntent = onIntent,
-                    fileLauncher = fileLauncher,
-                    replyingToMessage = state.replyingToMessage,
-                    editingMessage = state.editingMessage
-                )
+                if (state.isChannel) {
+                    ChannelBottomBar(
+                        isMuted = state.isMuted,
+                        onToggleMute = { onIntent(ChatDetailsIntent.OnToggleMute) } // или твой вызов мута
+                    )
+                } else {
+                    GhostInput(
+                        isCatchUpLoading = state.isCatchUpLoading,
+                        unreadCount = state.unreadCount,
+                        smartReplies = state.smartReplies,
+                        isRepliesLoading = state.isRepliesLoading,
+                        inputText = state.inputText,
+                        onIntent = onIntent,
+                        fileLauncher = fileLauncher,
+                        replyingToMessage = state.replyingToMessage,
+                        editingMessage = state.editingMessage
+                    )
+                }
             },
             floatingActionButton = {
                 FabGetDown(
@@ -335,18 +354,26 @@ fun ChatDetailsScreen(
                                         isGroup = state.isGroup,
                                         isFirstInGroup = isFirstInGroup, // 👈
                                         isLastInGroup = isLastInGroup,   // 👈
+                                        isBursting = state.activeBurstMessageId == item.message.id,
+                                        burstEffectJson = state.burstEffectJson, // 💥 Передаем JSON!
+                                        onBurstFinished = { onIntent(ChatDetailsIntent.OnClearBurst) },
                                         onMediaClick = { activeViewerMessageId = item.message.id },
-                                        onLongClick = { selectedMessageForMenu = item.message },
+                                        onLongClick = { offset ->
+                                            selectedMessageForMenu = item.message
+                                            selectedMessageOffset = offset // 💥 Запомнили позицию!
+                                        },
                                         replyMessage = repliedMsg,
-                                        onReactionClick = { msgId, emoji, isChosen ->
-                                            onIntent(
-                                                ChatDetailsIntent.OnToggleReaction(
-                                                    msgId,
-                                                    emoji,
-                                                    isChosen
-                                                )
-                                            )
-                                        }
+                                        onVideoClick = {
+                                            activeViewerMessageId = item.message.id
+                                        },
+                                        onReactionClick = { msgId, emoji, customEmojiId, isChosen ->
+                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
+                                            if (!isChosen) {
+                                                onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
+                                            }
+                                        },
+                                        onLoadCustomEmoji = onLoadCustomEmoji,
+                                        burstEmoji = state.burstEmoji,
                                     )
                                 }
                             }
@@ -367,15 +394,12 @@ fun ChatDetailsScreen(
                                         isFirstInGroup = isFirstInGroup,
                                         replyMessage = repliedMsg,
                                         onLongClick = { selectedMessageForMenu = baseMsg },
-                                        onReactionClick = { msgId, emoji, isChosen ->
-                                            onIntent(
-                                                ChatDetailsIntent.OnToggleReaction(
-                                                    msgId,
-                                                    emoji,
-                                                    isChosen
-                                                )
-                                            )
-                                        }
+                                        onReactionClick = { msgId, emoji, customEmojiId, isChosen ->
+                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
+                                            if (!isChosen) {
+                                                onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
+                                            }
+                                        },
                                     )
                                 }
                             }
@@ -425,6 +449,10 @@ fun ChatDetailsScreen(
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
+               FlyingReactionOverlay(
+                    emoji = state.flyingEmoji,
+                    onFinished = { onIntent(OnClearFlyingReaction) }
+                )
             }
         }
     }
@@ -434,6 +462,16 @@ fun ChatDetailsScreen(
             isLoading = state.isJoiningChat,
             onJoinClick = { onIntent(ChatDetailsIntent.OnConfirmJoinChat(state.invitePreview!!.inviteLink)) },
             onDismiss = { onIntent(ChatDetailsIntent.OnDismissInviteDialog) }
+        )
+    }
+    if (selectedMessageForMenu != null) {
+        TelegramContextMenu(
+            msg = selectedMessageForMenu!!,
+            messagePosition = selectedMessageOffset,
+            availableReactions = state.availableReactions,
+            clipboardManager = clipboardManager,
+            onIntent = onIntent,
+            onDismiss = { selectedMessageForMenu = null }
         )
     }
     if (activeViewerMessageId != null) {
@@ -451,11 +489,11 @@ fun ChatDetailsScreen(
             onDismiss = { activeViewerMessageId = null }
         )
     }
-    ChatDetailsDialogs(
+    /*ChatDetailsDialogs(
         state = state,
         selectedMessageForMenu = selectedMessageForMenu,
         clipboardManager = clipboardManager,
         onDismissMessageMenu = { selectedMessageForMenu = null },
         onIntent = onIntent
-    )
+    )*/
 }

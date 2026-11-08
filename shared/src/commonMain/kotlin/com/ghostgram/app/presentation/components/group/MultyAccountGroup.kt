@@ -1,6 +1,6 @@
 package com.ghostgram.app.presentation.components.group
 
-import AccountSession
+import session.AccountSession
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

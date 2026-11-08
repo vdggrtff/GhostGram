@@ -1,8 +1,7 @@
 package usecase
 
-import SessionManager
+import session.SessionManager
 import repository.AiRepository
-import repository.ChatRepository
 
 class GenerateSmartRepliesUseCase(
     private val sessionManager: SessionManager,

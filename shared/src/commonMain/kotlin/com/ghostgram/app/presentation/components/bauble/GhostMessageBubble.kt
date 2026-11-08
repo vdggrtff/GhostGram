@@ -10,17 +10,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +51,7 @@ import com.ghostgram.app.presentation.components.utils.ReplyToMessage
 import com.ghostgram.app.ui.theme.GhostAccentRed
 import com.ghostgram.app.ui.theme.GhostSecureGreen
 import com.ghostgram.app.ui.theme.TelegramColors
+import com.ghostgram.app.presentation.components.animations.MessageParticleBurst
 import entity.Message
 import entity.MessageMediaType
 
@@ -53,16 +63,23 @@ fun GhostMessageBubble(
     isFirstInGroup: Boolean = true, // Новые параметры
     isLastInGroup: Boolean = true,
     replyMessage: Message? = null,
-    onLongClick: () -> Unit,
+    isBursting: Boolean = false,
+    burstEffectJson: String? = null,
+    onBurstFinished: () -> Unit = {},
+    burstEmoji: String? = null,
+    onLongClick: (Offset) -> Unit,
+    onVideoClick: (String) -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    onReactionClick: (Long, String, Boolean) -> Unit,
+    onReactionClick: (Long, String, Long, Boolean) -> Unit,
+    onLoadCustomEmoji: suspend (Long) -> String? = { null },
 ) {
     val isOutgoing = message.isOutgoing
     val isVideo = message.mediaType == MessageMediaType.VIDEO /*|| message.mediaType == MessageMediaType.VIDEO_NOTE*/
     val isSticker = message.mediaType == MessageMediaType.STICKER
     val isVideoNote = message.mediaType == MessageMediaType.VIDEO_NOTE
     val hasText = message.text.isNotBlank()
+    var bubbleOffset by remember { mutableStateOf(Offset.Zero) }
 
     // Системное сообщение (например, E2EE handshake)
     if (message.fileExtraInfo == "SYSTEM") {
@@ -105,20 +122,20 @@ fun GhostMessageBubble(
                         max = 290.dp
                     ) // Ограничиваем только максимум, чтобы он сжимался под текст
                     .clip(bubbleShape)
+                    .onGloballyPositioned { coords ->
+                        bubbleOffset = coords.positionInRoot()
+                    }
                     .combinedClickable( // ЛОВИМ ДОЛГИЙ ТАП
                         onClick = {},
-                        onLongClick = onLongClick
+                        onLongClick = { onLongClick(bubbleOffset) }
                     )
                     .then(if (isVideoNote) Modifier else Modifier.clip(bubbleShape))
                     .then(
                         when {
-                            /*isSticker || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
-                            else -> Modifier.background(backgroundColor)*/
                             isSticker || isVideoNote || (isVideo && !hasText) -> Modifier.background(Color.Transparent)
                             else -> Modifier.background(backgroundColor)
                         }
                     )
-                    //.padding(horizontal = 12.dp, vertical = 7.dp)
                     .padding(
                         horizontal = if (isVideoNote) 0.dp else 12.dp,
                         vertical = if (isVideoNote) 0.dp else 7.dp
@@ -155,19 +172,18 @@ fun GhostMessageBubble(
                             }
                         }
 
-                        MessageMediaType.VIDEO/*, MessageMediaType.VIDEO_NOTE */-> {
+                        MessageMediaType.VIDEO-> {
                             VideoMessageContent(
                                 message = message,
-                                bubbleShape = bubbleShape,
-                                hasText = hasText,
-                                isOutgoing = isOutgoing
+                                onVideoClick = onVideoClick,
                             )
                         }
 
                         MessageMediaType.VIDEO_NOTE -> {
                             VideoNoteContent(
                                 message = message,
-                                onLongClick = onLongClick
+                                onLongClick = onLongClick,
+                                offset = bubbleOffset
                             )
                         }
 
@@ -206,9 +222,6 @@ fun GhostMessageBubble(
                         val displayText = if (isEncrypted) "🔒 ${message.text}" else message.text
 
                         // 💥 Превращаем обычный текст в подсвеченный!
-                       /* val annotatedText = remember(displayText, searchQuery) {
-                            HighlightUtils.buildHighlightedText(displayText, searchQuery)
-                        }*/
                         val annotatedText = remember(displayText, searchQuery) {
                             LinkifyUtils.createLinkedText(
                                 text = displayText,
@@ -242,16 +255,89 @@ fun GhostMessageBubble(
                     )
                 }
             }
-            if (message.reactions.isNotEmpty()) {
+            Box(
+                modifier = Modifier.wrapContentSize(),
+                contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                // 1. Постоянные капсулы (САЛЮТ ЖИВЕТ ВНУТРИ НИХ И САМ ЗНАЕТ СВОЕ МЕСТО!)
                 ReactionsRow(
                     reactions = message.reactions,
                     isOutgoing = isOutgoing,
-                    onReactionClick = { emoji, isChosen ->
-                        onReactionClick(message.id, emoji, isChosen)
+                    authorAvatarPath = if (!isOutgoing) message.senderAvatarPath else null,
+                    isBursting = isBursting,
+                    burstEffectJson = burstEffectJson,
+                    burstEmoji = burstEmoji,
+                    onBurstFinished = onBurstFinished,
+                    onReactionClick = { emoji, customEmojiId, isChosen ->
+                        onReactionClick(message.id, emoji, customEmojiId, isChosen)
                     },
+                    onLoadCustomEmoji = onLoadCustomEmoji,
                     modifier = Modifier.padding(top = 3.dp)
                 )
+
+                // 💥 2. ВТОРОЙ САЛЮТ ПОКАЗЫВАЕМ ТОЛЬКО ЕСЛИ РЕАКЦИЙ ЕЩЕ 0 (ПЕРВЫЙ ЛАЙК НА СООБЩЕНИИ)!
+                // Если реакция уже есть в списке — этот блок НЕ СРАБОТАЕТ, и дубликата не будет!
+                if (message.reactions.isEmpty() && isBursting && !burstEffectJson.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
+                            .offset(
+                                x = if (isOutgoing) (-24).dp else 24.dp,
+                                y = 14.dp
+                            )
+                            .size(0.dp)
+                            .wrapContentSize(align = Alignment.Center, unbounded = true)
+                    ) {
+                        com.ghostgram.app.presentation.components.player.TgsEffectPlayer(
+                            tgsJson = burstEffectJson,
+                            onFinished = onBurstFinished,
+                            modifier = Modifier.size(150.dp)
+                        )
+                    }
+                }
             }
+            /*Box(
+                modifier = Modifier.wrapContentSize(),
+                contentAlignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                // Постоянные капсулы реакций
+                if (message.reactions.isNotEmpty()) {
+                    ReactionsRow(
+                        reactions = message.reactions,
+                        isOutgoing = isOutgoing,
+                        authorAvatarPath = if (!isOutgoing) message.senderAvatarPath else null,
+                        isBursting = isBursting,
+                        burstEffectJson = burstEffectJson,
+                        burstEmoji = burstEmoji,
+                        onBurstFinished = onBurstFinished,
+                        onReactionClick = { emoji, isChosen ->
+                            onReactionClick(message.id, emoji, isChosen)
+                        },
+                        onLoadCustomEmoji = onLoadCustomEmoji,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+                if (isBursting && !burstEffectJson.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart)
+                            // 💥 Ставим анкер РОВНО в центр капсулы реакции:
+                            .offset(
+                                x = if (isOutgoing) (-24).dp else 24.dp,
+                                y = 14.dp
+                            )
+                            // 💥 Размер 0x0 dp: сообщение не сдвинется ни на 1 пиксель!
+                            .size(0.dp)
+                            .wrapContentSize(align = Alignment.Center, unbounded = true)
+                    ) {
+                        com.ghostgram.app.presentation.components.player.TgsEffectPlayer(
+                            tgsJson = burstEffectJson,
+                            onFinished = onBurstFinished,
+                            modifier = Modifier.size(150.dp)
+                        )
+                    }
+                }
+            }*/
         }
     }
 }

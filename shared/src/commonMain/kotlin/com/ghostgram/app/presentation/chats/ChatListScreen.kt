@@ -72,8 +72,7 @@ fun ChatListScreen(
     onIntent: (ChatListIntent) -> Unit,
     onNavigateToChat: (Long) -> Unit,
 ) {
-    // Выбранная вкладка (пока только UI-переключатель)
-    var selectedTab by remember { mutableStateOf(0) }
+
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -169,8 +168,6 @@ fun ChatListScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                // Отступ снизу, чтобы наш парящий BottomBar не перекрывал последнее сообщение!
-                //contentPadding = PaddingValues(bottom = 100.dp)
                 contentPadding = PaddingValues(
                     top = 8.dp,
                     bottom = 96.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -292,13 +289,17 @@ fun ChatListScreen(
                 }
                 // ИНАЧЕ - ОБЫЧНЫЙ СПИСОК ТВОИХ ЧАТОВ
                 else {
-                    items(state.chats, key = { it.id }) { chat ->
+                    items(
+                        items = state.chats,
+                        key = { it.id } // 💥 Ключ связывает анимацию с чатом!
+                    ) { chat ->
                         GhostChatListItem(
                             chat = chat,
-                            onClick = { onNavigateToChat(chat.id) }
+                            onClick = { onNavigateToChat(chat.id) },
+                            // 💥 МАГИЯ COMPOSE: ЧАТ ПЛАВНО СКОЛЬЗИТ НА 1-Е МЕСТО!
+                            modifier = Modifier.animateItem()
                         )
                     }
-
                 }
             }
         }

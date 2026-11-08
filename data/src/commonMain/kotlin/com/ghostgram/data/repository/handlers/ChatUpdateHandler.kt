@@ -2,53 +2,65 @@ package com.ghostgram.data.repository.handlers
 
 import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
+import com.ghostgram.data.repository.utils.ChatMemoryCache
 import com.ghostgram.data.repository.utils.DownloadTracker
 import entity.Chat
 import entity.Message
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlin.collections.emptyList
+import kotlin.to
 
 class ChatUpdateHandler(
-    private val chatsMap: MutableStateFlow<Map<Long, Chat>>,
-    private val lastReadOutboxMap: MutableMap<Long, Long>,
+    private val chatCache: ChatMemoryCache,
     private val tdlibClient: TelegramFlowClient,
     private val messageDao: MessageDao,
     private val repoScope: CoroutineScope,
-    private val tracker: DownloadTracker
+    private val tracker: DownloadTracker,
 ) : TdlibUpdateHandler {
+
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         when (type) {
 
             // 1. ЗАГРУЗКА ИЛИ ОБНОВЛЕНИЕ ЧАТА
             "updateNewChat", "chat" -> {
-                val chatObj = if (type == "chat") jsonObject else jsonObject["chat"]?.jsonObject ?: return true
+                val chatObj = if (type == "chat") jsonObject else jsonObject["chat"]?.jsonObject
+                    ?: return true
                 val id = chatObj["id"]?.jsonPrimitive?.longOrNull ?: return true
                 val title = chatObj["title"]?.jsonPrimitive?.content ?: "Без названия"
                 val unreadCount = chatObj["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
                 val lastMsgObj = chatObj["last_message"]?.jsonObject
                 val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
                 val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
-                val lastReadOutbox = chatObj["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
-                if (lastReadOutbox != 0L) lastReadOutboxMap[id] = lastReadOutbox
+                val lastReadOutbox =
+                    chatObj["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                if (lastReadOutbox != 0L) chatCache.lastReadOutboxMap[id] = lastReadOutbox
                 val photoObj = chatObj["photo"]?.jsonObject
                 val smallPhoto = photoObj?.get("small")?.jsonObject
                 val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
-                val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                val avatarPath =
+                    smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
                 val positions = chatObj["positions"]?.jsonArray
                 val isJoined = positions != null && positions.isNotEmpty()
                 val typeObj = chatObj["type"]?.jsonObject
-                val chatTypeStr = typeObj?.get("@type")?.jsonPrimitive?.content ?: ""
-                val isGroup = chatTypeStr in listOf("chatTypeBasicGroup", "chatTypeSupergroup", "chatTypeChannel")
+                val typeStr = typeObj?.get("@type")?.jsonPrimitive?.content ?: ""
                 val pinnedMsgId = chatObj["pinned_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
+                val isChannel = typeObj?.get("is_channel")?.jsonPrimitive?.booleanOrNull ?: false
+                val isGroup = (typeStr in listOf("chatTypeBasicGroup", "chatTypeSupergroup")) && !isChannel
+                val notifObj = chatObj["notification_settings"]?.jsonObject
+                val muteFor = notifObj?.get("mute_for")?.jsonPrimitive?.intOrNull ?: 0
+                val isMuted = muteFor > 0
 
                 // Если фото нет на диске, но есть ID — качаем!
                 if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
@@ -57,138 +69,141 @@ class ChatUpdateHandler(
                 }
 
                 val lastMessage = if (previewText != null) {
-                   Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
+                    Message(
+                        id = 0,
+                        chatId = id,
+                        senderName = "",
+                        text = previewText,
+                        date = dateUnix
+                    )
                 } else null
 
                 //chatsMap.update { it + (id to chat) }
-                chatsMap.update { current ->
-                    val existing = current[id]
+                chatCache.putOrUpdate(id) { existing ->
                     val path = if (!avatarPath.isNullOrBlank()) avatarPath else existing?.avatarPath
                     val lastMessage = if (previewText != null) {
                         Message(id = 0, chatId = id, senderName = "", text = previewText, date = dateUnix)
                     } else existing?.lastMessage
 
-                    if (existing != null) {
-                        current + (id to existing.copy(
-                            title = title,
-                            unreadCount = unreadCount,
-                            lastMessage = lastMessage,
-                            avatarPath = path,
-                            isJoined = isJoined,
-                            isGroup = isGroup,
-                            pinnedMessageId = pinnedMsgId
-                        ))
-                    } else {
-                        current + (id to Chat(
-                            id = id,
-                            title = title,
-                            unreadCount = unreadCount,
-                            lastMessage = lastMessage,
-                            avatarPath = path,
-                            isJoined = isJoined,
-                            isGroup = isGroup,
-                            pinnedMessageId = pinnedMsgId
-                        ))
-                    }
+                    existing?.copy(
+                        title = title, unreadCount = unreadCount, lastMessage = lastMessage,
+                        avatarPath = path, isJoined = isJoined, isMuted = isMuted,
+                        isGroup = isGroup, isChannel = isChannel, pinnedMessageId = pinnedMsgId
+                    ) ?: Chat(
+                        id = id, title = title, unreadCount = unreadCount, lastMessage = lastMessage,
+                        avatarPath = path, isJoined = isJoined, isMuted = isMuted,
+                        isGroup = isGroup, isChannel = isChannel, pinnedMessageId = pinnedMsgId
+                    )
                 }
                 return true
             }
+
             "updateChatPhoto" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
                 val photoObj = jsonObject["photo"]?.jsonObject
                 val smallPhoto = photoObj?.get("small")?.jsonObject
-                val fileId = smallPhoto?.get("id")?.jsonPrimitive?.intOrNull
-                val avatarPath = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
-
-                if (avatarPath.isNullOrBlank() && fileId != null && fileId != 0) {
-                    tracker.chatAvatars[fileId] = chatId
-                    tdlibClient.send("""{"@type": "downloadFile", "file_id": $fileId, "priority": 32, "offset": 0, "limit": 0, "synchronous": false}""")
-                }
-
-                if (!avatarPath.isNullOrBlank()) {
-                    chatsMap.update { current ->
-                        val chat = current[chatId]
-                        if (chat != null) current + (chatId to chat.copy(avatarPath = avatarPath)) else current
-                    }
-                }
+                val path = smallPhoto?.get("local")?.jsonObject?.get("path")?.jsonPrimitive?.content
+                chatCache.updateChat(chatId) { it.copy(avatarPath = path) }
                 return true
             }
+
             "updateChatPosition" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
-                val positionObj = jsonObject["position"]?.jsonObject ?: return true
-                val listType = positionObj["list"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
+                val position = jsonObject["position"]?.jsonObject ?: return false
+                val listType = position["list"]?.jsonObject?.get("@type")?.jsonPrimitive?.content
 
-                // Нас интересует только главный список чатов
-                if (listType == "chatListMain") {
-                    val order = positionObj["order"]?.jsonPrimitive?.longOrNull ?: 0L
-
-                    chatsMap.update { current ->
-                        val chat = current[chatId]
-                        // Обновляем позицию чата
-                        if (chat != null) current + (chatId to chat.copy(order = order)) else current
-                    }
+                if (listType == "chatListMain" || listType == null) {
+                    val order = position["order"]?.jsonPrimitive?.longOrNull ?: 0L
+                    chatCache.updateChat(chatId) { it.copy(order = order) }
                 }
                 return true
             }
+
             "updateChatLastMessage" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
                 val lastMsgObj = jsonObject["last_message"]?.jsonObject
-                val dateUnix = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
+                val positions = jsonObject["positions"]?.jsonArray
 
-                val previewText = parsePreviewText(lastMsgObj?.get("content")?.jsonObject)
+                // Достаем новый порядок (order)
+                val newOrder = positions?.firstOrNull()?.jsonObject?.get("order")?.jsonPrimitive?.longOrNull
 
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) {
-                        val lastMessage = if (previewText != null) {
-                            Message(id = 0, chatId = chatId, senderName = "", text = previewText, date = dateUnix)
-                        } else null
-
-                        current + (chatId to chat.copy(lastMessage = lastMessage))
-                    } else {
-                        current
+                val contentObj = lastMsgObj?.get("content")?.jsonObject
+                val previewText = contentObj?.get("text")?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: contentObj?.get("caption")?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: when (contentObj?.get("@type")?.jsonPrimitive?.content) {
+                        "messagePhoto" -> "📷 Фотография"
+                        "messageVideo" -> "📹 Видео"
+                        "messageVoiceNote" -> "🎤 Голосовое сообщение"
+                        "messageSticker" -> "✨ Стикер"
+                        "messageDocument" -> "📎 Файл"
+                        else -> "Новое сообщение"
                     }
+                val date = lastMsgObj?.get("date")?.jsonPrimitive?.intOrNull ?: 0
+
+                chatCache.updateChat(chatId) { chat ->
+                    val updatedMsg = Message(id = 0, chatId = chatId, senderName = "", text = previewText, date = date)
+                    chat.copy(
+                        lastMessage = updatedMsg,
+                        order = newOrder ?: chat.order // Если Telegram прислал новый order — чат летит вверх!
+                    )
                 }
                 return true
             }
+
 
             // 2. МЫ ПРОЧИТАЛИ СООБЩЕНИЯ (Сбрасываем счетчик)
             "updateChatReadInbox" -> {
-                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
                 val unreadCount = jsonObject["unread_count"]?.jsonPrimitive?.intOrNull ?: 0
-
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) current + (chatId to chat.copy(unreadCount = unreadCount)) else current
-                }
+                chatCache.updateChat(chatId) { it.copy(unreadCount = unreadCount) }
                 return true
             }
 
             // 3. СОБЕСЕДНИК ПРОЧИТАЛ НАШИ СООБЩЕНИЯ (Ставим ✓✓)
             "updateChatReadOutbox" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
-                val lastReadId = jsonObject["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val lastReadId =
+                    jsonObject["last_read_outbox_message_id"]?.jsonPrimitive?.longOrNull
+                        ?: return true
 
-                lastReadOutboxMap[chatId] = lastReadId
+                chatCache.lastReadOutboxMap[chatId] = lastReadId
                 repoScope.launch {
                     messageDao.markOutboxAsRead(chatId, lastReadId)
                 }
                 return true
             }
+
             "updateChatPinnedMessage" -> {
                 val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
                 val pinnedId = jsonObject["pinned_message_id"]?.jsonPrimitive?.longOrNull ?: 0L
 
-                chatsMap.update { current ->
-                    val chat = current[chatId]
-                    if (chat != null) current + (chatId to chat.copy(pinnedMessageId = pinnedId)) else current
+                chatCache.updateChat(chatId) { chat ->
+                    chat.copy(pinnedMessageId = pinnedId)
                 }
+                return true
+            }
+            "updateChatNotificationSettings" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return true
+                val notifObj = jsonObject["notification_settings"]?.jsonObject
+                val muteFor = notifObj?.get("mute_for")?.jsonPrimitive?.intOrNull ?: 0
+                val isMuted = muteFor > 0
+
+                chatCache.updateChat(chatId) { chat ->
+                    chat.copy(isMuted = isMuted)
+                }
+                return true
+            }
+            "updateChatTitle" -> {
+                val chatId = jsonObject["chat_id"]?.jsonPrimitive?.longOrNull ?: return false
+                val title = jsonObject["title"]?.jsonPrimitive?.content ?: return false
+                chatCache.updateChat(chatId) { it.copy(title = title) }
                 return true
             }
         }
 
         return false
     }
+
     private fun parsePreviewText(contentObj: JsonObject?): String? {
         val msgType = contentObj?.get("@type")?.jsonPrimitive?.content
         return when (msgType) {
@@ -201,6 +216,7 @@ class ChatUpdateHandler(
                     else -> text
                 }
             }
+
             "messagePhoto" -> "📷 Фотография"
             "messageVideo", "messageVideoNote" -> "🎥 Видео"
             "messageDocument" -> "📄 Документ"

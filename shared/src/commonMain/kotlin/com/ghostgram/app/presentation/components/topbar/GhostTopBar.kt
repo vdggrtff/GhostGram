@@ -1,5 +1,9 @@
 package com.ghostgram.app.presentation.components.topbar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -47,24 +51,36 @@ import com.ghostgram.app.ui.theme.GhostTextSecondary
 fun GhostTopBar(
     avatarPath: String?,
     chatTitle: String,
-    isGroup: Boolean = false, // Флаг группы
+    isGroup: Boolean = false,
+    isChannel: Boolean = false,
+    memberCount: Int = 0,
+    typingText: String? = null,
+    isOnline: Boolean = false,
+    statusText: String = "",
     isGhostMode: Boolean,
     isCryptoMode: Boolean,
     onBackClick: () -> Unit,
     onIntent: (ChatDetailsIntent) -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {}
 ){
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(containerColor = GhostBackground),
         navigationIcon = {
-            IconButton(onClick = { onBackClick() }) {
+            IconButton(onClick = onBackClick) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
             }
         },
         title = {
-            Row(modifier = Modifier.clickable { onProfileClick() }, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onProfileClick)
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 💥 1. АВАТАРКА
                 Box(contentAlignment = Alignment.BottomEnd) {
-                    // 1. Аватарка чата / группы
                     key(avatarPath) {
                         if (!avatarPath.isNullOrBlank() && !avatarPath.startsWith("INITIALS:")) {
                             val model = if (avatarPath.startsWith("/")) "file://$avatarPath" else avatarPath
@@ -75,7 +91,6 @@ fun GhostTopBar(
                                 modifier = Modifier.size(38.dp).clip(CircleShape)
                             )
                         } else {
-                            // Заглушка с первой буквой
                             Box(
                                 modifier = Modifier.size(38.dp).clip(CircleShape).background(GhostPrimary),
                                 contentAlignment = Alignment.Center
@@ -90,8 +105,8 @@ fun GhostTopBar(
                         }
                     }
 
-                    // 2. Зеленая точка онлайна (ТОЛЬКО В ЛИЧКЕ, В ГРУППАХ ЕЁ НЕТ!)
-                    if (!isGroup) {
+                    // 💥 Зеленая точка онлайна: ТОЛЬКО в личке и ТОЛЬКО если собеседник реально в сети!
+                    if (!isGroup && !isChannel && isOnline) {
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
@@ -106,7 +121,8 @@ fun GhostTopBar(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Column {
+                // 💥 2. ЗАГОЛОВОК И ДИНАМИЧЕСКИЙ ПОДЗАГОЛОВОК
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = chatTitle,
                         color = Color.White,
@@ -116,34 +132,91 @@ fun GhostTopBar(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    // 3. ДИНАМИЧЕСКИЙ ПОДЗАГОЛОВОК
-                    Text(
-                        text = if (isGroup) "группа" else "в сети",
-                        color = if (isGroup) GhostTextSecondary else GhostAccentGreen,
-                        fontSize = 12.sp,
-                        maxLines = 1
-                    )
+                    // 💥 1. ВЫЧИСЛЯЕМ ТЕКСТ СРАЗУ:
+                    val isTyping = !typingText.isNullOrBlank()
+                    val displaySubtitle = when {
+                        isTyping -> typingText!!
+                        isChannel -> formatMembers(memberCount, isChannel = true)
+                        isGroup -> formatMembers(memberCount, isChannel = false)
+                        isOnline -> "в сети"
+                        statusText.isNotBlank() -> statusText
+                        else -> "был(а) недавно"
+                    }
+
+                    // 💥 2. АНИМАЦИЯ РЕАГИРУЕТ НА ЛЮБОЕ ИЗМЕНЕНИЕ (ОНЛАЙН ВЫХОДИТ МГНОВЕННО БЕЗ КЛИКОВ!):
+                    AnimatedContent(
+                        targetState = displaySubtitle,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "status_anim"
+                    ) { targetText ->
+                        val subtitleColor = when {
+                            isTyping -> GhostAccentGreen
+                            !isGroup && !isChannel && isOnline -> GhostAccentGreen
+                            else -> GhostTextSecondary
+                        }
+
+                        Text(
+                            text = targetText,
+                            color = subtitleColor,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         },
         actions = {
-            // 4. ЗАМОК ШИФРОВАНИЯ ТОЛЬКО ДЛЯ ЛИЧНЫХ ЧАТОВ 1-НА-1
-            if (!isGroup) {
+            // Кнопка шифрования — ТОЛЬКО для лички 1-на-1
+            if (!isGroup && !isChannel) {
                 IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleCryptoMode) }, modifier = Modifier.size(34.dp)) {
                     Text(if (isCryptoMode) "🔒" else "🔓", fontSize = 15.sp)
                 }
             }
 
-            // Призрак и меню доступны везде
+            // Поиск в чате
+            IconButton(onClick = onSearchClick, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.Search, contentDescription = "Поиск", tint = Color.White)
+            }
+
+            // Призрак
             IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleGhostMode) }, modifier = Modifier.size(34.dp)) {
                 Text(if (isGhostMode) "👻" else "👁️", fontSize = 15.sp)
             }
-            IconButton(onClick = {onIntent(ChatDetailsIntent.OnToggleInChatSearch(true))}, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.Search, contentDescription = "Поиск", tint = Color.White)
-            }
-            IconButton(onClick = { /* TODO */ }, modifier = Modifier.size(34.dp)) {
+
+            IconButton(onClick = { /* Меню чата */ }, modifier = Modifier.size(34.dp)) {
                 Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White)
             }
         }
     )
+}
+
+// 💥 ПРАВИЛЬНОЕ РУССКОЕ СКЛОНЕНИЕ УЧАСТНИКОВ И ПОДПИСЧИКОВ
+private fun formatMembers(count: Int, isChannel: Boolean): String {
+    if (count <= 0) return if (isChannel) "канал" else "группа"
+
+    if (count >= 1000) {
+        val thousands = count / 1000f
+        val formatted = if (count % 1000 < 100) "${count / 1000}K" else "${(thousands * 10).toInt() / 10f}K"
+        return "$formatted ${if (isChannel) "подписчиков" else "участников"}"
+    }
+
+    val mod10 = count % 10
+    val mod100 = count % 100
+
+    return if (isChannel) {
+        when {
+            mod100 in 11..14 -> "$count подписчиков"
+            mod10 == 1 -> "$count подписчик"
+            mod10 in 2..4 -> "$count подписчика"
+            else -> "$count подписчиков"
+        }
+    } else {
+        when {
+            mod100 in 11..14 -> "$count участников"
+            mod10 == 1 -> "$count участник"
+            mod10 in 2..4 -> "$count участника"
+            else -> "$count участников"
+        }
+    }
 }

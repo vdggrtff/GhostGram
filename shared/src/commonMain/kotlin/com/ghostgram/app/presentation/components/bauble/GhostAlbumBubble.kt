@@ -50,7 +50,7 @@ fun GhostAlbumBubble(
     replyMessage: Message? = null,
     onLongClick: () -> Unit,
     onMediaClick: (Long) -> Unit,
-    onReactionClick: (Long, String, Boolean) -> Unit = { _, _, _ -> }
+    onReactionClick: (Long, String, Long, Boolean) -> Unit = { _, _, _, _ -> }
 ) {
     val baseMessage = albumMessages.last()
     val isOutgoing = baseMessage.isOutgoing
@@ -147,8 +147,8 @@ fun GhostAlbumBubble(
                 ReactionsRow(
                     reactions = messageWithReactions.reactions,
                     isOutgoing = isOutgoing,
-                    onReactionClick = { emoji, isChosen ->
-                        onReactionClick(messageWithReactions.id, emoji, isChosen)
+                    onReactionClick = { emoji, customEmojiId,  isChosen ->
+                        onReactionClick(messageWithReactions.id, emoji, customEmojiId, isChosen)
                     },
                     modifier = Modifier.padding(top = 3.dp)
                 )

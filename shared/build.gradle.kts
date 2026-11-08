@@ -106,6 +106,8 @@ kotlin {
             implementation("net.java.dev.jna:jna:5.19.1@aar")
             implementation("com.airbnb.android:lottie:6.7.1")
             implementation("com.airbnb.android:lottie-compose:6.4.1")
+            implementation("androidx.media3:media3-exoplayer:1.4.1")
+            implementation("androidx.media3:media3-ui:1.4.1")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

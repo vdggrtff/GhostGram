@@ -1,6 +1,6 @@
 package com.ghostgram.app.presentation.contacts
 
-import SessionManager
+import session.SessionManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
