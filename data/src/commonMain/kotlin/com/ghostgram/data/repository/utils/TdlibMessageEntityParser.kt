@@ -1,6 +1,7 @@
 package com.ghostgram.data.repository.utils
 
 import com.ghostgram.core.crypto.CryptoLayer
+import com.ghostgram.core.crypto.KeyVerificationStatus
 import com.ghostgram.core.crypto.toHex
 import com.ghostgram.core.database.entity.MessageEntity
 import com.ghostgram.core.tdlib.TelegramFlowClient
@@ -60,39 +61,47 @@ class TdlibMessageEntityParser(
                 // 1. E2EE: КТО-ТО ПРЕДЛАГАЕТ НАМ ОБМЕН КЛЮЧАМИ
                 if (text.startsWith("👻🔑 ")) {
                     if (!isOutgoing) {
-                        val otherPubKeyHex = text.removePrefix("👻🔑 ")
-                        cryptoLayer.establishSecret(chatId, otherPubKeyHex)
+                        val otherPubKeyHex = text.removePrefix("👻🔑 ").trim() // 💥 Добавили .trim()
+                        val status = cryptoLayer.verifyAndEstablishSecret(chatId, otherPubKeyHex)
 
-                        if (isLive) {
-                            val myPubKeyHex = cryptoLayer.myKeyPair.second.toHex()
-                            tdlibClient.send(
-                                """
-                                {
-                                    "@type": "sendMessage", 
-                                    "chat_id": $chatId, 
-                                    "input_message_content": {
-                                        "@type": "inputMessageText", 
-                                        "text": {"@type": "formattedText", "text": "👻🤝 $myPubKeyHex"},
-                                        "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}
-                                    }
+                        when (status) {
+                            KeyVerificationStatus.MITM_WARNING -> {
+                                text = "🚨 ВНИМАНИЕ: Ключ шифрования собеседника изменился! Возможна атака 'Человек посередине'!"
+                                extraInfo = "MITM_ALERT"
+                            }
+                            KeyVerificationStatus.NEW_KEY, KeyVerificationStatus.TRUSTED -> {
+                                if (isLive) {
+                                    val myPubKeyHex = cryptoLayer.myKeyPair.second.toHex()
+                                    tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🤝 $myPubKeyHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
                                 }
-                                """.trimIndent()
-                            )
+                                text = "🔐 Безопасный E2EE канал установлен!"
+                                extraInfo = "SYSTEM"
+                            }
                         }
+                    } else {
+                        text = "🔐 Запрос E2EE отправлен собеседнику..."
+                        extraInfo = "SYSTEM"
                     }
-                    text = "🔐 Запрос E2EE отправлен..."
-                    extraInfo = "SYSTEM"
                 }
                 // 2. E2EE: СОБЕСЕДНИК ПОДТВЕРДИЛ ОБМЕН
                 else if (text.startsWith("👻🤝 ")) {
                     if (!isOutgoing) {
-                        val otherPubKeyHex = text.removePrefix("👻🤝 ")
-                        cryptoLayer.establishSecret(chatId, otherPubKeyHex)
+                        val otherPubKeyHex = text.removePrefix("👻🤝 ").trim() // 💥 Добавили .trim()
+                        val status = cryptoLayer.verifyAndEstablishSecret(chatId, otherPubKeyHex)
+                        if (status == KeyVerificationStatus.MITM_WARNING) {
+                            text = "🚨 ВНИМАНИЕ: Подмененный ключ безопасности! Канал скомпрометирован!"
+                            extraInfo = "MITM_ALERT"
+                        } else {
+                            text = "✅ Защищенный E2EE канал подтвержден!"
+                            extraInfo = "SYSTEM"
+                        }
+                    } else {
+                        // 💥 ЧТОБЫ У СЕБЯ ТОЖЕ БЫЛ КРАСИВЫЙ БЕЙДЖ ВМЕСТО СЫРОГО ХЭША:
+                        text = "✅ Защищенный E2EE канал подтвержден!"
+                        extraInfo = "SYSTEM"
                     }
-                    text = "✅ Защищенный E2EE канал установлен!"
-                    extraInfo = "SYSTEM"
                 }
-                // 3. E2EE: РАСШИФРОВКА ТЕКСТА
+                // 💥 3. E2EE: РАСШИФРОВКА ТЕКСТА (РАСКОММЕНТИРОВАНО!):
                 else if (text.contains("👻 ")) {
                     val decrypted = cryptoLayer.revealAndDecrypt(chatId, text)
                     if (decrypted != null) {

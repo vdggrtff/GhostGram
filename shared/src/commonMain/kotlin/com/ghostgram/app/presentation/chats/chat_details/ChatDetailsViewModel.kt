@@ -17,12 +17,14 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnCon
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDeleteMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissCatchUpDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissInviteDialog
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnDismissSafetyDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnEditMessageClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnGenerateRepliesClick
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInChatSearchQueryChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnInputChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnLoadAvailableReactions
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMediaSelected
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnOpenSafetyDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPlayReactionEffect
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetPendingNavigation
@@ -261,6 +263,8 @@ class ChatDetailsViewModel(
                     }
                 }
             }
+            is OnOpenSafetyDialog -> openSafetyDialog()
+            is OnDismissSafetyDialog -> _state.update { it.copy(isSafetyDialogOpen = false) }
         }
     }
 
@@ -624,6 +628,17 @@ class ChatDetailsViewModel(
 
         viewModelScope.launch {
             repo.toggleReaction(chatId, intent.messageId, intent.emoji, intent.isChosen, intent.customEmojiId)
+        }
+    }
+
+    private fun openSafetyDialog() {
+        val repo = sessionManager.currentSession.value?.chatRepository ?: return
+        val fingerprint = repo.getSafetyFingerprint(chatId)
+        _state.update {
+            it.copy(
+                isSafetyDialogOpen = true,
+                safetyFingerprint = fingerprint
+            )
         }
     }
 

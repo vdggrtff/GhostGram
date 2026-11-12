@@ -30,7 +30,7 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 2
-        versionName = "0.2.0-alpha"
+        versionName = "0.4.0-alpha"
     }
     packaging {
         resources {

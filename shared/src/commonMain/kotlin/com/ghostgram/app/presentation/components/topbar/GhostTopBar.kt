@@ -167,23 +167,45 @@ fun GhostTopBar(
             }
         },
         actions = {
-            // Кнопка шифрования — ТОЛЬКО для лички 1-на-1
+            // 💥 1. КНОПКА ЗВОНКА 📞 (Только для личных чатов 1-на-1 — задел под v0.5.0!)
             if (!isGroup && !isChannel) {
-                IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleCryptoMode) }, modifier = Modifier.size(34.dp)) {
+                IconButton(
+                    onClick = { /* В следующем шаге подключим startCall(chatId) */ },
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Text("📞", fontSize = 16.sp)
+                }
+            }
+
+            // 💥 2. КНОПКА E2EE ШИФРОВАНИЯ (С ОТКРЫТИЕМ 4 ЭМОДЗИ БЕЗОПАСНОСТИ!)
+            if (!isGroup && !isChannel) {
+                IconButton(
+                    onClick = {
+                        if (isCryptoMode) {
+                            // 💥 Если шифрование уже работает — открываем карточку проверки 4 эмодзи!
+                            onIntent(ChatDetailsIntent.OnOpenSafetyDialog)
+                        } else {
+                            // Если выключено — включаем и запускаем обмен ключами
+                            onIntent(ChatDetailsIntent.OnToggleCryptoMode)
+                        }
+                    },
+                    modifier = Modifier.size(34.dp)
+                ) {
                     Text(if (isCryptoMode) "🔒" else "🔓", fontSize = 15.sp)
                 }
             }
 
-            // Поиск в чате
+            // 3. Поиск в чате
             IconButton(onClick = onSearchClick, modifier = Modifier.size(34.dp)) {
                 Icon(Icons.Default.Search, contentDescription = "Поиск", tint = Color.White)
             }
 
-            // Призрак
+            // 4. Призрак (Ghost Mode)
             IconButton(onClick = { onIntent(ChatDetailsIntent.OnToggleGhostMode) }, modifier = Modifier.size(34.dp)) {
                 Text(if (isGhostMode) "👻" else "👁️", fontSize = 15.sp)
             }
 
+            // 5. Меню чата (3 точки)
             IconButton(onClick = { /* Меню чата */ }, modifier = Modifier.size(34.dp)) {
                 Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White)
             }

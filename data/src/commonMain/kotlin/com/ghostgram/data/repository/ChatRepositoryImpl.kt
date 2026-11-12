@@ -397,6 +397,8 @@ class ChatRepositoryImpl(
         }
     }
 
+    override fun getSafetyFingerprint(chatId: Long) = cryptoLayer.getSafetyFingerprint(chatId)
+
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
         tdlibClient.send("""{"@type": "deleteMessages", "chat_id": $chatId, "message_ids": [$messageId], "revoke": $revoke}""")
     }

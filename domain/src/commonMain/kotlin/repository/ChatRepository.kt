@@ -5,6 +5,7 @@ import entity.ChatFullProfile
 import entity.Message
 import entity.MyProfile
 import entity.PublicChat
+import entity.SafetyFingerprint
 import kotlinx.coroutines.flow.Flow
 
 interface ChatRepository {
@@ -51,6 +52,8 @@ interface ChatRepository {
     suspend fun getAvailableReactions(chatId: Long, messageId: Long): List<String>
 
     suspend fun toggleReaction(chatId: Long, messageId: Long, emoji: String, isChosen: Boolean, customEmojiId: Long = 0L )
+
+    fun getSafetyFingerprint(chatId: Long): SafetyFingerprint?
 
     fun markChatAsRead(chatId: Long, messageIds: List<Long>)
 

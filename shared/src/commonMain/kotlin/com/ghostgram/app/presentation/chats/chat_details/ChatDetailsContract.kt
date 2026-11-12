@@ -2,6 +2,7 @@ package com.ghostgram.app.presentation.chats.chat_details
 
 import entity.ChatInvitePreview
 import entity.Message
+import entity.SafetyFingerprint
 
 data class MediaItem(val bytes: ByteArray, val extension: String)
 
@@ -50,7 +51,9 @@ data class ChatDetailsState(
     val availableReactions: List<String> = emptyList(), // 💥 Реальные доступные реакции сообщения
     val activeBurstMessageId: Long? = null,              // На каком сообщении взорвать партиклы
     val burstEmoji: String? = null,
-    val burstEffectJson: String? = null
+    val burstEffectJson: String? = null,
+    val isSafetyDialogOpen: Boolean = false,              // 💥 Открыт ли диалог проверки 4 эмодзи
+    val safetyFingerprint: SafetyFingerprint? = null
 )
 
 // Действия на экране чата
@@ -102,4 +105,6 @@ sealed interface ChatDetailsIntent {
     data class OnTriggerBurst(val messageId: Long, val emoji: String) : ChatDetailsIntent
     data object OnClearBurst : ChatDetailsIntent
     data class OnPlayReactionEffect(val messageId: Long, val emoji: String) : ChatDetailsIntent
+    data object OnOpenSafetyDialog : ChatDetailsIntent
+    data object OnDismissSafetyDialog : ChatDetailsIntent
 }

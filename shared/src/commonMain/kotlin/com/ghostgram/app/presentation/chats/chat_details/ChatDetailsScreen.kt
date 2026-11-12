@@ -30,22 +30,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.LoadMoreMessages
-import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnClearFlyingReaction
-import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
-import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsScreen
-import com.ghostgram.app.presentation.chats.chat_details.utils.ChatDetailsDialogs
-import com.ghostgram.app.presentation.chats.chat_details.utils.MessageListItem
-import com.ghostgram.app.presentation.chats.chat_details.utils.getSenderKey
-import com.ghostgram.app.presentation.chats.chat_details.utils.groupMessagesIntoAlbums
-import com.ghostgram.app.presentation.chats.chat_details.utils.rememberChatScrollBehavior
-import com.ghostgram.app.presentation.chats.chat_details.utils.shouldShowDateHeader
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.*
+import com.ghostgram.app.presentation.chats.chat_details.utils.*
+import com.ghostgram.app.presentation.components.topbar.PinnedMessageBar
+import com.ghostgram.app.presentation.components.animations.FlyingReactionOverlay
 import com.ghostgram.app.presentation.components.bauble.GhostAlbumBubble
 import com.ghostgram.app.presentation.components.bauble.GhostMessageBubble
+import com.ghostgram.app.presentation.components.dialog.ChatInviteDialog
+import com.ghostgram.app.presentation.components.dialog.SafetyVerificationDialog
+import com.ghostgram.app.presentation.components.dialog.TelegramContextMenu
 import com.ghostgram.app.presentation.components.fab.FabGetDown
 import com.ghostgram.app.presentation.components.input.ChannelBottomBar
 import com.ghostgram.app.presentation.components.input.GhostInput
@@ -55,8 +52,6 @@ import com.ghostgram.app.presentation.components.utils.GhostMediaViewer
 import com.ghostgram.app.presentation.components.utils.SwipeToReplyWrapper
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostCard
-import com.ghostgram.app.presentation.components.animations.FlyingReactionOverlay
-import com.ghostgram.app.presentation.components.dialog.TelegramContextMenu
 import com.ghostgram.app.utils.TimeFormatter
 import entity.Message
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
@@ -65,13 +60,17 @@ import io.github.vinceglb.filekit.core.PickerType
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
+
+// =============================================================================
+// 1. ENTRY POINT ROUTE (Навигационный роут экрана чата)
+// =============================================================================
 @Composable
 fun ChatDetailsRoute(
     viewModel: ChatDetailsViewModel = koinViewModel(),
     onBackClick: () -> Unit,
     onNavigateToProfile: (Long) -> Unit,
-    scrollToMessageId: Long?,
     onNavigateToChat: (Long) -> Unit,
+    scrollToMessageId: Long?,
     onMessageScrolled: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
@@ -81,9 +80,7 @@ fun ChatDetailsRoute(
         onIntent = viewModel::onIntent,
         onBackClick = onBackClick,
         onProfileClick = { onNavigateToProfile(viewModel.chatId) },
-        onDeepLinkClick = { link ->
-            viewModel.onDeepLinkClick(link, onNavigateToChat)
-        },
+        onDeepLinkClick = { link -> viewModel.onDeepLinkClick(link, onNavigateToChat) },
         onNavigateToChat = onNavigateToChat,
         scrollToMessageId = scrollToMessageId,
         onMessageScrolled = onMessageScrolled,
@@ -91,6 +88,9 @@ fun ChatDetailsRoute(
     )
 }
 
+// =============================================================================
+// 2. MAIN SCREEN COMPOSABLE
+// =============================================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailsScreen(
@@ -105,18 +105,24 @@ fun ChatDetailsScreen(
     onLoadCustomEmoji: suspend (Long) -> String? = { null },
     listState: LazyListState = rememberLazyListState(),
 ) {
-
     val coroutineScope = rememberCoroutineScope()
-    var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
-    var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
-    var selectedMessageOffset by remember { mutableStateOf(Offset.Zero) }
-    val defaultUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val defaultUriHandler = LocalUriHandler.current
 
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
 
+    // -------------------------------------------------------------------------
+    // А. Локальное UI-состояние экрана
+    // -------------------------------------------------------------------------
+    var activeViewerMessageId by remember { mutableStateOf<Long?>(null) }
+    var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+    var selectedMessageOffset by remember { mutableStateOf(Offset.Zero) }
+    var retryScrollCount by remember { mutableStateOf(0) }
+
+    // Группировка потока сообщений в альбомы (2+ фото/видео)
     val groupedMessages = remember(state.messages) { groupMessagesIntoAlbums(state.messages) }
 
+    // Контроллер скролла, пагинации и кнопки «Вниз»
     val scrollBehavior = rememberChatScrollBehavior(
         messages = state.messages,
         unreadCount = state.unreadCount,
@@ -124,28 +130,20 @@ fun ChatDetailsScreen(
         listState = listState
     )
 
+    // Перехватчик Telegram DeepLinks (t.me, tg://, @mentions)
     val ghostUriHandler = remember {
         object : androidx.compose.ui.platform.UriHandler {
             override fun openUri(uri: String) {
                 if (uri.startsWith("tg://") || uri.contains("t.me/") || uri.startsWith("@")) {
-                    // Внутренняя ссылка Telegram -> открываем внутри приложения!
                     onDeepLinkClick(uri)
                 } else {
-                    // Обычный сайт -> отдаем в Chrome/системный браузер
                     defaultUriHandler.openUri(uri)
                 }
             }
         }
     }
 
-    LaunchedEffect(state.pendingNavigationChatId) {
-        val targetId = state.pendingNavigationChatId
-        if (targetId != null && targetId != 0L) {
-            onNavigateToChat(targetId) // Перелетаем в новый чат!
-            onIntent(ChatDetailsIntent.OnResetPendingNavigation) // Сбрасываем ID
-        }
-    }
-
+    // Системный FilePicker для отправки фото и видео (FileKit KMP)
     val fileLauncher = rememberFilePickerLauncher(
         type = PickerType.ImageAndVideo,
         mode = PickerMode.Multiple()
@@ -155,17 +153,26 @@ fun ChatDetailsScreen(
                 val mediaList = files.map { file ->
                     MediaItem(file.readBytes(), file.name.substringAfterLast('.', "jpg"))
                 }
-                onIntent(ChatDetailsIntent.OnMediaSelected(mediaList))
+                onIntent(OnMediaSelected(mediaList))
             }
         }
     }
 
-    var retryCount by remember { mutableStateOf(0) }
+    // -------------------------------------------------------------------------
+    // Б. Сайд-эффекты: Навигация, Скролл к сообщению и Поиск
+    // -------------------------------------------------------------------------
+    // Бесшовный переход в чат по инвайту
+    LaunchedEffect(state.pendingNavigationChatId) {
+        val targetId = state.pendingNavigationChatId
+        if (targetId != null && targetId != 0L) {
+            onNavigateToChat(targetId)
+            onIntent(OnResetPendingNavigation)
+        }
+    }
 
+    // Программный скролл к целевому сообщению (из поиска, цитаты или профиля)
     LaunchedEffect(scrollToMessageId, groupedMessages.size) {
         if (scrollToMessageId != null && scrollToMessageId != 0L) {
-
-            // Ищем сообщение в памяти
             val targetIndex = groupedMessages.indexOfFirst { item ->
                 when (item) {
                     is MessageListItem.Single -> item.message.id == scrollToMessageId
@@ -174,29 +181,23 @@ fun ChatDetailsScreen(
             }
 
             if (targetIndex != -1) {
-                // 💥 НАШЛИ! Летим прямо к нему!
-                println("📍 [SCROLL] Сообщение найдено на позиции $targetIndex! Скроллим...")
                 scrollBehavior.listState.animateScrollToItem(targetIndex)
-                onMessageScrolled() // Сбрасываем ID
-                retryCount = 0
-            } else if (retryCount < 2) {
-                // Если не нашли с первого раза — просим подгрузить историю вокруг него
-                println("📍 [SCROLL] Загружаем историю вокруг ID=$scrollToMessageId (Попытка ${retryCount + 1})")
-                retryCount++
-                onIntent(ChatDetailsIntent.LoadMoreMessages(scrollToMessageId))
-            } else {
-                // Если после подгрузки так и не нашли — сбрасываем, чтобы не зависать
-                println("⚠️ [SCROLL] Сообщение не удалось загрузить в память.")
                 onMessageScrolled()
-                retryCount = 0
+                retryScrollCount = 0
+            } else if (retryScrollCount < 2) {
+                retryScrollCount++
+                onIntent(LoadMoreMessages(scrollToMessageId))
+            } else {
+                onMessageScrolled()
+                retryScrollCount = 0
             }
         }
     }
 
+    // Навигация по найденным сообщениям внутри чата (стрелки Вверх/Вниз)
     LaunchedEffect(state.currentSearchIndex, state.inChatSearchResults) {
         val targetMessage = state.inChatSearchResults.getOrNull(state.currentSearchIndex)
         if (targetMessage != null) {
-            // Ищем сообщение в текущем отображаемом списке
             val index = groupedMessages.indexOfFirst { item ->
                 when (item) {
                     is MessageListItem.Single -> item.message.id == targetMessage.id
@@ -206,24 +207,17 @@ fun ChatDetailsScreen(
             if (index != -1) {
                 scrollBehavior.listState.animateScrollToItem(index)
             } else {
-                // Если сообщение старое — наш проверенный LoadMore подкачает его!
-                onIntent(ChatDetailsIntent.LoadMoreMessages(targetMessage.id))
+                onIntent(LoadMoreMessages(targetMessage.id))
             }
         }
     }
 
-    // Вспомогательная функция, чтобы достать дату из элемента
-    fun getDateFromItem(item: MessageListItem): Int {
-        return when (item) {
-            is MessageListItem.Single -> item.message.date
-            is MessageListItem.Album -> item.messages.first().date
-        }
-    }
-    CompositionLocalProvider(androidx.compose.ui.platform.LocalUriHandler provides ghostUriHandler) {
+    // -------------------------------------------------------------------------
+    // В. Основная верстка экрана (Scaffold & Overlays)
+    // -------------------------------------------------------------------------
+    CompositionLocalProvider(LocalUriHandler provides ghostUriHandler) {
         Scaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
+            modifier = Modifier.fillMaxSize().imePadding(),
             containerColor = GhostBackground,
             topBar = {
                 if (state.isSearchOpen) {
@@ -233,11 +227,11 @@ fun ChatDetailsScreen(
                         currentIndex = state.currentSearchIndex,
                         isSearching = state.isSearchingInChat,
                         isAiSearching = state.isAiSearching,
-                        onQueryChanged = { onIntent(ChatDetailsIntent.OnInChatSearchQueryChanged(it)) },
-                        onPrevious = { onIntent(ChatDetailsIntent.OnSearchPrevious) },
-                        onNext = { onIntent(ChatDetailsIntent.OnSearchNext) },
-                        onRunAiSearch = { onIntent(ChatDetailsIntent.OnRunAiSearch) },
-                        onClose = { onIntent(ChatDetailsIntent.OnToggleInChatSearch(false)) }
+                        onQueryChanged = { onIntent(OnInChatSearchQueryChanged(it)) },
+                        onPrevious = { onIntent(OnSearchPrevious) },
+                        onNext = { onIntent(OnSearchNext) },
+                        onRunAiSearch = { onIntent(OnRunAiSearch) },
+                        onClose = { onIntent(OnToggleInChatSearch(false)) }
                     )
                 } else {
                     GhostTopBar(
@@ -254,14 +248,16 @@ fun ChatDetailsScreen(
                         onIntent = onIntent,
                         onBackClick = onBackClick,
                         onProfileClick = onProfileClick,
+                        onSearchClick = { onIntent(OnToggleInChatSearch(true)) }
                     )
                 }
             },
             bottomBar = {
+                // В каналах прячем инпут и показываем плашку звука Mute/Unmute
                 if (state.isChannel) {
                     ChannelBottomBar(
                         isMuted = state.isMuted,
-                        onToggleMute = { onIntent(ChatDetailsIntent.OnToggleMute) } // или твой вызов мута
+                        onToggleMute = { onIntent(OnToggleMute) }
                     )
                 } else {
                     GhostInput(
@@ -289,6 +285,9 @@ fun ChatDetailsScreen(
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding())
             ) {
+                // -------------------------------------------------------------
+                // Г. Список сообщений (Reverse LazyColumn)
+                // -------------------------------------------------------------
                 LazyColumn(
                     state = listState,
                     reverseLayout = true,
@@ -296,55 +295,36 @@ fun ChatDetailsScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        // 💥 3. Сверху даем отступ под плашку закрепа (если она есть) или обычные 8dp:
                         top = if (state.pinnedMessage != null && !state.isSearchOpen) 58.dp else 8.dp,
-                        // А снизу — запас под строку ввода сообщений:
                         bottom = innerPadding.calculateBottomPadding() + 28.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Итерируемся по альбомам и одиночным сообщениям
-                    items(groupedMessages.size, key = { index ->
-                        when (val item = groupedMessages[index]) {
-                            is MessageListItem.Single -> item.message.id
-                            is MessageListItem.Album -> item.messages.first().id
+                    items(
+                        count = groupedMessages.size,
+                        key = { index ->
+                            when (val item = groupedMessages[index]) {
+                                is MessageListItem.Single -> item.message.id
+                                is MessageListItem.Album -> item.messages.first().id
+                            }
                         }
-                    }) { index ->
-
+                    ) { index ->
                         val item = groupedMessages[index]
-                        val itemDate = getDateFromItem(item)
-
                         val currentSenderKey = getSenderKey(item)
+                        val topNeighborKey = groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
+                        val bottomNeighborKey = groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
 
-                        // Кто автор сообщения ВЫШЕ на экране (старее в массиве: index + 1)?
-                        val topNeighborKey =
-                            groupedMessages.getOrNull(index + 1)?.let { getSenderKey(it) }
-
-                        // Кто автор сообщения НИЖЕ на экране (свежее в массиве: index - 1)?
-                        val bottomNeighborKey =
-                            groupedMessages.getOrNull(index - 1)?.let { getSenderKey(it) }
-
-                        // 2. ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ СООБЩЕНИЙ
-                        // Первое сообщение человека в пачке (над ним рисуем цветное имя):
+                        // Хвостовые скругления для цепочек сообщений одного автора
                         val isFirstInGroup = currentSenderKey != topNeighborKey
-
-                        // Последнее сообщение человека в пачке (рядом с ним рисуем его аватарку):
                         val isLastInGroup = currentSenderKey != bottomNeighborKey
 
-                        // 3. ДАТА ТЕПЕРЬ СЧИТАЕТСЯ КОРРЕКТНО ДЛЯ АЛЬБОМОВ
-                        val showDateHeader = if (index == groupedMessages.size - 1) {
-                            true
-                        } else {
-                            val olderItem = groupedMessages[index + 1]
-                            !TimeFormatter.isSameDay(itemDate, getDateFromItem(olderItem))
-                        }
-
-                        // 4. РИСУЕМ ПУЗЫРЬ ИЛИ ЦЕЛЫЙ АЛЬБОМ
                         when (item) {
+                            // 1. Одиночное сообщение (Текст, Фото, Видео, Стикер, Голосовое)
                             is MessageListItem.Single -> {
                                 val repliedMsg = if (item.message.replyToMessageId != 0L) {
                                     state.messages.find { it.id == item.message.replyToMessageId }
                                 } else null
+
                                 SwipeToReplyWrapper(
                                     onSwipe = { onIntent(OnSwipeToReply(item.message)) }
                                 ) {
@@ -352,37 +332,37 @@ fun ChatDetailsScreen(
                                         message = item.message,
                                         searchQuery = state.inChatSearchQuery,
                                         isGroup = state.isGroup,
-                                        isFirstInGroup = isFirstInGroup, // 👈
-                                        isLastInGroup = isLastInGroup,   // 👈
+                                        isFirstInGroup = isFirstInGroup,
+                                        isLastInGroup = isLastInGroup,
                                         isBursting = state.activeBurstMessageId == item.message.id,
-                                        burstEffectJson = state.burstEffectJson, // 💥 Передаем JSON!
-                                        onBurstFinished = { onIntent(ChatDetailsIntent.OnClearBurst) },
+                                        burstEffectJson = state.burstEffectJson,
+                                        burstEmoji = state.burstEmoji,
+                                        onBurstFinished = { onIntent(OnClearBurst) },
                                         onMediaClick = { activeViewerMessageId = item.message.id },
+                                        onVideoClick = { activeViewerMessageId = item.message.id },
                                         onLongClick = { offset ->
                                             selectedMessageForMenu = item.message
-                                            selectedMessageOffset = offset // 💥 Запомнили позицию!
+                                            selectedMessageOffset = offset
                                         },
                                         replyMessage = repliedMsg,
-                                        onVideoClick = {
-                                            activeViewerMessageId = item.message.id
-                                        },
                                         onReactionClick = { msgId, emoji, customEmojiId, isChosen ->
-                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
+                                            onIntent(OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
                                             if (!isChosen) {
-                                                onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
+                                                onIntent(OnPlayReactionEffect(msgId, emoji))
                                             }
                                         },
-                                        onLoadCustomEmoji = onLoadCustomEmoji,
-                                        burstEmoji = state.burstEmoji,
+                                        onLoadCustomEmoji = onLoadCustomEmoji
                                     )
                                 }
                             }
 
+                            // 2. Медиа-альбом (Сетка 2+ фотографий или видео)
                             is MessageListItem.Album -> {
                                 val baseMsg = item.messages.first()
                                 val repliedMsg = if (baseMsg.replyToMessageId != 0L) {
                                     state.messages.find { it.id == baseMsg.replyToMessageId }
                                 } else null
+
                                 SwipeToReplyWrapper(
                                     onSwipe = { onIntent(OnSwipeToReply(baseMsg)) }
                                 ) {
@@ -395,19 +375,19 @@ fun ChatDetailsScreen(
                                         replyMessage = repliedMsg,
                                         onLongClick = { selectedMessageForMenu = baseMsg },
                                         onReactionClick = { msgId, emoji, customEmojiId, isChosen ->
-                                            onIntent(ChatDetailsIntent.OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
+                                            onIntent(OnToggleReaction(msgId, emoji, isChosen, customEmojiId))
                                             if (!isChosen) {
-                                                onIntent(ChatDetailsIntent.OnPlayReactionEffect(msgId, emoji))
+                                                onIntent(OnPlayReactionEffect(msgId, emoji))
                                             }
-                                        },
+                                        }
                                     )
                                 }
                             }
                         }
 
-                        // ПЛАШКА ДАТЫ
+                        // Липкая дата-разделитель между днями ("Сегодня", "Вчера", "12 мая")
                         if (shouldShowDateHeader(index, groupedMessages)) {
-                            val dateText = TimeFormatter.formatDateHeader(getDateFromItem(item))
+                            val dateText = TimeFormatter.formatDateHeader(item.dateUnix())
                             if (dateText.isNotBlank()) {
                                 Box(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
@@ -418,7 +398,8 @@ fun ChatDetailsScreen(
                                         color = Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
                                             .background(GhostCard.copy(alpha = 0.6f))
                                             .padding(horizontal = 12.dp, vertical = 4.dp)
                                     )
@@ -427,10 +408,11 @@ fun ChatDetailsScreen(
                         }
                     }
                 }
-                val pinnedMsg = state.pinnedMessage
 
+                // Закрепленное сообщение сверху чата
+                val pinnedMsg = state.pinnedMessage
                 if (pinnedMsg != null && !state.isSearchOpen) {
-                    com.ghostgram.app.presentation.components.topbar.PinnedMessageBar(
+                    PinnedMessageBar(
                         pinnedMessage = pinnedMsg,
                         onClick = {
                             val targetIndex = groupedMessages.indexOfFirst { item ->
@@ -442,28 +424,36 @@ fun ChatDetailsScreen(
                             if (targetIndex != -1) {
                                 coroutineScope.launch { listState.animateScrollToItem(targetIndex) }
                             } else {
-                                // Если сообщение старое — наш проверенный LoadMore с offset: -20 подкачает его!
-                                onIntent(ChatDetailsIntent.LoadMoreMessages(pinnedMsg.id))
+                                onIntent(LoadMoreMessages(pinnedMsg.id))
                             }
                         },
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
-               FlyingReactionOverlay(
+
+                // Фоновый оверлей эффекта реакции
+                FlyingReactionOverlay(
                     emoji = state.flyingEmoji,
                     onFinished = { onIntent(OnClearFlyingReaction) }
                 )
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Д. Модальные окна, Диалоги и Просмотрщик медиа
+    // -------------------------------------------------------------------------
+    // Карточка предпросмотра инвайт-ссылки (t.me/+)
     if (state.invitePreview != null) {
-        com.ghostgram.app.presentation.components.dialog.ChatInviteDialog(
+        ChatInviteDialog(
             preview = state.invitePreview!!,
             isLoading = state.isJoiningChat,
-            onJoinClick = { onIntent(ChatDetailsIntent.OnConfirmJoinChat(state.invitePreview!!.inviteLink)) },
-            onDismiss = { onIntent(ChatDetailsIntent.OnDismissInviteDialog) }
+            onJoinClick = { onIntent(OnConfirmJoinChat(state.invitePreview!!.inviteLink)) },
+            onDismiss = { onIntent(OnDismissInviteDialog) }
         )
     }
+
+    // Парящее контекстное меню Telegram с параболическим «Hop»-перелётом смайлика
     if (selectedMessageForMenu != null) {
         TelegramContextMenu(
             msg = selectedMessageForMenu!!,
@@ -474,8 +464,18 @@ fun ChatDetailsScreen(
             onDismiss = { selectedMessageForMenu = null }
         )
     }
+
+    // Диалог проверки 4 эмодзи сквозного шифрования (Anti-MITM)
+    if (state.isSafetyDialogOpen) {
+        SafetyVerificationDialog(
+            chatTitle = state.chatTitle,
+            fingerprint = state.safetyFingerprint,
+            onDismiss = { onIntent(ChatDetailsIntent.OnDismissSafetyDialog) }
+        )
+    }
+
+    // Полноэкранный просмотрщик фото и видео
     if (activeViewerMessageId != null) {
-        // Фильтруем все сообщения чата, у которых есть фото или видео
         val chatMediaList = remember(state.messages) {
             state.messages.filter {
                 (it.mediaType == entity.MessageMediaType.PHOTO && it.photoPath != null) ||
@@ -489,11 +489,12 @@ fun ChatDetailsScreen(
             onDismiss = { activeViewerMessageId = null }
         )
     }
-    /*ChatDetailsDialogs(
-        state = state,
-        selectedMessageForMenu = selectedMessageForMenu,
-        clipboardManager = clipboardManager,
-        onDismissMessageMenu = { selectedMessageForMenu = null },
-        onIntent = onIntent
-    )*/
+}
+
+// =============================================================================
+// 3. PRIVATE EXTENSIONS & HELPERS
+// =============================================================================
+private fun MessageListItem.dateUnix(): Int = when (this) {
+    is MessageListItem.Single -> message.date
+    is MessageListItem.Album -> messages.first().date
 }
