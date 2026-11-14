@@ -72,4 +72,10 @@ interface MessageDao {
 
     @Query("UPDATE messages SET reactionsJson = :reactionsJson WHERE id = :msgId")
     suspend fun updateMessageReactions(msgId: Long, reactionsJson: String)
+
+    @Query("DELETE FROM messages WHERE chatId = :chatId AND fileExtraInfo = 'ENCRYPTED'")
+    suspend fun deleteEncryptedMessagesForChat(chatId: Long)
+
+    @Query("DELETE FROM messages WHERE chatId = :chatId AND fileExtraInfo = 'ENCRYPTED' AND id <= :beforeMessageId")
+    suspend fun deleteEncryptedMessagesBefore(chatId: Long, beforeMessageId: Long)
 }

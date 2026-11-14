@@ -55,6 +55,8 @@ interface ChatRepository {
 
     fun getSafetyFingerprint(chatId: Long): SafetyFingerprint?
 
+    suspend fun resetChatEncryption(chatId: Long)
+
     fun markChatAsRead(chatId: Long, messageIds: List<Long>)
 
     suspend fun loadMoreMessages(chatId: Long, fromMessageId: Long)

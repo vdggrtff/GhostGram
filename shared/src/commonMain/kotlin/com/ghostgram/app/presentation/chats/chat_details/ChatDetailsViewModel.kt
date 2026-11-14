@@ -27,6 +27,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnMed
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnOpenSafetyDialog
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPendingCaptionChanged
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnPlayReactionEffect
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetEncryptionKeys
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnResetPendingNavigation
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnRunAiSearch
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSearchNext
@@ -265,6 +266,21 @@ class ChatDetailsViewModel(
             }
             is OnOpenSafetyDialog -> openSafetyDialog()
             is OnDismissSafetyDialog -> _state.update { it.copy(isSafetyDialogOpen = false) }
+            is OnResetEncryptionKeys -> {
+                viewModelScope.launch {
+                    val repo = sessionManager.currentSession.value?.chatRepository ?: return@launch
+                    // Сбрасываем ключи и стираем сообщения
+                    repo.resetChatEncryption(chatId)
+
+                    // Закрываем диалог и сбрасываем старый отпечаток
+                    _state.update {
+                        it.copy(
+                            isSafetyDialogOpen = false,
+                            safetyFingerprint = null
+                        )
+                    }
+                }
+            }
         }
     }
 

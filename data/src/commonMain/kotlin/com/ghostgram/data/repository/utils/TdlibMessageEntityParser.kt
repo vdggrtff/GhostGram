@@ -2,6 +2,7 @@ package com.ghostgram.data.repository.utils
 
 import com.ghostgram.core.crypto.CryptoLayer
 import com.ghostgram.core.crypto.KeyVerificationStatus
+import com.ghostgram.core.crypto.ZeroWidthSteganography
 import com.ghostgram.core.crypto.toHex
 import com.ghostgram.core.database.entity.MessageEntity
 import com.ghostgram.core.tdlib.TelegramFlowClient
@@ -19,7 +20,8 @@ class TdlibMessageEntityParser(
     private val tdlibClient: TelegramFlowClient,
     private val tracker: DownloadTracker,
     private val cryptoLayer: CryptoLayer,
-    private val userCache: UserMemoryCache
+    private val userCache: UserMemoryCache,
+    private val onWipeEncryptedMessages: (Long, Long) -> Unit = { _, _ -> }
 ) {
 
     fun parseSingleMessageToEntity(
@@ -58,7 +60,7 @@ class TdlibMessageEntityParser(
                 var text = contentObj["text"]?.jsonObject?.get("text")?.jsonPrimitive?.content ?: ""
                 var extraInfo: String? = null
 
-                // 1. E2EE: КТО-ТО ПРЕДЛАГАЕТ НАМ ОБМЕН КЛЮЧАМИ
+                /*// 1. E2EE: КТО-ТО ПРЕДЛАГАЕТ НАМ ОБМЕН КЛЮЧАМИ
                 if (text.startsWith("👻🔑 ")) {
                     if (!isOutgoing) {
                         val otherPubKeyHex = text.removePrefix("👻🔑 ").trim() // 💥 Добавили .trim()
@@ -110,6 +112,74 @@ class TdlibMessageEntityParser(
                     } else {
                         text = "❌ Ошибка дешифровки E2EE\n$text"
                         extraInfo = "SYSTEM"
+                    }
+                }*/
+
+
+                when {
+                    // 💥 1. СИГНАЛ СБРОСА СЕАНСА ОТ СОБЕСЕДНИКА:
+                    text.startsWith("👻🔄 ") -> {
+                        val otherPubKeyHex = text.removePrefix("👻🔄 ").trim()
+
+                        if (!isOutgoing && otherPubKeyHex.isNotBlank()) {
+                            // 💥 Проверяем shouldProcessReset, чтобы история при перезапуске не сбросила новый ключ повторно!
+                            if (cryptoLayer.shouldProcessReset(chatId, msgId)) {
+                                println("🚨 [E2EE RESET] Собеседник сбросил сеанс! Стираем все сообщения до msg=$msgId...")
+                                onWipeEncryptedMessages(chatId, msgId)
+
+                                cryptoLayer.resetChatSecurity(chatId)
+                                val myNewChatPair = cryptoLayer.generateFreshChatKeyPair(chatId)
+                                cryptoLayer.establishSecret(chatId, otherPubKeyHex)
+
+                                // Отвечаем новым публичным ключом
+                                val myPubHex = myNewChatPair.second.toHex()
+                                tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🤝 $myPubHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
+                            }
+                        }
+                        text = "🔒 Сеанс шифрования был сброшен и обновлен"
+                        extraInfo = "SYSTEM"
+                    }
+
+                    // 💥 2. ПЕРВЫЙ ЗАПРОС КЛЮЧЕЙ (👻🔑 <PubKey>):
+                    text.startsWith("👻🔑 ") -> {
+                        val otherPubKeyHex = text.removePrefix("👻🔑 ").trim()
+                        if (!isOutgoing && otherPubKeyHex.isNotBlank()) {
+                            if (cryptoLayer.shouldProcessReset(chatId, msgId)) {
+                                val myChatPair = cryptoLayer.getOrGenerateChatKeyPair(chatId)
+                                val status = cryptoLayer.verifyAndEstablishSecret(chatId, otherPubKeyHex)
+
+                                if (status != KeyVerificationStatus.MITM_WARNING && isLive) {
+                                    val myPubHex = myChatPair.second.toHex()
+                                    tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🤝 $myPubHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
+                                }
+                            }
+                            text = "🔐 Безопасный E2EE канал установлен!"
+                        } else {
+                            text = "🔐 Запрос E2EE отправлен собеседнику..."
+                        }
+                        extraInfo = "SYSTEM"
+                    }
+
+                    // 💥 3. ПОДТВЕРЖДЕНИЕ (👻🤝 <PubKey>):
+                    text.startsWith("👻🤝 ") -> {
+                        val otherPubKeyHex = text.removePrefix("👻🤝 ").trim()
+                        if (!isOutgoing && otherPubKeyHex.isNotBlank()) {
+                            cryptoLayer.establishSecret(chatId, otherPubKeyHex)
+                        }
+                        text = "✅ Защищенный E2EE канал подтвержден!"
+                        extraInfo = "SYSTEM"
+                    }
+
+                    // 💥 4. ДЕШИФРОВКА ТЕКСТА (Невидимая стеганография + поддержка старых сообщений):
+                    ZeroWidthSteganography.containsHiddenPayload(text) || text.contains("👻 ") -> {
+                        val decrypted = cryptoLayer.revealAndDecrypt(chatId, text)
+                        if (decrypted != null) {
+                            text = decrypted
+                            extraInfo = "ENCRYPTED" // Зеленый бабл с замочком в UI!
+                        } else {
+                            text = "❌ Ошибка дешифровки E2EE\n$text"
+                            extraInfo = "SYSTEM"
+                        }
                     }
                 }
 

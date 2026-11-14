@@ -107,4 +107,5 @@ sealed interface ChatDetailsIntent {
     data class OnPlayReactionEffect(val messageId: Long, val emoji: String) : ChatDetailsIntent
     data object OnOpenSafetyDialog : ChatDetailsIntent
     data object OnDismissSafetyDialog : ChatDetailsIntent
+    data object OnResetEncryptionKeys : ChatDetailsIntent
 }

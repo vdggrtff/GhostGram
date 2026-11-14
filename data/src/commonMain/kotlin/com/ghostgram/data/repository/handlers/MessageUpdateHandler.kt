@@ -31,7 +31,18 @@ class MessageUpdateHandler(
 ) : TdlibUpdateHandler {
 
     // 💥 Вынесенный чистый парсер сущностей
-    private val entityParser = TdlibMessageEntityParser(tdlibClient, tracker, cryptoLayer, userCache)
+    //private val entityParser = TdlibMessageEntityParser(tdlibClient, tracker, cryptoLayer, userCache)
+    private val entityParser = TdlibMessageEntityParser(
+        tdlibClient = tdlibClient,
+        tracker = tracker,
+        cryptoLayer = cryptoLayer,
+        userCache = userCache,
+        onWipeEncryptedMessages = { targetChatId, beforeMsgId ->
+            repoScope.launch {
+                messageDao.deleteEncryptedMessagesBefore(targetChatId, beforeMsgId)
+            }
+        }
+    )
 
     override fun handle(type: String, jsonObject: JsonObject): Boolean {
         return when (type) {

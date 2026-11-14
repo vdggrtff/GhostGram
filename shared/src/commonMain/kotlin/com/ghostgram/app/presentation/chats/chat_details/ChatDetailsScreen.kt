@@ -470,7 +470,8 @@ fun ChatDetailsScreen(
         SafetyVerificationDialog(
             chatTitle = state.chatTitle,
             fingerprint = state.safetyFingerprint,
-            onDismiss = { onIntent(ChatDetailsIntent.OnDismissSafetyDialog) }
+            onResetKeys = { onIntent(OnResetEncryptionKeys) }, // 💥
+            onDismiss = { onIntent(OnDismissSafetyDialog) }
         )
     }
 

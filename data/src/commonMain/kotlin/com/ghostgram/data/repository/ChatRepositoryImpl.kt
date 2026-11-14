@@ -399,6 +399,29 @@ class ChatRepositoryImpl(
 
     override fun getSafetyFingerprint(chatId: Long) = cryptoLayer.getSafetyFingerprint(chatId)
 
+    override suspend fun resetChatEncryption(chatId: Long) {
+        cryptoLayer.resetChatSecurity(chatId)
+        messageDao.deleteEncryptedMessagesForChat(chatId)
+
+        // 💥 Генерируем НОВУЮ пару ключей и шлем новый публичный ключ:
+        val freshPair = cryptoLayer.generateFreshChatKeyPair(chatId)
+        val freshPubHex = freshPair.second.toHex()
+
+        tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🔄 $freshPubHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
+    }
+
+
+    /*override suspend fun resetChatEncryption(chatId: Long) {
+        // 1. Стираем ключи шифрования
+        cryptoLayer.resetChatSecurity(chatId)
+
+        // 2. Стираем все сообщения с замочком (без ключа их всё равно никто не прочитает)
+        messageDao.deleteEncryptedMessagesForChat(chatId)
+
+        // 3. Отправляем запрос на создание нового свежего сеанса с новыми ключами!
+        requestKeyExchange(chatId)
+    }*/
+
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
         tdlibClient.send("""{"@type": "deleteMessages", "chat_id": $chatId, "message_ids": [$messageId], "revoke": $revoke}""")
     }
@@ -419,9 +442,15 @@ class ChatRepositoryImpl(
     }
 
     override suspend fun requestKeyExchange(chatId: Long) {
+        // 💥 Отправляем эфемерный публичный ключ чата:
+        val myChatPubHex = cryptoLayer.getOrGenerateChatKeyPair(chatId).second.toHex()
+        tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🔑 $myChatPubHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
+    }
+
+    /*override suspend fun requestKeyExchange(chatId: Long) {
         val myPubKeyHex = cryptoLayer.myKeyPair.second.toHex()
         tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🔑 $myPubKeyHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
-    }
+    }*/
 
     override suspend fun getChatHistory(chatId: Long, limit: Int): String {
         return messageDao.observeMessages(chatId).firstOrNull()?.takeLast(limit)
