@@ -54,6 +54,10 @@ val dataModule = module {
 
     single { LocalSettingsManager(get()) } bind SettingsRepository::class
 
+    single<repository.CallRepository> {
+        get<ChatRepository>().let { (it as ChatRepositoryImpl).callHandler }
+    }
+
     factory<ChatRepository> { (accountId: String) ->
         val tdlibConfig: TdlibConfig = get { parametersOf(accountId) }
         val database: GhostDatabase = get { parametersOf(accountId) }

@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -18,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import com.ghostgram.app.navigation.AppNavGraph
 import com.ghostgram.app.navigation.Screen
 import com.ghostgram.app.presentation.components.bottombar.GhostBottomBar
+import com.ghostgram.app.presentation.components.call.CallOverlayScreen
 import com.ghostgram.app.ui.theme.GhostBackground
 import com.ghostgram.app.ui.theme.GhostPrimary
 import org.koin.compose.koinInject
@@ -44,6 +47,20 @@ fun MainLayout() {
         }
         return
     }
+
+    if (currentSession == null) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(GhostBackground),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = GhostPrimary)
+        }
+        return
+    }
+
+    // 💥 БЕЗОПАСНАЯ ПОДПИСКА НА ЗВОНОК (НИКАКИХ ДОСРОЧНЫХ RETURN!):
+    val callRepo = currentSession?.chatRepository?.callRepository
+    val currentCall by (callRepo?.currentCall)?.collectAsState() ?: remember { mutableStateOf(null) }
 
     Scaffold(
         containerColor = GhostBackground,
@@ -72,5 +89,16 @@ fun MainLayout() {
         ) {
             AppNavGraph(navController)
         }
+    }
+
+    val activeCall = currentCall
+    if (activeCall != null && callRepo != null) {
+        CallOverlayScreen(
+            call = activeCall,
+            onAccept = { callRepo.acceptCall(activeCall.callId) },
+            onDiscard = { callRepo.discardCall(activeCall.callId) },
+            onToggleMute = { callRepo.toggleMute() },
+            onToggleSpeaker = { callRepo.toggleSpeaker() }
+        )
     }
 }

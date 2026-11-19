@@ -9,6 +9,9 @@ import entity.SafetyFingerprint
 import kotlinx.coroutines.flow.Flow
 
 interface ChatRepository {
+
+    val callRepository: CallRepository
+
     fun observeChats(): Flow<List<Chat>>
     fun observeChat(chatId: Long): Flow<Chat?>
     fun observeMessages(chatId: Long): Flow<List<Message>>

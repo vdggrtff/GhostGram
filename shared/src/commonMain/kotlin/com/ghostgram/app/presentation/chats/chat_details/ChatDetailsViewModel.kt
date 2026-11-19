@@ -35,6 +35,7 @@ import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSea
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendMessage
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSendSticker
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSmartReplyClick
+import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnStartCall
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnStartRecording
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnStopRecording
 import com.ghostgram.app.presentation.chats.chat_details.ChatDetailsIntent.OnSwipeToReply
@@ -281,6 +282,7 @@ class ChatDetailsViewModel(
                     }
                 }
             }
+            is OnStartCall -> repo.callRepository.startCall(userId = chatId, isVideo = false)
         }
     }
 

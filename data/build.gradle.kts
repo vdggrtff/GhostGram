@@ -30,5 +30,8 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.okio)
         }
+        jvmMain.dependencies {
+            implementation("net.java.dev.jna:jna:5.15.0")
+        }
     }
 }

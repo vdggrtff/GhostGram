@@ -6,6 +6,7 @@ import com.ghostgram.core.database.dao.MessageDao
 import com.ghostgram.core.tdlib.TelegramFlowClient
 import com.ghostgram.core.tdlib.sendAndAwait
 import com.ghostgram.data.mapper.toDomain
+import com.ghostgram.data.repository.handlers.CallUpdateHandler
 import com.ghostgram.data.repository.handlers.ChatStatusAndActionHandler
 import com.ghostgram.data.repository.handlers.ChatUpdateHandler
 import com.ghostgram.data.repository.handlers.MessageUpdateHandler
@@ -51,6 +52,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import repository.CallRepository
 import repository.ChatRepository
 
 class ChatRepositoryImpl(
@@ -60,6 +62,10 @@ class ChatRepositoryImpl(
 ) : ChatRepository {
     private val jsonParser = Json { ignoreUnknownKeys = true }
     private val repoScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private val userCache = UserMemoryCache()
+
+    private val _isGhostModeEnabled = MutableStateFlow(true)
 
     // 💥 1. ВЫНЕСЕННЫЙ КЭШ И СЕРВИСЫ
     private val chatCache = ChatMemoryCache()
@@ -74,12 +80,16 @@ class ChatRepositoryImpl(
     private val searchHandler =  SearchUpdateHandler(chatCache, tdlibClient, repoScope)
     private val profileHandler =
         ProfileAndFileHandler(chatCache, tdlibClient, messageDao, repoScope, downloadTracker)
-    private val stickerHandler = StickerUpdateHandler(tdlibClient, downloadTracker)
-    private val userCache = UserMemoryCache()
 
-    private val _isGhostModeEnabled = MutableStateFlow(true)
+
+    private val voipEngine = com.ghostgram.data.voip.createPlatformVoipEngine()
+    val  callHandler = CallUpdateHandler(tdlibClient, userCache, repoScope, voipEngine)
+    override val callRepository: CallRepository = callHandler
+
+    private val stickerHandler = StickerUpdateHandler(tdlibClient, downloadTracker)
 
     private val handlers: List<TdlibUpdateHandler> = listOf(
+        callHandler,
         statusAndActionHandler,
         searchHandler,
         MessageUpdateHandler(
@@ -410,18 +420,6 @@ class ChatRepositoryImpl(
         tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🔄 $freshPubHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
     }
 
-
-    /*override suspend fun resetChatEncryption(chatId: Long) {
-        // 1. Стираем ключи шифрования
-        cryptoLayer.resetChatSecurity(chatId)
-
-        // 2. Стираем все сообщения с замочком (без ключа их всё равно никто не прочитает)
-        messageDao.deleteEncryptedMessagesForChat(chatId)
-
-        // 3. Отправляем запрос на создание нового свежего сеанса с новыми ключами!
-        requestKeyExchange(chatId)
-    }*/
-
     override suspend fun deleteMessage(chatId: Long, messageId: Long, revoke: Boolean) {
         tdlibClient.send("""{"@type": "deleteMessages", "chat_id": $chatId, "message_ids": [$messageId], "revoke": $revoke}""")
     }
@@ -446,11 +444,6 @@ class ChatRepositoryImpl(
         val myChatPubHex = cryptoLayer.getOrGenerateChatKeyPair(chatId).second.toHex()
         tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🔑 $myChatPubHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
     }
-
-    /*override suspend fun requestKeyExchange(chatId: Long) {
-        val myPubKeyHex = cryptoLayer.myKeyPair.second.toHex()
-        tdlibClient.send("""{"@type": "sendMessage", "chat_id": $chatId, "input_message_content": {"@type": "inputMessageText", "text": {"@type": "formattedText", "text": "👻🔑 $myPubKeyHex"}, "link_preview_options": {"@type": "linkPreviewOptions", "is_disabled": true}}}""")
-    }*/
 
     override suspend fun getChatHistory(chatId: Long, limit: Int): String {
         return messageDao.observeMessages(chatId).firstOrNull()?.takeLast(limit)

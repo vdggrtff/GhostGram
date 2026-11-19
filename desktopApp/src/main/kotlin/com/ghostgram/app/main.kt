@@ -9,7 +9,10 @@ fun main() = application {
     initKoin(appStoragePath = System.getProperty("user.home"))
 
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = {
+            exitApplication()
+            kotlin.system.exitProcess(0)
+        },
         title = "GhostGram",
     ) {
         App()

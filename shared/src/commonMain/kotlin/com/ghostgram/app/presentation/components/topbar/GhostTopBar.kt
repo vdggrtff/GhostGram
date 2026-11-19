@@ -170,7 +170,7 @@ fun GhostTopBar(
             // 💥 1. КНОПКА ЗВОНКА 📞 (Только для личных чатов 1-на-1 — задел под v0.5.0!)
             if (!isGroup && !isChannel) {
                 IconButton(
-                    onClick = { /* В следующем шаге подключим startCall(chatId) */ },
+                    onClick = { onIntent(ChatDetailsIntent.OnStartCall) },
                     modifier = Modifier.size(34.dp)
                 ) {
                     Text("📞", fontSize = 16.sp)

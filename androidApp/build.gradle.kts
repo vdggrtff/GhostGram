@@ -13,6 +13,7 @@ kotlin {
 }
 dependencies {
     implementation(project(":shared"))
+    implementation("io.github.pytgcalls:ntgcalls:3.0.5")
 
     implementation(libs.androidx.activity.compose)
 

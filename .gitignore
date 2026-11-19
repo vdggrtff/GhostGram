@@ -18,6 +18,12 @@ local.properties
 captures
 .externalNativeBuild
 .cxx
+*.zip
+*.so
+*.dll
+*.dylib
+/desktopApp/*.so
+/composeApp/*.so
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/

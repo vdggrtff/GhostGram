@@ -108,4 +108,5 @@ sealed interface ChatDetailsIntent {
     data object OnOpenSafetyDialog : ChatDetailsIntent
     data object OnDismissSafetyDialog : ChatDetailsIntent
     data object OnResetEncryptionKeys : ChatDetailsIntent
+    data object OnStartCall : ChatDetailsIntent
 }
